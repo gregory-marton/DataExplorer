@@ -1,0 +1,8 @@
+.claude_session
+
+# Example datasets too large for git (download via download_examples.sh)
+examples/LLCP2024.ASC
+examples/LLCP2024ASC.zip
+examples/xr_latest_dwca.zip
+examples/FIADB_URBAN_ENTIRE_CSV.zip
+examples/ncdd-202501-grd-scaled.nc
