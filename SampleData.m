@@ -134,7 +134,7 @@ while hasdata(ds)
             % Reservoir full: replace with decreasing probability
             j = randi(n_seen);
             if j <= k
-                reservoir(j, :) = chunk(i, :);
+                reservoir(j, :) = chunk(i, :); %#ok<AGROW>
             end
         end
     end

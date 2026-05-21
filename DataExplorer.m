@@ -85,6 +85,20 @@ se_report(T, prof);
 %% ── 4.  Plot ──────────────────────────────────────────────────────────────
 se_plot(T, prof, options);
 
+%% ── 5.  Recipe ────────────────────────────────────────────────────────────
+if ischar(source) || isstring(source)
+    recipe_path = se_assemble_recipe(string(source), T, prof, options);
+    if ~isempty(recipe_path)
+        fprintf('  Running recipe to produce best-of plots…\n');
+        run(recipe_path);
+        [~, bname, ~] = fileparts(source);
+        fprintf('\n  ══════════════════════════════════════════════════════════\n');
+        fprintf('  Recipe script: %s\n', recipe_path);
+        fprintf('  To keep it:    save_recipe(''%s_recipe.m'')\n', bname);
+        fprintf('  ══════════════════════════════════════════════════════════\n\n');
+    end
+end
+
 end % ── DataExplorer ──────────────────────────────────────────────────────
 
 
@@ -139,7 +153,7 @@ function T = load_from_zip(filepath, options)
         error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX found inside the ZIP.');
     end
 
-    if numel(files) == 1
+    if isscalar(files)
         choice_idx = 1;
     else
         SMALL_FILE_BYTES = 5000;
@@ -219,7 +233,7 @@ end
 function T = load_excel(filepath, options)
     sheets = sheetnames(filepath);
 
-    if numel(sheets) == 1
+    if isscalar(sheets)
         sheetname = sheets{1};
     else
         % Get row and column count for each sheet
@@ -608,69 +622,26 @@ end
 % ── se_echo_load_code ─────────────────────────────────────────────────────────
 function se_echo_load_code(filepath, T)
 %SE_ECHO_LOAD_CODE  Print copy-pasteable MATLAB code to reload this dataset.
-
-[~, ~, ext] = fileparts(filepath);
-ext = lower(ext);
-ud  = T.Properties.UserData;
-
+code = cg_load_code(filepath, T);
 fprintf('\n  ══════════════════════════════════════════════════════════\n');
 fprintf('  To load this dataset in a script:\n');
 fprintf('  ──────────────────────────────────────────────────────────\n');
-
-if ext == ".zip"
-    % They loaded a file from inside a zip — they need to unzip first
-    inner = '';
-    if isstruct(ud) && ~isempty(ud.inner_file)
-        inner = ud.inner_file;
+lines = strsplit(code, newline);
+for i = 1:numel(lines)
+    if ~isempty(strtrim(lines{i}))
+        fprintf('  %s\n', lines{i});
     end
-    [~, inner_base, inner_ext] = fileparts(inner);
-    inner_ext = lower(inner_ext);
-    fprintf('  tmpdir = tempname; mkdir(tmpdir);\n');
-    fprintf('  unzip(''%s'', tmpdir);\n', filepath);
-    if ismember(inner_ext, {'.xlsx','.xls','.xlsm'})
-        sheet = '';
-        if isstruct(ud) && ~isempty(ud.sheet)
-            sheet = ud.sheet;
-        end
-        fprintf('  opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''Sheet'', ''%s'');\n', ...
-            inner, sheet);
-        fprintf('  opts.MissingRule = ''fill'';\n');
-        fprintf('  T = readtable(fullfile(tmpdir, ''%s''), opts, ''Sheet'', ''%s'');\n', ...
-            inner, sheet);
-    else
-        fprintf('  opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''FileType'', ''text'');\n', inner);
-        fprintf('  opts.MissingRule = ''fill'';\n');
-        fprintf('  T = readtable(fullfile(tmpdir, ''%s''), opts);\n', inner);
-    end
-
-elseif ismember(ext, {'.xlsx','.xls','.xlsm'})
-    sheet = '';
-    if isstruct(ud) && ~isempty(ud.sheet)
-        sheet = ud.sheet;
-    end
-    fprintf('  opts = detectImportOptions(''%s'', ''Sheet'', ''%s'');\n', filepath, sheet);
-    fprintf('  opts.MissingRule = ''fill'';\n');
-    fprintf('  T = readtable(''%s'', opts, ''Sheet'', ''%s'');\n', filepath, sheet);
-
-elseif ismember(ext, {'.nc','.nc4','.netcdf'})
-    fprintf('  %% NetCDF — adjust variable name, start, and count as needed:\n');
-    fprintf('  data = ncread(''%s'', ''varname'');\n', filepath);
-    fprintf('  %% See ncinfo(''%s'') for available variables.\n', filepath);
-
-else
-    % Plain text
-    fprintf('  opts = detectImportOptions(''%s'', ''FileType'', ''text'');\n', filepath);
-    fprintf('  opts.MissingRule = ''fill'';\n');
-    fprintf('  T = readtable(''%s'', opts);\n', filepath);
-    % If the file is large, also suggest SampleData
+end
+[~, ~, ext] = fileparts(filepath);
+ext = lower(ext);
+if ~ismember(ext, {'.zip', '.nc', '.nc4', '.netcdf', '.xlsx', '.xls', '.xlsm'})
     info = dir(filepath);
-    if info.bytes > 100e6
+    if ~isempty(info) && info.bytes > 100e6
         fprintf('\n  %% File is large (%.0f MB) — for a random sample use:\n', ...
             info.bytes/1e6);
         fprintf('  T = SampleData(''%s'', %d);\n', filepath, height(T));
     end
 end
-
 fprintf('  ══════════════════════════════════════════════════════════\n\n');
 end
 
@@ -744,109 +715,11 @@ end
 
 % ── se_profile ───────────────────────────────────────────────────────────────
 function [T, prof] = se_profile(T, missingStrings)
-%SE_PROFILE  Classify each column, fix types, count missing values.
-
-n    = height(T);
-ncol = width(T);
-
-prof.name        = T.Properties.VariableNames;
-prof.source_name = '';
-prof.skip        = false(1, ncol);
-prof.skip_reason = repmat("", 1, ncol);
-prof.type     = repmat("unknown",  1, ncol);
-prof.nmissing = zeros(1, ncol);
-prof.nunique  = zeros(1, ncol);
-prof.skip     = false(1, ncol);     % true if >80% missing
-
-% Common numeric sentinel values used as stand-ins for missing
-SENTINELS = [-999, -9999, -99999, 9999, 99999, 999];
-
-for k = 1:ncol
-    col  = T.(prof.name{k});
-    cname = prof.name{k};
-
-    % ── String/char/cellstr: try numeric conversion, else categorical ──────
-    if ischar(col) || iscellstr(col) || (isstring(col) && ~isscalar(col))
-        col = string(col);
-
-        % Recode known missing strings
-        col(ismember(col, missingStrings)) = missing;
-
-        % Attempt numeric conversion: keep as numeric only if ≥70% succeed
-        numvals = str2double(col);
-        pct_numeric = sum(~isnan(numvals)) / n;
-        if pct_numeric >= 0.70
-            col = numvals;
-        else
-            col = categorical(col);
-        end
-        T.(cname) = col;
-    end
-
-    % Re-fetch after possible conversion
-    col = T.(cname);
-
-    % ── Classify ────────────────────────────────────────────────────────────
-    if isnumeric(col) || islogical(col)
-        % Recode sentinel values
-        if isnumeric(col)
-            for s = SENTINELS
-                col(col == s) = NaN;
-            end
-            T.(cname) = col;
-        end
-
-        if islogical(col)
-            prof.type(k) = "logical";
-            nmiss = 0;
-        else
-            prof.type(k) = "numeric";
-            nmiss = sum(isnan(col));
-        end
-        prof.nmissing(k) = nmiss;
-        prof.nunique(k)  = numel(unique(col(~isnan(col))));
-
-    elseif iscategorical(col)
-        % Remove any category labels that are known missing strings
-        bad_cats = intersect(categories(col), cellstr(missingStrings));
-        if ~isempty(bad_cats)
-            col = setcats(col, setdiff(categories(col), bad_cats));
-            T.(cname) = col;
-        end
-        prof.type(k)     = "categorical";
-        prof.nmissing(k) = sum(isundefined(col));
-        prof.nunique(k)  = numel(categories(col));
-
-    elseif isdatetime(col)
-        prof.type(k)     = "datetime";
-        prof.nmissing(k) = sum(isnat(col));
-        valid            = col(~isnat(col));
-        prof.nunique(k)  = numel(unique(valid));
-
-    elseif isduration(col)
-        prof.type(k)     = "datetime";
-        prof.nmissing(k) = sum(isnan(seconds(col)));
-        valid            = col(~isnan(seconds(col)));
-        prof.nunique(k)  = numel(unique(valid));
-
-    else
-        prof.type(k) = "other";
-    end
-
-    % Flag columns that are mostly empty
-    if prof.nmissing(k) / n > 0.80
-        prof.skip(k)        = true;
-        prof.skip_reason(k) = "mostly missing";
-    end
-
-    % Flag ID-like columns: every non-missing value is unique → useless for plots
-    % Only applies to categoricals — numeric measurements naturally have unique values
-    n_present = n - prof.nmissing(k);
-    if n_present > 1 && prof.nunique(k) == n_present && ...
-            prof.type(k) == "categorical"
-        prof.skip(k)        = true;
-        prof.skip_reason(k) = "all values unique (ID column)";
-    end
+%SE_PROFILE  Thin wrapper — delegates to the standalone de_profile library function.
+if nargin < 2
+    [T, prof] = de_profile(T);
+else
+    [T, prof] = de_profile(T, missingStrings);
 end
 end
 
@@ -919,14 +792,14 @@ num_cols = find(prof.type == "numeric"  & ~prof.skip);
 year_col = [];
 if isempty(dt_cols)
     year_candidates = num_cols(arrayfun(@(i) ...
-        ~isempty(regexpi(prof.name{i}, 'year')), num_cols));
-    if numel(year_candidates) == 1
+        ~isempty(regexpi(prof.name{i}, 'year', 'once')), num_cols));
+    if isscalar(year_candidates)
         year_col = year_candidates;
         fprintf('  ℹ "%s" treated as time axis (year column).\n', prof.name{year_col});
     end
 end
 
-if numel(dt_cols) == 1 && numel(num_cols) >= 2
+if isscalar(dt_cols) && numel(num_cols) >= 2
     fprintf('  ℹ Datetime column "%s" detected — producing time series figure.\n', ...
         prof.name{dt_cols});
     fprintf('    Scatter matrix follows for structural relationships.\n\n');
@@ -1063,6 +936,10 @@ else
     title_str = sprintf('%s  —  n = %d', prof.source_name, n);
 end
 title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
+
+% ── Categorical drill-down ──────────────────────────────────────────────────
+se_plot_categorical_drilldown(T, prof, sel);
+
 end
 
 
@@ -1179,13 +1056,13 @@ cat_cols  = find(ismember(prof.type, ["categorical","logical"]) & ~prof.skip);
 
 encoding = 'plain';
 enc_col  = [];
-if numel(dt_cols) == 1
+if isscalar(dt_cols)
     encoding = 'time';
     enc_col  = dt_cols;
-elseif numel(num_cols) == 1
+elseif isscalar(num_cols)
     encoding = 'size';
     enc_col  = num_cols;
-elseif numel(cat_cols) == 1
+elseif isscalar(cat_cols)
     encoding = 'color_cat';
     enc_col  = cat_cols;
 end
@@ -1202,12 +1079,12 @@ if has_mapping
         case 'time'
             tdata  = T.(prof.name{enc_col});
             tdata  = tdata(valid);
-            tnums  = datenum(tdata);
+            tnums  = datenum(tdata); %#ok<DATNM>
             geoscatter(ax, lat, lon, BASE_SZ, tnums, 'filled', ...
                 'MarkerFaceAlpha', 0.6);
             colormap(ax, 'turbo');
             cb = colorbar(ax);
-            cb.TickLabels = datestr(linspace(min(tnums), max(tnums), 5), 'mmm yyyy');
+            cb.TickLabels = datestr(linspace(min(tnums), max(tnums), 5), 'mmm yyyy'); %#ok<DATST>
             cb.Label.String = prof.name{enc_col};
 
         case 'size'
@@ -1257,7 +1134,7 @@ else
             tdata = T.(prof.name{enc_col});
             tdata = tdata(valid);
             scatter(ax, lon, lat, BASE_SZ, datenum(tdata), 'filled', ...
-                'MarkerFaceAlpha', 0.6);
+                'MarkerFaceAlpha', 0.6); %#ok<DATNM>
             colormap(ax, 'turbo');
             cb = colorbar(ax); cb.Label.String = prof.name{enc_col};
         case 'size'
@@ -1302,22 +1179,23 @@ end
 
 
 % ── se_plot_timeseries ────────────────────────────────────────────────────────
-function se_plot_timeseries(T, prof, dt_idx, options)
+function se_plot_timeseries(T, prof, dt_idx, ~)
 %SE_PLOT_TIMESERIES  All numeric variables on one plot against a datetime axis.
 %
-%   If all values are non-negative: stacked area chart (shows composition).
-%   Otherwise: z-scored overlaid lines (shows relative patterns).
+%   Aggregates multiple rows per time point to mean, with bootstrap 95% CI shading.
+%   If series are compositional (stable total): stacked area chart.
+%   Otherwise: overlaid lines with bootstrap CI bands.
 
 tdata   = T.(prof.name{dt_idx});
 num_idx = find(prof.type == "numeric" & ~prof.skip);
 n_series = numel(num_idx);
 if n_series == 0, return; end
 
-% Sort by time
-valid_t      = ~isnat(tdata);
+% Sort by time, drop missing
+valid_t        = ~isnat(tdata);
 [tdata_s, ord] = sort(tdata(valid_t));
 
-% Build data matrix (rows = time, cols = series), NaN for missing
+% Build data matrix (rows = sorted obs, cols = series)
 Y = NaN(sum(valid_t), n_series);
 labels = cell(1, n_series);
 for k = 1:n_series
@@ -1327,56 +1205,104 @@ for k = 1:n_series
     labels{k} = prof.name{num_idx(k)};
 end
 
-% Decide plot mode: stacked area if all values non-negative, else z-score lines
-all_nonneg = all(Y(~isnan(Y)) >= 0);
+% Aggregate by unique datetime: mean + bootstrap 95% CI
+[tdata_u, ~, tidx] = unique(tdata_s);
+n_u    = numel(tdata_u);
+Y_mean = NaN(n_u, n_series);
+Y_lo   = NaN(n_u, n_series);
+Y_hi   = NaN(n_u, n_series);
+B = 500;
+for k = 1:n_series
+    for t = 1:n_u
+        vals = Y(tidx == t, k);
+        vals = vals(~isnan(vals));
+        n_v = numel(vals);
+        if n_v == 0, continue; end
+        Y_mean(t, k) = mean(vals);
+        if n_v >= 2
+            bm = mean(vals(randi(n_v, n_v, B)), 1);
+            bm_s = sort(bm);
+            Y_lo(t, k) = bm_s(max(1, round(0.025*B)));
+            Y_hi(t, k) = bm_s(min(B, round(0.975*B)));
+        end
+    end
+end
+
+% Compositional test: stacked only when data clearly has parts summing to a whole.
+% Primary signal: any categorical column has a "Total"-like level.
+% Fallback: row sums of aggregated means are extremely stable (CV < 0.05).
+TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
+has_total_label = false;
+cat_search = find(prof.type == "categorical" & ~prof.skip);
+for kk = 1:numel(cat_search)
+    lvls_kk = cellstr(categories(T.(prof.name{cat_search(kk)})));
+    if any(cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), lvls_kk))
+        has_total_label = true;
+        break;
+    end
+end
+Y_complete = Y_mean(all(~isnan(Y_mean), 2), :);
+all_nonneg  = ~isempty(Y_complete) && size(Y_complete, 2) > 1 && all(Y_complete(:) >= 0);
+if has_total_label && all_nonneg
+    use_stacked = true;
+elseif all_nonneg
+    row_sums    = sum(Y_complete, 2);
+    cv_sums     = std(row_sums) / max(abs(mean(row_sums)), eps);
+    use_stacked = cv_sums < 0.05;
+else
+    use_stacked = false;
+end
 
 fig = figure( ...
     'Name',        sprintf('DataExplorer (time series) — %s', prof.source_name), ...
     'Color',       [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
-
 ax = axes(fig);
+colors_ts = lines(n_series);
 
-% Keep raw copy for correlation heatmap regardless of plot mode
-Y_raw = Y;
-
-if all_nonneg
-    % Replace NaN with 0 for area chart (gaps would be misleading anyway)
-    Y(isnan(Y)) = 0;
-    % Sort series by mean value descending so largest is at bottom
-    [~, sord] = sort(mean(Y, 1), 'descend');
-    Y      = Y(:, sord);
+if use_stacked
+    Y_plot = Y_mean;
+    Y_plot(isnan(Y_plot)) = 0;
+    [~, sord] = sort(mean(Y_plot, 1), 'descend');
+    Y_plot = Y_plot(:, sord);
     labels = labels(sord);
-
-    area(ax, tdata_s, Y, 'LineStyle', 'none', 'FaceAlpha', 0.85);
-    ylabel(ax, 'Generation (stacked)', 'FontSize', 8);
+    area(ax, tdata_u, Y_plot, 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    ylabel(ax, 'Value (stacked)', 'FontSize', 8);
     mode_note = 'stacked area';
 else
-    % Raw overlaid lines — dominant series will be visible, small ones less so,
-    % but that relative scale is meaningful. Students can drill down with Columns=.
-    plot(ax, tdata_s, Y, 'LineWidth', 1.0);
-    ylabel(ax, 'Value (raw)', 'FontSize', 8);
-    yline(ax, 0, ':', 'Color', [0.5 0.5 0.5]);
-    mode_note = 'raw values';
+    hold(ax, 'on');
+    for k = 1:n_series
+        has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
+        if sum(has_ci) >= 2
+            t_fwd = tdata_u(has_ci);
+            t_rev = t_fwd(end:-1:1);
+            upper = Y_hi(has_ci, k);
+            lower = Y_lo(has_ci, k);
+            patch(ax, [t_fwd; t_rev], [upper; lower(end:-1:1)], colors_ts(k,:), ...
+                'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+        end
+    end
+    for k = 1:n_series
+        plot(ax, tdata_u, Y_mean(:, k), '-', ...
+            'Color', colors_ts(k, :), 'LineWidth', 1.5, 'DisplayName', labels{k});
+    end
+    ylabel(ax, 'Value', 'FontSize', 8);
+    mode_note = 'overlaid lines';
 end
 
-legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, ...
-    'Interpreter', 'none');
+legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
 set(ax, 'FontSize', 8);
 box(ax, 'off');
-
 title(ax, sprintf('%s  —  time series, %s  (n = %d, %d series)', ...
     prof.source_name, mode_note, height(T), n_series), ...
     'FontSize', 11, 'Interpreter', 'none');
-
-% Also produce a correlation heatmap so co-movement patterns are visible
-se_plot_corrheatmap(Y_raw, labels, prof.source_name);
 end
 
 
 % ── se_plot_timeseries_numeric ────────────────────────────────────────────────
-function se_plot_timeseries_numeric(T, prof, year_idx, options)
+function se_plot_timeseries_numeric(T, prof, year_idx, ~)
 %SE_PLOT_TIMESERIES_NUMERIC  Like se_plot_timeseries but for a numeric year axis.
+%   Aggregates multiple rows per year to mean, with bootstrap 95% CI shading.
 
 xdata    = T.(prof.name{year_idx});
 num_idx  = find(prof.type == "numeric" & ~prof.skip & ...
@@ -1397,25 +1323,86 @@ for k = 1:n_series
     labels{k} = prof.name{num_idx(k)};
 end
 
-all_nonneg = all(Y(~isnan(Y)) >= 0);
-Y_raw      = Y;
+% Aggregate by unique year: mean + bootstrap 95% CI
+[xdata_u, ~, xidx] = unique(xdata_s);
+n_u    = numel(xdata_u);
+Y_mean = NaN(n_u, n_series);
+Y_lo   = NaN(n_u, n_series);
+Y_hi   = NaN(n_u, n_series);
+B = 500;
+for k = 1:n_series
+    for t = 1:n_u
+        vals = Y(xidx == t, k);
+        vals = vals(~isnan(vals));
+        n_v = numel(vals);
+        if n_v == 0, continue; end
+        Y_mean(t, k) = mean(vals);
+        if n_v >= 2
+            bm = mean(vals(randi(n_v, n_v, B)), 1);
+            bm_s = sort(bm);
+            Y_lo(t, k) = bm_s(max(1, round(0.025*B)));
+            Y_hi(t, k) = bm_s(min(B, round(0.975*B)));
+        end
+    end
+end
+
+% Compositional test: stacked only when data clearly has parts summing to a whole.
+% Primary signal: any categorical column has a "Total"-like level.
+% Fallback: row sums of aggregated means are extremely stable (CV < 0.05).
+TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
+has_total_label = false;
+cat_search = find(prof.type == "categorical" & ~prof.skip);
+for kk = 1:numel(cat_search)
+    lvls_kk = cellstr(categories(T.(prof.name{cat_search(kk)})));
+    if any(cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), lvls_kk))
+        has_total_label = true;
+        break;
+    end
+end
+Y_complete = Y_mean(all(~isnan(Y_mean), 2), :);
+all_nonneg  = ~isempty(Y_complete) && size(Y_complete, 2) > 1 && all(Y_complete(:) >= 0);
+if has_total_label && all_nonneg
+    use_stacked = true;
+elseif all_nonneg
+    row_sums    = sum(Y_complete, 2);
+    cv_sums     = std(row_sums) / max(abs(mean(row_sums)), eps);
+    use_stacked = cv_sums < 0.05;
+else
+    use_stacked = false;
+end
 
 fig = figure('Name', sprintf('DataExplorer (time series) — %s', prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 ax = axes(fig);
+colors_ts = lines(n_series);
 
-if all_nonneg
-    Y(isnan(Y)) = 0;
-    [~, sord] = sort(mean(Y,1), 'descend');
-    Y = Y(:,sord);  labels = labels(sord);
-    area(ax, xdata_s, Y, 'LineStyle', 'none', 'FaceAlpha', 0.85);
+if use_stacked
+    Y_plot = Y_mean;
+    Y_plot(isnan(Y_plot)) = 0;
+    [~, sord] = sort(mean(Y_plot, 1), 'descend');
+    Y_plot = Y_plot(:, sord);  labels = labels(sord);
+    area(ax, xdata_u, Y_plot, 'LineStyle', 'none', 'FaceAlpha', 0.85);
     ylabel(ax, 'Value (stacked)', 'FontSize', 8);
     mode_note = 'stacked area';
 else
-    plot(ax, xdata_s, Y, 'LineWidth', 1.0);
-    ylabel(ax, 'Value (raw)', 'FontSize', 8);
-    yline(ax, 0, ':', 'Color', [0.5 0.5 0.5]);
-    mode_note = 'raw values';
+    hold(ax, 'on');
+    for k = 1:n_series
+        has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
+        if sum(has_ci) >= 2
+            x_fwd = xdata_u(has_ci);
+            x_rev = x_fwd(end:-1:1);
+            upper = Y_hi(has_ci, k);
+            lower = Y_lo(has_ci, k);
+            patch(ax, [x_fwd; x_rev], [upper; lower(end:-1:1)], colors_ts(k,:), ...
+                'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+        end
+    end
+    for k = 1:n_series
+        plot(ax, xdata_u, Y_mean(:, k), '-', ...
+            'Color', colors_ts(k, :), 'LineWidth', 1.5, 'DisplayName', labels{k});
+    end
+    ylabel(ax, 'Value', 'FontSize', 8);
+    mode_note = 'overlaid lines';
 end
 
 xlabel(ax, prof.name{year_idx}, 'FontSize', 8, 'Interpreter', 'none');
@@ -1425,95 +1412,15 @@ box(ax, 'off');
 title(ax, sprintf('%s  —  time series, %s  (n = %d, %d series)', ...
     prof.source_name, mode_note, height(T), n_series), ...
     'FontSize', 11, 'Interpreter', 'none');
-
-se_plot_corrheatmap(Y_raw, labels, prof.source_name);
 end
 
 
-% ── se_plot_corrheatmap ───────────────────────────────────────────────────────
-function se_plot_corrheatmap(Y, labels, source_name)
-%SE_PLOT_CORRHEATMAP  Pearson correlation matrix with hierarchical clustering.
-%   Variables are reordered by average linkage clustering so co-moving
-%   groups appear as blocks along the diagonal.
 
-% Drop columns that are all-NaN or constant (corr would be NaN/undefined)
-valid_cols = false(1, size(Y, 2));
-for k = 1:size(Y, 2)
-    col = Y(:, k);
-    col = col(~isnan(col));
-    valid_cols(k) = numel(col) >= 3 && std(col) > 0;
-end
-Y      = Y(:, valid_cols);
-labels = labels(valid_cols);
-n      = size(Y, 2);
-
-if n < 2, return; end
-
-% Pairwise Pearson correlation (complete cases per pair)
-R = corr(Y, 'rows', 'pairwise');
-R(isnan(R)) = 0;   % treat uncorrelated-by-missing as zero
-
-% Hierarchical clustering on dissimilarity = 1 - r to reorder variables
-D    = 1 - R;
-D    = (D + D') / 2;          % ensure symmetry
-D(1:n+1:end) = 0;             % zero diagonal
-link = linkage(squareform(max(D, 0)), 'average');
-ord  = optimalleaforder(link, squareform(max(D, 0)));
-
-R_ord      = R(ord, ord);
-labels_ord = labels(ord);
-
-% ── Plot ─────────────────────────────────────────────────────────────────────
-fig = figure( ...
-    'Name',        sprintf('DataExplorer (correlations) — %s', source_name), ...
-    'Color',       [0.97 0.97 0.97], ...
-    'NumberTitle', 'off');
-
-ax = axes(fig);
-imagesc(ax, R_ord, [-1 1]);
-
-% Diverging red-white-blue colormap
-cmap = diverging_rwb(64);
-colormap(ax, cmap);
-cb = colorbar(ax);
-cb.Label.String = 'Pearson r';
-cb.FontSize = 8;
-
-% Tick labels
-set(ax, 'XTick', 1:n, 'YTick', 1:n, ...
-    'XTickLabel', labels_ord, 'YTickLabel', labels_ord, ...
-    'XTickLabelRotation', 45, 'FontSize', 8, 'TickLabelInterpreter', 'none');
-
-% Annotate each cell with the r value
-for r = 1:n
-    for c = 1:n
-        val = R_ord(r, c);
-        % White text on dark cells, dark text on light cells
-        txt_color = [1 1 1] * (abs(val) > 0.5);
-        text(ax, c, r, sprintf('%.2f', val), ...
-            'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontSize', max(5, min(8, 80/n)), 'Color', txt_color);
-    end
-end
-
-title(ax, sprintf('%s  —  pairwise correlations (%d variables)', ...
-    source_name, n), 'FontSize', 11, 'Interpreter', 'none');
-axis(ax, 'square');
-box(ax, 'off');
-end
-
-function cmap = diverging_rwb(n)
-% Red-white-blue diverging colormap, n levels.
-    half  = floor(n/2);
-    red   = [linspace(0.80, 1, half)', linspace(0.10, 1, half)', linspace(0.10, 1, half)'];
-    blue  = [linspace(1, 0.17, n-half)', linspace(1, 0.40, n-half)', linspace(1, 0.70, n-half)'];
-    cmap  = [red; blue];
-end
 
 
 % ── Cell-type plot helpers ────────────────────────────────────────────────────
 
-function plot_num_diag(ax, x, name, nmissing, n)
+function plot_num_diag(ax, x, ~, nmissing, n)
 % Histogram with summary stats annotation (mean, std, min, max).
     valid = x(~isnan(x));
     if isempty(valid)
@@ -1545,16 +1452,14 @@ function plot_num_diag(ax, x, name, nmissing, n)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_cat_diag(ax, x, name, nmissing, n)
+function plot_cat_diag(ax, x, ~, nmissing, n)
 % Horizontal bar chart: quantile-spaced sample of categories by count.
     MAX_K = 15;
     if iscategorical(x)
-        total_cats = numel(categories(x));
-        cats       = categories(x);
-        counts     = histcounts(x);
+        cats   = categories(x);
+        counts = histcounts(x);
     elseif islogical(x)
-        total_cats = 2;
-        cats       = {'false','true'};
+        cats   = {'false','true'};
         counts     = [sum(~x), sum(x)];
     else
         axis(ax, 'off'); return
@@ -1593,7 +1498,7 @@ function plot_cat_diag(ax, x, name, nmissing, n)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_time_diag(ax, x, name)
+function plot_time_diag(ax, x, ~)
 % Histogram of datetime values by year (or month if span < 2 years).
     if isduration(x)
         x = datetime(0,0,0) + x;   % convert to datetime for uniform handling
@@ -1619,7 +1524,7 @@ function plot_time_diag(ax, x, name)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_num_num(ax, x, y, xname, yname)
+function plot_num_num(ax, x, y, ~, ~)
 % Scatter with transparency for dense data; adds a least-squares line.
     valid = ~isnan(x) & ~isnan(y);
     xv = x(valid);
@@ -1653,7 +1558,7 @@ function plot_num_num(ax, x, y, xname, yname)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_num_cat(ax, catdata, numdata, catname, numname, has_stats, flipped)
+function plot_num_cat(ax, catdata, numdata, ~, ~, ~, ~)
 % ≤5 categories  → hand-drawn box plot (within-group distribution)
 % >5 categories  → horizontal median dot plot ranked by median (top 15)
 
@@ -1715,7 +1620,7 @@ function plot_num_cat(ax, catdata, numdata, catname, numname, has_stats, flipped
         % always include min and max, fill remaining slots with
         % evenly-spaced quantiles of the median distribution.
         valid_med = find(~isnan(med_vals));
-        [sorted_meds, sort_ord] = sort(med_vals(valid_med));
+        [~, sort_ord] = sort(med_vals(valid_med));
         valid_med = valid_med(sort_ord);   % indices into all_cats, sorted by median
 
         if numel(valid_med) <= MAX_DOTS
@@ -1750,7 +1655,7 @@ function plot_num_cat(ax, catdata, numdata, catname, numname, has_stats, flipped
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_cat_cat(ax, x, y, xname, yname)
+function plot_cat_cat(ax, x, y, ~, ~)
 % Co-occurrence heatmap for two categorical columns.
     MAX_CATS = 10;   % heatmap becomes unreadable beyond this
 
@@ -1809,7 +1714,7 @@ function cats = top_cats(x, k)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_time_pair(ax, x, y, xname, yname, rtype, ctype)
+function plot_time_pair(ax, x, y, ~, ~, rtype, ctype)
 % Scatter or line for one datetime + one numeric column.
     if rtype == "datetime" && ctype == "numeric"
         tdata = x;  ndata = y;
@@ -1883,12 +1788,6 @@ for k = 1:numel(num_ranked)
     if isempty(num_sel)
         num_sel(end+1) = candidate; %#ok<AGROW>
     else
-        % Build matrix of valid rows for correlation check
-        cols_so_far = cell2mat(cellfun(@(n) ...
-            T.(n)(~any(isnan(cell2mat( ...
-                cellfun(@(nn) T.(nn), prof.name(num_sel), 'UniformOutput', false) ...
-            )), 2)), ...
-            prof.name(num_sel), 'UniformOutput', false));
         cand_col = T.(prof.name{candidate});
 
         % Keep rows where both candidate and all selected are non-NaN
@@ -2022,3 +1921,854 @@ function s = wrapped_name(name)
     lines{end+1} = cur_line;
     s = strjoin(lines, newline);
 end
+
+
+% ── cg_load_code ───────────────────────────────────────────────────────
+function code = cg_load_code(filepath, T)
+%SE_BUILD_LOAD_CODE  Return MATLAB code string that reloads this dataset.
+
+[~, ~, ext] = fileparts(filepath);
+ext = lower(string(ext));
+ud  = T.Properties.UserData;
+L   = {};   % lines
+
+if ext == ".zip"
+    inner = '';
+    if isstruct(ud) && ~isempty(ud.inner_file)
+        inner = ud.inner_file;
+    end
+    [~, ~, inner_ext] = fileparts(inner);
+    inner_ext = lower(inner_ext);
+    L{end+1} = sprintf('tmpdir = tempname; mkdir(tmpdir);');
+    L{end+1} = sprintf('unzip(''%s'', tmpdir);', filepath);
+    if ismember(inner_ext, {'.xlsx','.xls','.xlsm'})
+        sheet = '';
+        if isstruct(ud) && ~isempty(ud.sheet), sheet = ud.sheet; end
+        L{end+1} = sprintf('opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''Sheet'', ''%s'');', inner, sheet);
+        L{end+1} = 'opts.MissingRule = ''fill'';';
+        L{end+1} = sprintf('T = readtable(fullfile(tmpdir, ''%s''), opts, ''Sheet'', ''%s'');', inner, sheet);
+    else
+        L{end+1} = sprintf('opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''FileType'', ''text'');', inner);
+        L{end+1} = 'opts.MissingRule = ''fill'';';
+        L{end+1} = sprintf('T = readtable(fullfile(tmpdir, ''%s''), opts);', inner);
+    end
+elseif ismember(ext, [".xlsx", ".xls", ".xlsm"])
+    sheet = '';
+    if isstruct(ud) && ~isempty(ud.sheet), sheet = ud.sheet; end
+    L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''Sheet'', ''%s'');', filepath, sheet);
+    L{end+1} = 'opts.MissingRule = ''fill'';';
+    L{end+1} = sprintf('T = readtable(''%s'', opts, ''Sheet'', ''%s'');', filepath, sheet);
+elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
+    L{end+1} = sprintf('%% NetCDF — adjust variable/start/count as needed:');
+    L{end+1} = sprintf('data = ncread(''%s'', ''varname'');', filepath);
+    L{end+1} = sprintf('%% See ncinfo(''%s'') for available variables.', filepath);
+else
+    L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
+    L{end+1} = 'opts.MissingRule = ''fill'';';
+    L{end+1} = sprintf('T = readtable(''%s'', opts);', filepath);
+end
+
+code = strjoin(L, newline);
+end
+
+
+% ── cg_clean_code ──────────────────────────────────────────────────────
+function code = cg_clean_code()
+%CG_CLEAN_CODE  Emit recipe code for the clean/profile step.
+%   Uses de_profile, which handles type conversion and missing-value recoding.
+code = '[T, prof] = de_profile(T);';
+end
+
+
+% ── cg_best_plots_code ─────────────────────────────────────────────────
+function code = cg_best_plots_code(prof, sel, source_name)
+%CG_BEST_PLOTS_CODE  Emit recipe code for 1-2 standalone full-page plots.
+%
+%   Picks the top numeric column (best histogram) and the top numeric pair
+%   (best scatter) from the already-selected columns in SEL.
+%   If a datetime column exists, also generates a time-series plot.
+
+COLOR = '[0.35 0.55 0.75]';
+L = {};
+
+% ── Identify best numeric columns from sel ───────────────────────────────────
+sel_num = sel(prof.type(sel) == "numeric");
+
+if ~isempty(sel_num)
+    cn1 = prof.name{sel_num(1)};
+    cn1_sq = strrep(cn1, '''', '''''');
+    L{end+1} = sprintf('%% Best histogram: %s', cn1);
+    L{end+1} = sprintf('de_histogram(T.%s, ''%s'');', cn1, cn1_sq);
+    L{end+1} = '';
+end
+
+if numel(sel_num) >= 2
+    cn1 = prof.name{sel_num(1)};
+    cn2 = prof.name{sel_num(2)};
+
+    L{end+1} = sprintf('%% Best scatter: %s vs %s', cn1, cn2);
+    L{end+1} = sprintf('figure(''Name'', ''%s — %s vs %s'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
+        source_name, cn1, cn2);
+    L{end+1} = sprintf('x = T.%s; y = T.%s;', cn1, cn2);
+    L{end+1} = 'valid = ~isnan(x) & ~isnan(y);';
+    L{end+1} = 'n_pts = sum(valid);';
+    L{end+1} = sprintf('alpha = max(0.05, min(0.8, 500 / max(n_pts, 1)));');
+    L{end+1} = sprintf('scatter(x(valid), y(valid), 20, %s, ''filled'', ''MarkerFaceAlpha'', alpha);', COLOR);
+    L{end+1} = sprintf('xlabel(''%s''); ylabel(''%s'');', ...
+        strrep(cn1, '''', ''''''), strrep(cn2, '''', ''''''));
+    L{end+1} = sprintf('title(sprintf(''%s vs %s  (n=%%d)'', n_pts));', ...
+        strrep(cn1, '''', ''''''), strrep(cn2, '''', ''''''));
+    L{end+1} = 'box off;';
+    L{end+1} = '';
+end
+
+% ── Time series if a datetime column exists ───────────────────────────────────
+dt_idx = find(prof.type == "datetime" & ~prof.skip, 1, 'first');
+num_idx = sel_num;
+if ~isempty(dt_idx) && ~isempty(num_idx)
+    tcn = prof.name{dt_idx};
+    ncn = prof.name{num_idx(1)};
+
+    L{end+1} = sprintf('%% Time series: %s over %s', ncn, tcn);
+    L{end+1} = sprintf('figure(''Name'', ''%s — %s over time'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
+        source_name, ncn);
+    L{end+1} = sprintf('t = T.%s; y = T.%s;', tcn, ncn);
+    L{end+1} = 'valid = ~isnat(t) & ~isnan(y);';
+    L{end+1} = '[ts, ord] = sort(t(valid));';
+    L{end+1} = 'ys = y(valid); ys = ys(ord);';
+    L{end+1} = sprintf('plot(ts, ys, ''-'', ''Color'', %s, ''LineWidth'', 1.5);', COLOR);
+    L{end+1} = sprintf('xlabel(''%s''); ylabel(''%s'');', ...
+        strrep(tcn, '''', ''''''), strrep(ncn, '''', ''''''));
+    L{end+1} = sprintf('title(sprintf(''%s over time  (n=%%d)'', sum(valid)));', ...
+        strrep(ncn, '''', ''''''));
+    L{end+1} = 'box off;';
+    L{end+1} = '';
+end
+
+if isempty(L)
+    code = '% No plottable numeric columns found.';
+else
+    code = strjoin(L, newline);
+end
+end
+
+
+% ── se_assemble_recipe ───────────────────────────────────────────────────────
+function recipe_path = se_assemble_recipe(filepath, T, prof, options)
+%SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
+%
+%   The script is self-contained: load + clean + 1-2 best-of plots.
+%   It runs without DataExplorer installed.
+
+[~, bname, ~] = fileparts(filepath);
+bname_safe = regexprep(bname, '[^A-Za-z0-9_]', '_');
+recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s.m', bname_safe));
+
+% Select the same columns the pairplot used
+if ~isempty(options.Columns)
+    if isnumeric(options.Columns)
+        sel = options.Columns(:)';
+    else
+        cols = string(options.Columns);
+        sel  = find(ismember(string(prof.name), cols));
+    end
+    sel = sel(~prof.skip(sel));
+else
+    sel = se_select_columns(T, prof, options.MaxVars);
+end
+
+load_code  = cg_load_code(filepath, T);
+clean_code = cg_clean_code();
+plots_code = cg_best_plots_code(prof, sel, prof.source_name);
+
+header = sprintf([...
+    '%% DataExplorer recipe — %s\n' ...
+    '%% Generated %s\n' ...
+    '%% Requires DataExplorer.m on the MATLAB path (for de_profile, de_histogram).\n' ...
+    '%% To save this script: save_recipe(''%s_recipe.m'')\n'], ...
+    prof.source_name, datetime('now','Format','yyyy-MM-dd HH:mm'), ...
+    regexprep(prof.source_name, '[^A-Za-z0-9]', '_'));
+
+sections = { ...
+    header, ...
+    '%% === Load ===', load_code, '', ...
+    '%% === Clean ===', clean_code, '', ...
+    '%% === Best-of Plots ===', plots_code ...
+};
+
+script_text = strjoin(sections, newline);
+
+fid = fopen(recipe_path, 'w');
+if fid == -1
+    warning('DataExplorer:recipeFailed', ...
+        'Could not write recipe to %s', recipe_path);
+    recipe_path = '';
+    return
+end
+fprintf(fid, '%s\n', script_text);
+fclose(fid);
+end
+
+
+% ── se_find_time_axis ────────────────────────────────────────────────────────
+function [time_idx, is_year_axis] = se_find_time_axis(prof)
+%SE_FIND_TIME_AXIS  Return index of the time axis column and whether it is a
+%   year-named numeric (true) or a proper datetime column (false).
+%   Returns time_idx=[] if no time axis is found.
+
+dt_idx = find(prof.type == "datetime" & ~prof.skip, 1, 'first');
+if ~isempty(dt_idx)
+    time_idx    = dt_idx;
+    is_year_axis = false;
+    return
+end
+
+num_cols = find(prof.type == "numeric" & ~prof.skip);
+year_candidates = num_cols(arrayfun(@(i) ...
+    ~isempty(regexpi(prof.name{i}, 'year', 'once')), num_cols));
+if isscalar(year_candidates)
+    time_idx    = year_candidates;
+    is_year_axis = true;
+else
+    time_idx    = [];
+    is_year_axis = false;
+end
+end
+
+
+% ── se_plot_categorical_drilldown ────────────────────────────────────────────
+function se_plot_categorical_drilldown(T, prof, sel)
+%SE_PLOT_CATEGORICAL_DRILLDOWN  Grouped time series + scatter matrices by category.
+%
+%   For each qualifying categorical (non-constant, ≤15 levels):
+%     1. Grouped time series: one subplot per numeric variable, one line per level.
+%     2. Scatter matrix: np×np grid of scatters colored by that categorical.
+%   For geo-like categoricals (name contains "state", or levels are state codes):
+%     Bar charts of mean per state + state×time heatmap.
+
+MAX_LEVELS = 15;
+
+cat_all    = find(prof.type == "categorical" & ~prof.skip);
+cat_useful = cat_all(prof.nunique(cat_all) > 1 & ...
+                     prof.nunique(cat_all) <= MAX_LEVELS);
+cat_big    = cat_all(prof.nunique(cat_all) > MAX_LEVELS);
+
+[time_idx, is_year_axis] = se_find_time_axis(prof);
+
+% Numeric columns for scatter matrix: selected numerics excluding time axis
+sel_num = sel(prof.type(sel) == "numeric");
+if ~isempty(time_idx)
+    sel_num = sel_num(sel_num ~= time_idx);
+end
+% Cap scatter grid width for readability
+MAX_NP_DRILL = 6;
+if numel(sel_num) > MAX_NP_DRILL
+    sel_num = sel_num(1:MAX_NP_DRILL);
+end
+
+% All non-skip numerics excluding time axis for time series subplots
+if ~isempty(time_idx)
+    ts_num = find(prof.type == "numeric" & ~prof.skip);
+    ts_num = ts_num(ts_num ~= time_idx);
+else
+    ts_num = [];
+end
+
+if ~isempty(cat_useful)
+    fprintf('  Categorical drill-down: %d grouping variable(s).\n', numel(cat_useful));
+    for k = 1:numel(cat_useful)
+        ci = cat_useful(k);
+        if ~isempty(time_idx) && ~isempty(ts_num)
+            se_plot_grouped_timeseries(T, prof, ci, time_idx, ts_num, is_year_axis);
+        end
+        if numel(sel_num) >= 2
+            se_plot_scatter_by_cat(T, prof, ci, sel_num);
+        end
+    end
+end
+
+% High-cardinality categoricals: geo treatment OR top-K drill-down
+TOP_K = 8;
+for k = 1:numel(cat_big)
+    ci = cat_big(k);
+    if se_looks_like_states(prof, ci, T)
+        se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis);
+    else
+        % Restrict to top-K levels by frequency so plots stay readable
+        catname_k = prof.name{ci};
+        cnt = histcounts(T.(catname_k));
+        [~, ord] = sort(cnt, 'descend');
+        top_levels = cellstr(categories(T.(catname_k)));
+        top_levels = top_levels(ord(1:min(TOP_K, end)));
+        row_mask = ismember(T.(catname_k), top_levels);
+        T_sub = T(row_mask, :);
+        T_sub.(catname_k) = removecats(T_sub.(catname_k));
+        fprintf('  Drill-down: %s — top %d of %d levels\n', ...
+            catname_k, numel(top_levels), prof.nunique(ci));
+        if ~isempty(time_idx) && ~isempty(ts_num)
+            se_plot_grouped_timeseries(T_sub, prof, ci, time_idx, ts_num, is_year_axis);
+        end
+        if numel(sel_num) >= 2
+            se_plot_scatter_by_cat(T_sub, prof, ci, sel_num);
+        end
+    end
+end
+
+if isempty(cat_useful) && isempty(cat_big), return; end
+end
+
+
+% ── se_plot_grouped_timeseries ───────────────────────────────────────────────
+function se_plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_year_axis)
+%SE_PLOT_GROUPED_TIMESERIES  One figure per categorical: mean of each numeric
+%   over time, one line per category level.  Aggregates rows sharing the same
+%   (level, time) by mean — appropriate when multiple rows exist per time point.
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+levels  = cellstr(categories(cat_col));
+n_lev   = numel(levels);
+colors  = lines(n_lev);
+tdata   = T.(prof.name{time_idx});
+
+% Vertical layout: one row per numeric variable, legend on every subplot
+n_num  = numel(num_idxs);
+
+fig = figure( ...
+    'Name',        sprintf('DataExplorer (by %s) — %s', catname, prof.source_name), ...
+    'Color',       [0.97 0.97 0.97], ...
+    'NumberTitle', 'off');
+tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+B_CI = 500;
+for j = 1:n_num
+    ax = nexttile(tl);
+    ncn   = prof.name{num_idxs(j)};
+    ydata = T.(ncn);
+
+    for lk = 1:n_lev
+        mask = cat_col == levels{lk};
+        t_sub = tdata(mask);
+        y_sub = ydata(mask);
+
+        if is_year_axis
+            valid = ~isnan(t_sub) & ~isnan(y_sub);
+        else
+            valid = ~isnat(t_sub) & ~isnan(y_sub);
+        end
+        if sum(valid) < 2, continue; end
+
+        t_v = t_sub(valid);
+        y_v = y_sub(valid);
+
+        % Bootstrap 95% CI per unique time value
+        [t_u, ~, tidx] = unique(t_v);
+        n_u = numel(t_u);
+        y_agg = nan(n_u, 1);
+        y_lo  = nan(n_u, 1);
+        y_hi  = nan(n_u, 1);
+        for tt = 1:n_u
+            vals = y_v(tidx == tt);
+            vals = vals(~isnan(vals));
+            nv = numel(vals);
+            if nv == 0, continue; end
+            y_agg(tt) = mean(vals);
+            if nv >= 2
+                bm = mean(vals(randi(nv, nv, B_CI)), 1);
+                bm = sort(bm);
+                y_lo(tt) = bm(max(1, round(0.025*B_CI)));
+                y_hi(tt) = bm(min(B_CI, round(0.975*B_CI)));
+            else
+                y_lo(tt) = vals; y_hi(tt) = vals;
+            end
+        end
+
+        % CI shading (only where both bounds are finite)
+        ok_ci = ~isnan(y_lo) & ~isnan(y_hi);
+        if sum(ok_ci) >= 2
+            hold(ax, 'on');
+            t_ci = t_u(ok_ci);
+            fill(ax, [t_ci; flipud(t_ci)], [y_hi(ok_ci); flipud(y_lo(ok_ci))], ...
+                colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
+                'HandleVisibility', 'off');
+        end
+
+        h = plot(ax, t_u, y_agg, '-o', ...
+            'Color',      colors(lk, :), ...
+            'MarkerSize', 3, ...
+            'LineWidth',  1.2, ...
+            'DisplayName', levels{lk});
+        hold(ax, 'on');
+        try
+            h.DataTipTemplate.DataTipRows(end+1) = ...
+                dataTipTextRow(catname, repmat(levels(lk), numel(t_u), 1));
+        catch
+        end
+    end
+
+    if j == n_num
+        xlabel(ax, prof.name{time_idx}, 'FontSize', 8, 'Interpreter', 'none');
+    end
+    ylabel(ax, ncn, 'FontSize', 7, 'Interpreter', 'none');
+    legend(ax, 'Location', 'bestoutside', 'FontSize', 6, 'Interpreter', 'none');
+    box(ax, 'off');
+end
+
+title(tl, sprintf('%s — by %s', prof.source_name, catname), ...
+    'FontSize', 10, 'Interpreter', 'none');
+end
+
+
+% ── se_plot_scatter_by_cat ───────────────────────────────────────────────────
+function se_plot_scatter_by_cat(T, prof, cat_idx, sel_num)
+%SE_PLOT_SCATTER_BY_CAT  np×np scatter matrix with points colored by category.
+%   Diagonal: overlapping probability-normalized histograms per level.
+%   Off-diagonal: scatter plots, one color per level.
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+levels  = cellstr(categories(cat_col));
+n_lev   = numel(levels);
+colors  = lines(n_lev);
+
+MAX_NP = 6;
+sel_num = sel_num(1:min(end, MAX_NP));
+np = numel(sel_num);
+
+fig = figure( ...
+    'Name',        sprintf('DataExplorer (%s) — %s', catname, prof.source_name), ...
+    'Color',       [0.97 0.97 0.97], ...
+    'NumberTitle', 'off');
+tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
+
+% Choose alpha based on total non-missing point count
+n_total = height(T);
+pt_alpha = max(0.1, min(0.7, 300 / max(n_total, 1)));
+
+% Collect one handle per level for the shared legend
+legend_handles = gobjects(n_lev, 1);
+
+for r = 1:np
+    for c = 1:np
+        ax = nexttile(tl);
+        ri    = sel_num(r);
+        ci    = sel_num(c);
+        xname = prof.name{ci};
+        yname = prof.name{ri};
+        xdata = T.(xname);
+        ydata = T.(yname);
+
+        if r == c
+            % Diagonal: overlapping normalized histograms
+            for lk = 1:n_lev
+                mask = cat_col == levels{lk};
+                x = xdata(mask);
+                x = x(~isnan(x));
+                if numel(x) < 2, continue; end
+                h = histogram(ax, x, 15, ...
+                    'Normalization', 'probability', ...
+                    'FaceColor',     colors(lk, :), ...
+                    'FaceAlpha',     0.45, ...
+                    'EdgeColor',     'none', ...
+                    'DisplayName',   levels{lk});
+                hold(ax, 'on');
+                try
+                    nb = numel(h.Values);
+                    h.DataTipTemplate.DataTipRows(end+1) = ...
+                        dataTipTextRow(catname, repmat(levels(lk), nb, 1));
+                catch
+                end
+                if ~isgraphics(legend_handles(lk))
+                    legend_handles(lk) = h;
+                end
+            end
+        else
+            % Off-diagonal: colored scatter + per-level regression line + r
+            for lk = 1:n_lev
+                mask  = cat_col == levels{lk};
+                x     = xdata(mask);
+                y     = ydata(mask);
+                valid = ~isnan(x) & ~isnan(y);
+                if ~any(valid), continue; end
+                xv = x(valid);  yv = y(valid);
+                if numel(xv) >= 5
+                    r_val = corr(xv, yv);
+                    lbl   = sprintf('%s (r=%.2f)', levels{lk}, r_val);
+                    [ci_lo, ci_hi, x_fit, y_fit] = de_bootstrap_poly_ci(xv, yv, 1, 0.95, 300);
+                    if ~isempty(y_fit)
+                        hold(ax, 'on');
+                        x_poly = [x_fit; flipud(x_fit)];
+                        y_poly = [ci_hi; flipud(ci_lo)];
+                        h_fill = fill(ax, x_poly, y_poly, ...
+                            colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
+                            'HandleVisibility', 'off');
+                        try
+                            h_fill.DataTipTemplate.DataTipRows(end+1) = ...
+                                dataTipTextRow(catname, repmat(levels(lk), numel(x_poly), 1));
+                        catch
+                        end
+                        h_line = plot(ax, x_fit, y_fit, '-', 'Color', colors(lk,:), ...
+                            'LineWidth', 1.5, 'HandleVisibility', 'off');
+                        try
+                            h_line.DataTipTemplate.DataTipRows(end+1) = ...
+                                dataTipTextRow(catname, repmat(levels(lk), numel(x_fit), 1));
+                        catch
+                        end
+                    end
+                else
+                    lbl = levels{lk};
+                end
+                h = scatter(ax, xv, yv, 8, colors(lk, :), 'filled', ...
+                    'MarkerFaceAlpha', pt_alpha, 'DisplayName', lbl);
+                hold(ax, 'on');
+                try
+                    h.DataTipTemplate.DataTipRows(end+1) = ...
+                        dataTipTextRow(catname, repmat(levels(lk), numel(xv), 1));
+                catch
+                end
+                if ~isgraphics(legend_handles(lk))
+                    legend_handles(lk) = h;
+                end
+            end
+        end
+
+        set(ax, 'XTick', [], 'YTick', []);
+        box(ax, 'off');
+
+        if r == 1
+            title(ax, short_name(xname), 'FontSize', 7, ...
+                'FontWeight', 'bold', 'Interpreter', 'none');
+        end
+        if r == c && r > 1
+            title(ax, short_name(yname), 'FontSize', 7, ...
+                'FontWeight', 'bold', 'Interpreter', 'none');
+        end
+        if c == 1
+            yl = ylabel(ax, short_name(yname), 'FontSize', 6, 'Interpreter', 'none');
+            set(yl, 'Rotation', 0, 'HorizontalAlignment', 'right');
+        end
+    end
+end
+
+% One shared legend for the whole figure, placed in the east tile strip
+valid_mask   = isgraphics(legend_handles);
+valid_h      = legend_handles(valid_mask);
+valid_labels = levels(valid_mask);
+if ~isempty(valid_h)
+    lgd = legend(nexttile(tl, 1), valid_h, valid_labels, ...
+        'FontSize', 6, 'Interpreter', 'none');
+    lgd.Layout.Tile = 'east';
+end
+
+title(tl, sprintf('%s — colored by %s', prof.source_name, catname), ...
+    'FontSize', 10, 'Interpreter', 'none');
+end
+
+
+% ── se_looks_like_states ──────────────────────────────────────────────────────
+function tf = se_looks_like_states(prof, idx, T)
+%SE_LOOKS_LIKE_STATES  True if categorical column looks like U.S. state identifiers.
+%   Matches on: column name containing "state"; ≥80% of levels are 2-letter
+%   U.S. state/territory abbreviations; or ≥80% are full U.S. state names.
+tf = false;
+catname = prof.name{idx};
+if contains(lower(catname), 'state')
+    tf = true;
+    return;
+end
+US_CODES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA", ...
+            "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD", ...
+            "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ", ...
+            "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC", ...
+            "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY", ...
+            "DC","PR","GU","VI","AS","MP"];
+US_NAMES = ["ALABAMA","ALASKA","ARIZONA","ARKANSAS","CALIFORNIA", ...
+            "COLORADO","CONNECTICUT","DELAWARE","FLORIDA","GEORGIA", ...
+            "HAWAII","IDAHO","ILLINOIS","INDIANA","IOWA","KANSAS", ...
+            "KENTUCKY","LOUISIANA","MAINE","MARYLAND","MASSACHUSETTS", ...
+            "MICHIGAN","MINNESOTA","MISSISSIPPI","MISSOURI","MONTANA", ...
+            "NEBRASKA","NEVADA","NEW HAMPSHIRE","NEW JERSEY","NEW MEXICO", ...
+            "NEW YORK","NORTH CAROLINA","NORTH DAKOTA","OHIO","OKLAHOMA", ...
+            "OREGON","PENNSYLVANIA","RHODE ISLAND","SOUTH CAROLINA", ...
+            "SOUTH DAKOTA","TENNESSEE","TEXAS","UTAH","VERMONT","VIRGINIA", ...
+            "WASHINGTON","WEST VIRGINIA","WISCONSIN","WYOMING", ...
+            "DISTRICT OF COLUMBIA","PUERTO RICO","GUAM"];
+levels = upper(cellstr(categories(T.(catname))));
+if numel(levels) >= 3
+    if all(cellfun(@numel, levels) == 2)
+        tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_CODES)), levels)) / numel(levels) >= 0.8;
+    else
+        tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_NAMES)), levels)) / numel(levels) >= 0.8;
+    end
+end
+end
+
+
+% ── se_plot_state_summary ─────────────────────────────────────────────────────
+function se_plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis)
+%SE_PLOT_STATE_SUMMARY  Bar charts of mean-per-state and state×time heatmaps.
+%   Figure 1: horizontal bar chart of mean value per state, sorted descending.
+%   Figure 2 (if time axis exists): imagesc heatmap of state × time for each numeric.
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+states  = cellstr(unique(cat_col(~isundefined(cat_col))));
+n_st    = numel(states);
+if n_st == 0, return; end
+
+% Numeric columns to show: union of sel_num and ts_num
+num_idxs = unique([sel_num, ts_num(:)']);
+num_idxs = num_idxs(prof.type(num_idxs) == "numeric");
+if ~isempty(time_idx)
+    num_idxs = num_idxs(num_idxs ~= time_idx);
+end
+n_num = numel(num_idxs);
+if n_num == 0, return; end
+
+fprintf('  State summary: %d states × %d variables.\n', n_st, n_num);
+
+% ── Figure 1: horizontal bar charts of mean per state ────────────────────────
+n_cols = min(n_num, 3);
+n_rows = ceil(n_num / n_cols);
+
+fig = figure('Name', sprintf('DataExplorer (by %s) — %s', catname, prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+tl = tiledlayout(fig, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+for j = 1:n_num
+    ax = nexttile(tl);
+    ncn   = prof.name{num_idxs(j)};
+    ydata = T.(ncn);
+    means = NaN(n_st, 1);
+    for s = 1:n_st
+        vals = ydata(cat_col == states{s});
+        vals = vals(~isnan(vals));
+        if ~isempty(vals), means(s) = mean(vals); end
+    end
+    [means_s, sord] = sort(means, 'descend', 'MissingPlacement', 'last');
+    states_s = states(sord);
+    barh(ax, 1:n_st, means_s, 'FaceColor', [0.3 0.5 0.8], 'EdgeColor', 'none');
+    set(ax, 'YTick', 1:n_st, 'YTickLabel', states_s, 'FontSize', 5, ...
+        'YDir', 'reverse');
+    title(ax, short_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    box(ax, 'off');
+end
+title(tl, sprintf('%s — mean by %s', prof.source_name, catname), ...
+    'FontSize', 10, 'Interpreter', 'none');
+
+% ── Figure 2: state × time heatmap ───────────────────────────────────────────
+if isempty(time_idx), return; end
+
+tdata = T.(prof.name{time_idx});
+if is_year_axis
+    valid_t = ~isnan(tdata);
+else
+    valid_t = ~isnat(tdata);
+end
+t_vals = unique(tdata(valid_t));
+n_t    = numel(t_vals);
+if n_t < 2, return; end
+
+fig2 = figure('Name', sprintf('DataExplorer (%s × time) — %s', catname, prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+for j = 1:n_num
+    ax = nexttile(tl2);
+    ncn   = prof.name{num_idxs(j)};
+    ydata = T.(ncn);
+    Heat  = NaN(n_st, n_t);
+    for s = 1:n_st
+        s_mask = cat_col == states{s};
+        for tt = 1:n_t
+            mask = s_mask & (tdata == t_vals(tt));
+            vals = ydata(mask);
+            vals = vals(~isnan(vals));
+            if ~isempty(vals), Heat(s, tt) = mean(vals); end
+        end
+    end
+    imagesc(ax, Heat);
+    colorbar(ax);
+    if is_year_axis
+        step = max(1, floor(n_t / 8));
+        set(ax, 'XTick', 1:step:n_t, ...
+            'XTickLabel', t_vals(1:step:n_t), ...
+            'XTickLabelRotation', 45);
+    else
+        set(ax, 'XTick', []);
+    end
+    set(ax, 'YTick', 1:n_st, 'YTickLabel', states, 'FontSize', 5);
+    title(ax, short_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    box(ax, 'off');
+end
+title(tl2, sprintf('%s — %s over time', prof.source_name, catname), ...
+    'FontSize', 10, 'Interpreter', 'none');
+
+% ── Animated choropleth (Mapping Toolbox) ─────────────────────────────────────
+se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis);
+end
+
+
+% ── se_plot_state_choropleth ──────────────────────────────────────────────────
+function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis)
+%SE_PLOT_STATE_CHOROPLETH  Interactive U.S. choropleth map via the Mapping Toolbox.
+%   One figure per numeric variable.  A year slider lets the user scrub through
+%   time without blocking MATLAB — the callback updates patch FaceColors.
+%   Requires the Mapping Toolbox and usastatelo.shp.
+
+if isempty(ver('map'))
+    fprintf('  ℹ Mapping Toolbox not available — skipping choropleth.\n');
+    return;
+end
+try
+    S = shaperead('usastatelo.shp', 'UseGeoCoords', true);
+catch ME
+    fprintf('  ℹ Cannot load usastatelo.shp: %s\n', ME.message);
+    return;
+end
+n_shape     = numel(S);
+shape_upper = upper({S.Name});
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+
+tdata = T.(prof.name{time_idx});
+if is_year_axis
+    t_vals = unique(tdata(~isnan(tdata)));
+else
+    t_vals = unique(tdata(~isnat(tdata)));
+end
+n_t = numel(t_vals);
+if n_t == 0, return; end
+
+cmap_ch = parula(256);
+
+for j = 1:numel(num_idxs)
+    ncn   = prof.name{num_idxs(j)};
+    ydata = T.(ncn);
+
+    % Build state × time mean matrix
+    Heat = NaN(n_shape, n_t);
+    for si = 1:n_shape
+        s_mask = strcmpi(cellstr(cat_col), shape_upper{si});
+        for tt = 1:n_t
+            vals = ydata(s_mask & (tdata == t_vals(tt)));
+            vals = vals(~isnan(vals));
+            if ~isempty(vals), Heat(si, tt) = mean(vals); end
+        end
+    end
+
+    vmin = min(Heat(:), [], 'omitnan');
+    vmax = max(Heat(:), [], 'omitnan');
+    if isnan(vmin) || vmin == vmax, continue; end
+
+    fig = figure( ...
+        'Name',        sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name), ...
+        'Color',       [0.97 0.97 0.97], ...
+        'NumberTitle', 'off', ...
+        'Units',       'normalized', ...
+        'Position',    [0.05 0.12 0.88 0.80]);
+
+    % usamap creates its own axes in the current figure; reposition afterward
+    figure(fig);
+    ax = usamap('conus');
+    set(ax, 'Units', 'normalized', 'Position', [0 0.10 1 0.84]);
+    setm(ax, 'Frame', 'off', 'Grid', 'off', ...
+        'MeridianLabel', 'off', 'ParallelLabel', 'off');
+
+    % Draw patches for first time step.
+    % States with islands return multiple handles from patchm — store in cell.
+    patch_h = cell(n_shape, 1);
+    for si = 1:n_shape
+        fc = se_val_to_color(Heat(si, 1), vmin, vmax, cmap_ch);
+        patch_h{si} = patchm(S(si).Lat, S(si).Lon, 0, ...
+            'FaceColor', fc, 'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.3, ...
+            'Parent', ax);
+    end
+
+    colormap(ax, cmap_ch);
+    clim(ax, [vmin vmax]);
+    cb = colorbar(ax, 'Location', 'southoutside');
+    cb.Label.String = strrep(ncn, '_', ' ');
+    cb.FontSize = 8;
+
+    yr_label = @(tt) se_choropleth_yr_str(t_vals, tt, is_year_axis);
+    title_h = title(ax, ...
+        sprintf('%s — %s  (%s)', short_name(ncn), prof.source_name, yr_label(1)), ...
+        'FontSize', 11, 'Interpreter', 'none');
+
+    if n_t > 1
+        % Slider along the bottom
+        sld = uicontrol(fig, ...
+            'Style',    'slider', ...
+            'Units',    'normalized', ...
+            'Position', [0.10 0.02 0.80 0.05], ...
+            'Min',      1, 'Max', n_t, ...
+            'Value',    1, ...
+            'SliderStep', [1/(n_t-1) max(0.1, 5/(n_t-1))]);
+
+        lbl = uicontrol(fig, ...
+            'Style',    'text', ...
+            'Units',    'normalized', ...
+            'Position', [0.91 0.02 0.08 0.05], ...
+            'String',   yr_label(1), ...
+            'FontSize', 10, ...
+            'BackgroundColor', [0.97 0.97 0.97]);
+
+        % Capture needed vars in closure
+        Heat_c     = Heat;
+        patch_h_c  = patch_h;
+        vmin_c     = vmin; vmax_c = vmax;
+        cmap_c     = cmap_ch;
+        ncn_c      = ncn;
+        src_c      = prof.source_name;
+        t_vals_c   = t_vals;
+        is_yr_c    = is_year_axis;
+
+        sld.Callback = @(src, ~) se_choropleth_update( ...
+            src, Heat_c, patch_h_c, vmin_c, vmax_c, cmap_c, ...
+            ncn_c, src_c, t_vals_c, is_yr_c, title_h, lbl);
+    end
+end
+end
+
+
+function se_choropleth_update(sld, Heat, patch_h, vmin, vmax, cmap, ... %#ok<DEFNU>
+        ncn, src_name, t_vals, is_year_axis, title_h, lbl)
+tt = round(sld.Value);
+sld.Value = tt;
+n_shape = numel(patch_h);
+for si = 1:n_shape
+    fc = se_val_to_color(Heat(si, tt), vmin, vmax, cmap);
+    set(patch_h{si}, 'FaceColor', fc);
+end
+yr_str = se_choropleth_yr_str(t_vals, tt, is_year_axis);
+title_h.String = sprintf('%s — %s  (%s)', short_name(ncn), src_name, yr_str);
+lbl.String = yr_str;
+end
+
+
+function s = se_choropleth_yr_str(t_vals, tt, is_year_axis)
+if is_year_axis
+    s = sprintf('%g', t_vals(tt));
+else
+    s = sprintf('%d', year(t_vals(tt)));
+end
+end
+
+
+% ── se_val_to_color ───────────────────────────────────────────────────────────
+function fc = se_val_to_color(val, vmin, vmax, cmap)
+%SE_VAL_TO_COLOR  Scalar → RGB via colormap.  Returns gray for NaN.
+if isnan(val)
+    fc = [0.85 0.85 0.85];
+else
+    norm = max(0, min(1, (val - vmin) / (vmax - vmin)));
+    ci   = max(1, min(size(cmap, 1), floor(norm * size(cmap, 1)) + 1));
+    fc   = cmap(ci, :);
+end
+end
+
+
+% de_profile, de_histogram, de_bootstrap_poly_ci are standalone .m files
+% in the same directory as DataExplorer.m — callable from any script on the path.

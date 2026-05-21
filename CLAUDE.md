@@ -129,6 +129,27 @@ Current ranker (line 1832): numeric score = `std/range`; categorical score = Sha
 
 Fix should be driven by concrete bad examples from the baseline session (task 1), not theory alone.
 
+### Task 6 amendment — Sentinel detection via outlier detection
+`se_profile` does **not** attempt numeric sentinel replacement (the -999/-9999 heuristic was removed). Missing text sentinels ("N/A", "NULL", etc.) are handled by `MissingStrings` before numeric conversion; that is sufficient for now. Task 6's outlier detection pass is the right place to surface candidate sentinel values: far AND repeated univariate outliers should be recoded automatically (the goal is a useful first pass with minimal input), but the recode must be printed so the user can review and undo post-hoc. Never silent. Constraint: some legitimate extremes are indistinguishable from sentinels by value alone (e.g., 0 or -1 as satellite dry mass at launch) — the printout is the safety net.
+
+### Task 7 amendment — Decide library vs. vanilla code in recipes
+Recipe output is currently vanilla MATLAB (portable, no dependency). The alternative: expose DataExplorer internals as a named library (`de_profile`, `de_histogram`, etc.) and use those in recipe code. This produces cleaner, more readable output and gives students reusable vocabulary, but adds a dependency. Decide this question before finalizing Task 7 recipe format — the baseline session (Task 1) is the right moment to look at actual recipe output and judge readability. Candidate library functions to brainstorm: `se_select_columns`/interestingness ranker, `se_profile`, best-plot generators, outlier/sentinel detection.
+
+### Task 10 — Categorical drill-down figures
+After the pairplot, add a "categorical drill-down" phase that fires when at least one useful categorical exists. Heuristic filter: skip categoricals where `nunique == 1` (constant); for coloring/grouping, also skip those with cardinality > ~15 unless they are a known geo key (e.g., 2-letter `StateCode`).
+
+Three new figure types, in priority order:
+
+1. **Grouped time series** — for each qualifying categorical, one figure showing the numeric variables over time (or year axis) with one line per category level. This is the most immediately useful: for cigarette data, this would show prevalence trends by state, focus group, etc.
+
+2. **Scatter matrix × categorical** — for each qualifying categorical, one page of np×np scatters where points are colored by that categorical's levels. Expands the existing correlation heatmap cells into grouped scatter views. Cap at `MaxVars` columns for the scatter grid.
+
+3. **Choropleth maps** — when a categorical matches a known geographic key pattern (2-letter state codes, FIPS, country ISO) and the Mapping Toolbox is available, produce one map per numeric variable showing values by geography. Extend the existing `se_plot_geo` (which handles lat/lon) to also handle administrative-key columns.
+
+All three figure types can generate many figures quickly. Apply the interestingness ranker from Task 8 to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
+
+**Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines.
+
 ### Task 9 — Create and maintain a Python version
 Full Python port with the same five-phase pipeline. Natural equivalents: pandas (load/profile), matplotlib/seaborn (plots), xarray/netCDF4 (NetCDF), scikit-learn `GaussianMixture` (task 6), scipy `f_oneway` (task 8 ANOVA ranker). Recipe output should be a Jupyter notebook (`.ipynb`) — the native Python exploration format — rather than a `.m` file. This is a meaningful divergence from the MATLAB version (not a strict translation) and gives a better Python-native experience.
 
