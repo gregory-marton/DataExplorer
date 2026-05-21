@@ -75,6 +75,51 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             n = numel(findall(0, 'Type', 'figure'));
         end
 
+        function figs = figures_named(~, keyword)
+            % Return all open figures whose Name contains keyword (case-insensitive).
+            all_figs = findall(0, 'Type', 'figure');
+            mask = arrayfun(@(f) contains(lower(get(f,'Name')), lower(keyword)), all_figs);
+            figs = all_figs(mask);
+        end
+
+        function second = find_second_largest_sheet(~, filepath, sheets)
+            % Return the name of the second-largest sheet by row count.
+            % Returns "" if fewer than 2 non-empty sheets exist.
+            nrows = zeros(numel(sheets), 1);
+            for k = 1:numel(sheets)
+                try
+                    o = detectImportOptions(filepath, 'Sheet', sheets{k});
+                    if ~isempty(o.VariableNames)
+                        o.SelectedVariableNames = o.VariableNames(1);
+                        tmp = readtable(filepath, o, 'Sheet', sheets{k});
+                        nrows(k) = height(tmp);
+                    end
+                catch
+                end
+            end
+            [~, ord] = sort(nrows, 'descend');
+            if numel(ord) >= 2 && nrows(ord(2)) > 0
+                second = sheets{ord(2)};
+            else
+                second = "";
+            end
+        end
+
+        function assert_all_figures_nonempty(testCase)
+            % Every open figure must have at least one visible axes with data children.
+            figs = findall(0, 'Type', 'figure');
+            testCase.verifyNotEmpty(figs, 'No figures were created');
+            for k = 1:numel(figs)
+                fig_name = get(figs(k), 'Name');
+                all_ax = findall(figs(k), 'Type', 'axes');
+                vis_ax = all_ax(arrayfun(@(a) ~strcmp(get(a,'Visible'),'off'), all_ax));
+                has_data = ~isempty(vis_ax) && ...
+                           any(arrayfun(@(a) ~isempty(get(a,'Children')), vis_ax));
+                testCase.verifyTrue(has_data, ...
+                    sprintf('Figure "%s" has no data in any visible axes', fig_name));
+            end
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -84,6 +129,150 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function close_all_figures(~)
             close all;
         end
+    end
+
+    % ─────────────────────────────────────────────────────────────────────────
+    %  Unit tests — de_profile invariants
+    %
+    %  de_profile is a standalone .m file so these call it directly.
+    % ─────────────────────────────────────────────────────────────────────────
+    methods (Test, TestTags = {'unit'})
+
+        function test_matlab_version(testCase)
+            % DataExplorer targets R2025b (25.2). Running older versions risks
+            % silent failures in DataTipTemplate, boxchart, arguments blocks, etc.
+            testCase.verifyFalse(verLessThan('matlab', '25.2'), ...
+                sprintf('R2025b (25.2) required; this session is running %s (%s)', ...
+                    version, version('-release')));
+        end
+
+        function test_profile_numeric_column(testCase)
+            T = table([1;2;3;NaN;5], 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "numeric");
+            testCase.verifyEqual(prof.nmissing(1), 1);
+            testCase.verifyEqual(prof.nunique(1), 4);  % 1,2,3,5 (NaN excluded)
+        end
+
+        function test_profile_string_to_numeric_at_70pct(testCase)
+            % 4/5 = 80% parseable → converted to numeric
+            T = table(["1.0";"2.5";"bad";"4.0";"5.0"], 'VariableNames', {'X'});
+            [T2, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "numeric");
+            testCase.verifyTrue(isnumeric(T2.X), 'Column should be numeric after conversion');
+        end
+
+        function test_profile_string_below_70pct_stays_categorical(testCase)
+            % 2/5 = 40% parseable → stays categorical
+            T = table(["1.0";"foo";"bar";"baz";"5.0"], 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "categorical");
+        end
+
+        function test_profile_missing_sentinels_recoded(testCase)
+            % N/A and NA should count as missing
+            T = table(["1.0";"N/A";"3.0";"NA";"5.0"], 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.nmissing(1), 2, ...
+                'N/A and NA should both be recoded as missing');
+        end
+
+        function test_profile_mostly_missing_flagged_skip(testCase)
+            % >80% missing → skip = true
+            T = table([NaN;NaN;NaN;NaN;NaN;NaN;NaN;NaN;NaN;1.0], 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(prof.skip(1), 'Column with >80% missing should be skip=true');
+        end
+
+        function test_profile_id_column_flagged_skip(testCase)
+            % All-unique categorical → skip = true (ID detection)
+            T = table(categorical(["a";"b";"c";"d";"e"]), 'VariableNames', {'ID'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(prof.skip(1), 'All-unique categorical should be skip=true');
+        end
+
+        function test_profile_low_cardinality_categorical_not_skipped(testCase)
+            % Categorical with repeated values → not skipped
+            T = table(categorical(["a";"b";"a";"b";"a"]), 'VariableNames', {'Cat'});
+            [~, prof] = de_profile(T);
+            testCase.verifyFalse(prof.skip(1), ...
+                'Low-cardinality categorical should not be skipped');
+        end
+
+        function test_profile_source_name_is_scalar_string(testCase)
+            % Loading via a double-quoted path must not produce a 1×2 string array
+            % in prof.source_name (regression: [fname, fext] on string type).
+            f = fullfile(testCase.EXAMPLES_DIR, ...
+                'State_Tobacco_Related_Disparities_Dashboard_Data.csv');
+            if ~exist(f, 'file'), testCase.assumeFail('Tobacco CSV not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            % Pass as a MATLAB string (double-quoted) to exercise the string path
+            T = DataExplorer(string(f), 'MaxRows', 200);
+            % If source_name were 1×2, the overview sprintf('%d') would have crashed.
+            % Just reaching here confirms it's scalar. Double-check explicitly:
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(isscalar(prof.source_name) || ischar(prof.source_name), ...
+                'source_name should be a scalar (not a 1×2 string array)');
+        end
+
+        function test_recipe_uses_absolute_path(testCase)
+            % Regression: recipe embedded the relative path passed by the caller,
+            % so running the recipe from tempdir failed with "File not found".
+            f = fullfile(testCase.EXAMPLES_DIR, ...
+                'State_Tobacco_Related_Disparities_Dashboard_Data.csv');
+            if ~exist(f, 'file'), testCase.assumeFail('Tobacco CSV not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            % Load using a relative path (cd to examples/ first to reproduce the bug)
+            orig_dir = pwd;
+            cd(testCase.EXAMPLES_DIR);
+            dir_cleanup = onCleanup(@() cd(orig_dir));
+
+            DataExplorer('State_Tobacco_Related_Disparities_Dashboard_Data.csv', ...
+                'MaxRows', 100);
+
+            cd(orig_dir);   % restore before reading recipe so any remaining test code runs fine
+
+            recipe_path = se_find_latest_recipe();
+            testCase.assumeTrue(~isempty(recipe_path), 'No recipe was written — skip path check');
+
+            content = fileread(recipe_path);
+            % The relative filename must not appear bare in the recipe
+            testCase.verifyEmpty( ...
+                strfind(content, '''State_Tobacco_Related_Disparities_Dashboard_Data.csv'''), ...
+                'Recipe contains a relative path — should be absolute');
+        end
+
+        function test_missing_file_gives_named_error(testCase)
+            testCase.verifyError( ...
+                @() DataExplorer('no_such_file_xyz_abc.csv'), ...
+                'DataExplorer:fileNotFound');
+        end
+
+        function test_sampling_records_in_userdata(testCase)
+            % When DataExplorer samples a table, UserData.sampled should be set
+            % so the echo code emits SampleData() rather than readtable().
+            f = fullfile(testCase.EXAMPLES_DIR, ...
+                'State_Tobacco_Related_Disparities_Dashboard_Data.csv');
+            if ~exist(f, 'file'), testCase.assumeFail('Tobacco CSV not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 100);  % force sampling
+            ud = T.Properties.UserData;
+            testCase.verifyTrue(isstruct(ud) && isfield(ud, 'sampled') && ud.sampled > 0, ...
+                'UserData.sampled should be set when MaxRows forces a sample');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -232,10 +421,15 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEqual(testCase.timeseries_mode(), 'overlaid lines', ...
                 'Tobacco prevalence series should use overlaid lines, not stacked area');
 
+            % ── All figures non-empty ────────────────────────────────────
+            % Every figure must have at least one visible axes with data.
+            % Catches: empty overview tiles, choropleth stealing the wrong
+            % figure, any axes that got created but never drawn into.
+            testCase.assert_all_figures_nonempty();
+
             % ── Figure count ──────────────────────────────────────────────
-            % TODO: confirm exact count after watching session with figures visible.
-            % Minimum expected: overview (1+ pages) + time series + corr heatmap +
-            %                   pairplot + recipe best-of plots.
+            % Minimum expected: overview + time series + pairplot +
+            %                   categorical drill-down + recipe best-of plots.
             testCase.verifyGreaterThanOrEqual(testCase.figure_count(), 4, ...
                 'Expected at least 4 figures');
 
@@ -260,6 +454,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             % TODO (baseline): column count, types, figure count
             testCase.verifyGreaterThan(height(T), 0, 'Table is empty');
             testCase.verifyGreaterThan(width(T), 0, 'Table has no columns');
+            testCase.assert_all_figures_nonempty();
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
@@ -274,16 +469,44 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            T = DataExplorer(f, 'MaxRows', 1000);
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
 
             testCase.verifyGreaterThan(height(T), 0);
             % TODO (Task 3 + baseline): after header fix, column names should include
             % Data_Status, StateCode, MSN plus correctly-named year columns.
             % TODO (baseline): figure count, time series mode (wide year-format data
             % will trigger Task 4 pivot before time series is meaningful).
+            testCase.assert_all_figures_nonempty();
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
+        end
+
+        % ── Prod_dataset.xlsx — second-largest sheet ──────────────────────
+        % Exercises the Sheet= parameter on a file known to have 4 sheets.
+        % The default (AutoSelect) picks the largest; here we test the next one.
+        function test_excel_prod_dataset_secondary_sheet(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'Prod_dataset.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('Prod_dataset.xlsx not found'); end
+
+            sheets = sheetnames(f);
+            testCase.assumeGreaterThan(numel(sheets), 1, ...
+                'Prod_dataset.xlsx has only one sheet — nothing to test here');
+
+            second = testCase.find_second_largest_sheet(f, sheets);
+            testCase.assumeFalse(isempty(second), ...
+                'Could not find a second non-empty sheet');
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'Sheet', second, 'MaxRows', 1000);
+
+            testCase.verifyGreaterThan(height(T), 0, ...
+                sprintf('Sheet "%s" produced empty table', second));
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
         end
 
         % ── Energy peak xlsx  (not yet baselined) ─────────────────────────
@@ -295,11 +518,12 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            T = DataExplorer(f, 'MaxRows', 1000);
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
 
             % TODO (baseline): this dataset likely has compositional energy sources —
             % verify time series fires as STACKED AREA (unlike the tobacco CSV).
             testCase.verifyGreaterThan(height(T), 0);
+            testCase.assert_all_figures_nonempty();
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
@@ -318,6 +542,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
             % TODO (baseline): single CSV inside zip — should not prompt.
             testCase.verifyGreaterThan(height(T), 0);
+            testCase.assert_all_figures_nonempty();
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
@@ -335,15 +560,190 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             T = DataExplorer(f, 'MaxRows', 1000);
 
             testCase.verifyGreaterThan(height(T), 0);
+            testCase.assert_all_figures_nonempty();
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
         end
 
-        % ── NetCDF  (skipped until fixture strategy is decided) ───────────
+        % ── 2026 daygenbyfuel xlsx  (not yet baselined) ───────────────────
+        function test_excel_daygenbyfuel(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, '2026_daygenbyfuel.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('daygenbyfuel xlsx not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── 2026 daygenbyfuel xlsx — second-largest sheet ─────────────────
+        % EIA generation workbooks typically have both annual and monthly
+        % data sheets; this exercises Sheet= on the second one.
+        function test_excel_daygenbyfuel_secondary_sheet(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, '2026_daygenbyfuel.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('daygenbyfuel xlsx not found'); end
+
+            sheets = sheetnames(f);
+            testCase.assumeGreaterThan(numel(sheets), 1, ...
+                'daygenbyfuel has only one sheet — nothing to test here');
+
+            second = testCase.find_second_largest_sheet(f, sheets);
+            testCase.assumeFalse(isempty(second), ...
+                'Could not find a second non-empty sheet');
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'Sheet', second, 'MaxRows', 1000);
+
+            testCase.verifyGreaterThan(height(T), 0, ...
+                sprintf('Sheet "%s" produced empty table', second));
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── 311 service requests xlsx  (not yet baselined) ────────────────
+        function test_excel_311(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, ...
+                '311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('311 xlsx not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── eBird sample ZIP  (not yet baselined) ─────────────────────────
+        function test_zip_ebd(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'ebd-datafile-SAMPLE.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('eBird ZIP not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── FIADB urban CSV ZIP  (not yet baselined) ──────────────────────
+        function test_zip_fiadb(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'FIADB_URBAN_ENTIRE_CSV.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('FIADB ZIP not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── LLCP ASC (fixed-width BRFSS)  (not yet baselined) ─────────────
+        function test_asc_llcp(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'LLCP2024.ASC');
+            if ~exist(f, 'file'), testCase.assumeFail('LLCP ASC not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            % BRFSS fixed-width; load_text will attempt delimiter detection.
+            % MaxRows kept small: the file is very large.
+            T = DataExplorer(f, 'MaxRows', 500);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── LLCP zipped ASC  (not yet baselined) ──────────────────────────
+        function test_zip_llcp(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'LLCP2024ASC.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('LLCP zip not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 500, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── MA 2024 ZIP  (not yet baselined) ──────────────────────────────
+        function test_zip_ma(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'MA-2024.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('MA-2024 ZIP not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── xr latest DWCA ZIP  (not yet baselined) ───────────────────────
+        function test_zip_xr(testCase)
+            f = fullfile(testCase.EXAMPLES_DIR, 'xr_latest_dwca.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('xr DWCA ZIP not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+            testCase.assert_all_figures_nonempty();
+        end
+
+        % ── NetCDF: largest variable, flattened to long format ────────────
+        % AutoSelect picks the largest variable and flattens 3D+ to a long
+        % table (lat, lon, time, value).  That gives DataExplorer something
+        % it can run the full grouping flow on: geo columns for the
+        % choropleth, a time column for the time series, and the value
+        % column for distribution plots — same shape as the tobacco CSV.
         function test_netcdf(testCase)
-            testCase.assumeFail( ...
-                'NetCDF requires interactive variable selection — skipped until fixture strategy decided');
+            f = fullfile(testCase.EXAMPLES_DIR, 'ncdd-202501-grd-scaled.nc');
+            if ~exist(f, 'file'), testCase.assumeFail('NetCDF file not found'); end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            % AutoSelect: largest variable, flatten 3D → long format, sample
+            T = DataExplorer(f, 'AutoSelect', true, 'MaxRows', 2000);
+
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0, 'NetCDF flatten should produce multiple columns');
+            testCase.assert_all_figures_nonempty();
         end
 
         % ── Table input (no file) ─────────────────────────────────────────
@@ -359,6 +759,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             % Table input: no recipe written (Phase 5 is skipped for table input)
             testCase.verifyEqual(height(T), 50);
             testCase.verifyEqual(width(T), 4);
+            testCase.assert_all_figures_nonempty();
         end
 
     end
