@@ -110,6 +110,11 @@ end % ── DataExplorer ──────────────────
 function T = se_load(filepath, options)
 %SE_LOAD  Detect format, sniff delimiter, detect header row, load table.
 
+if ~isfile(filepath)
+    error('DataExplorer:fileNotFound', ...
+        'File not found: %s\n(current folder: %s)', filepath, pwd);
+end
+
 [~, basename, ext] = fileparts(filepath);
 ext = string(lower(ext));
 fprintf('\n  Loading: %s%s\n', basename, ext);
@@ -334,11 +339,16 @@ function T = load_text(filepath, options)
             file_mb, options.MaxRows);
         fprintf('    This avoids loading the full file into memory.\n');
         T = SampleData(filepath, options.MaxRows, 'Verbose', true);
+        T = se_record_sampled(T, height(T));
     else
         opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
         opts.MissingRule = 'fill';
         T = readtable(filepath, opts);
+        n_before = height(T);
         T = se_sample(T, options.MaxRows);
+        if height(T) < n_before
+            T = se_record_sampled(T, height(T));
+        end
     end
 
     T = se_fix_names(T, filepath, '.csv', []);
@@ -632,16 +642,6 @@ for i = 1:numel(lines)
         fprintf('  %s\n', lines{i});
     end
 end
-[~, ~, ext] = fileparts(filepath);
-ext = lower(ext);
-if ~ismember(ext, {'.zip', '.nc', '.nc4', '.netcdf', '.xlsx', '.xls', '.xlsm'})
-    info = dir(filepath);
-    if ~isempty(info) && info.bytes > 100e6
-        fprintf('\n  %% File is large (%.0f MB) — for a random sample use:\n', ...
-            info.bytes/1e6);
-        fprintf('  T = SampleData(''%s'', %d);\n', filepath, height(T));
-    end
-end
 fprintf('  ══════════════════════════════════════════════════════════\n\n');
 end
 
@@ -709,6 +709,17 @@ function T = se_sample(T, maxrows)
         fprintf('  ℹ Large file: keeping %d of %d rows (random sample).\n', ...
             maxrows, n);
         fprintf('    Increase with:  DataExplorer(file, MaxRows=N)\n');
+    end
+end
+
+
+% ── se_record_sampled ─────────────────────────────────────────────────────────
+function T = se_record_sampled(T, n)
+% Store how many rows were sampled so cg_load_code can emit SampleData().
+    if isempty(T.Properties.UserData)
+        T.Properties.UserData = struct('sheet', '', 'inner_file', '', 'sampled', n);
+    else
+        T.Properties.UserData.sampled = n;
     end
 end
 
@@ -1526,10 +1537,23 @@ end
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 function plot_num_num(ax, x, y, ~, ~)
 % Scatter with transparency for dense data; adds a least-squares line.
+% When one axis is discrete (few unique integer values, e.g. years), uses
+% box plots instead.
     valid = ~isnan(x) & ~isnan(y);
     xv = x(valid);
     yv = y(valid);
     if isempty(xv), axis(ax,'off'); return; end
+
+    x_disc = num_is_discrete(xv);
+    y_disc = num_is_discrete(yv);
+
+    if x_disc && ~y_disc
+        plot_boxchart_by_group(ax, xv, yv);
+        return;
+    elseif y_disc && ~x_disc
+        plot_boxchart_by_group(ax, yv, xv);
+        return;
+    end
 
     % Thin further if extremely dense (>5k points)
     MAX_SCATTER = 5000;
@@ -1555,6 +1579,30 @@ function plot_num_num(ax, x, y, ~, ~)
 
     hold(ax, 'off');
     box(ax, 'off');
+end
+
+function tf = num_is_discrete(v)
+% True when v looks like a discrete group axis: ≤25 unique integer values.
+tf = numel(unique(v)) <= 25 && max(abs(v - round(v))) < 0.01;
+end
+
+function plot_boxchart_by_group(ax, grp, vals)
+% Box-and-whisker per unique value of grp (e.g. one box per year).
+grp_cat = categorical(grp);
+try
+    boxchart(ax, grp_cat, vals, ...
+        'BoxFaceColor', [0.25 0.45 0.70], ...
+        'WhiskerLineColor', [0.25 0.45 0.70], ...
+        'MarkerColor', [0.25 0.45 0.70], ...
+        'MarkerStyle', '.', ...
+        'BoxWidth', 0.6);
+    xtickangle(ax, 45);
+    ax.XAxis.FontSize = 6;
+catch
+    scatter(ax, double(grp_cat), vals, 8, [0.25 0.45 0.70], 'filled', ...
+        'MarkerFaceAlpha', min(1, 500/numel(vals)));
+end
+box(ax, 'off');
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
@@ -1963,9 +2011,18 @@ elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
     L{end+1} = sprintf('data = ncread(''%s'', ''varname'');', filepath);
     L{end+1} = sprintf('%% See ncinfo(''%s'') for available variables.', filepath);
 else
-    L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
-    L{end+1} = 'opts.MissingRule = ''fill'';';
-    L{end+1} = sprintf('T = readtable(''%s'', opts);', filepath);
+    sampled_n = 0;
+    if isstruct(ud) && isfield(ud, 'sampled')
+        sampled_n = ud.sampled;
+    end
+    if sampled_n > 0
+        L{end+1} = sprintf('T = SampleData(''%s'', %d);', filepath, sampled_n);
+        L{end+1} = sprintf('%% Add Seed=42 for a reproducible sample.');
+    else
+        L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
+        L{end+1} = 'opts.MissingRule = ''fill'';';
+        L{end+1} = sprintf('T = readtable(''%s'', opts);', filepath);
+    end
 end
 
 code = strjoin(L, newline);
@@ -2187,24 +2244,52 @@ if ~isempty(cat_useful)
     end
 end
 
-% High-cardinality categoricals: geo treatment OR top-K drill-down
+% High-cardinality categoricals: geo treatment OR top-K drill-down with Other
 TOP_K = 8;
 for k = 1:numel(cat_big)
     ci = cat_big(k);
     if se_looks_like_states(prof, ci, T)
         se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis);
     else
-        % Restrict to top-K levels by frequency so plots stay readable
-        catname_k = prof.name{ci};
-        cnt = histcounts(T.(catname_k));
-        [~, ord] = sort(cnt, 'descend');
-        top_levels = cellstr(categories(T.(catname_k)));
-        top_levels = top_levels(ord(1:min(TOP_K, end)));
-        row_mask = ismember(T.(catname_k), top_levels);
-        T_sub = T(row_mask, :);
-        T_sub.(catname_k) = removecats(T_sub.(catname_k));
-        fprintf('  Drill-down: %s — top %d of %d levels\n', ...
-            catname_k, numel(top_levels), prof.nunique(ci));
+        catname_k  = prof.name{ci};
+        cat_col_k  = T.(catname_k);
+        all_levels = cellstr(categories(cat_col_k));  % N×1 column
+        cnt        = countcats(cat_col_k);            % N×1 column, same order
+        [~, ord]   = sort(cnt, 'descend');
+        n_show     = min(TOP_K, numel(all_levels));
+        top_levels = all_levels(ord(1:n_show));
+        n_other    = numel(all_levels) - n_show;
+
+        top_counts = cnt(ord(1:n_show));
+        top_labels = cellfun(@(lv, c) sprintf('%s (n=%d)', lv, c), ...
+            top_levels, num2cell(top_counts), 'UniformOutput', false);
+
+        if n_other > 0
+            n_other_rows = sum(~ismember(cat_col_k, top_levels) & ~isundefined(cat_col_k));
+            other_label  = sprintf('%d more groups (n=%d)', n_other, n_other_rows);
+            cat_str = string(cat_col_k);
+            for ti = 1:n_show
+                cat_str(cat_col_k == top_levels{ti}) = top_labels{ti};
+            end
+            cat_str(~ismember(cat_col_k, top_levels) & ~isundefined(cat_col_k)) = other_label;
+            cat_str(isundefined(cat_col_k)) = missing;
+            T_sub = T;
+            T_sub.(catname_k) = categorical(cat_str, [top_labels; {other_label}]);
+            T_sub = T_sub(~isundefined(T_sub.(catname_k)), :);
+            fprintf('  Drill-down: %s — top %d of %d levels + Other\n', ...
+                catname_k, n_show, prof.nunique(ci));
+        else
+            cat_str = string(cat_col_k);
+            for ti = 1:n_show
+                cat_str(cat_col_k == top_levels{ti}) = top_labels{ti};
+            end
+            cat_str(isundefined(cat_col_k)) = missing;
+            T_sub = T;
+            T_sub.(catname_k) = categorical(cat_str, top_labels);
+            T_sub = T_sub(~isundefined(T_sub.(catname_k)), :);
+            fprintf('  Drill-down: %s — all %d levels\n', catname_k, n_show);
+        end
+
         if ~isempty(time_idx) && ~isempty(ts_num)
             se_plot_grouped_timeseries(T_sub, prof, ci, time_idx, ts_num, is_year_axis);
         end
@@ -2647,43 +2732,51 @@ for j = 1:numel(num_idxs)
     ncn   = prof.name{num_idxs(j)};
     ydata = T.(ncn);
 
-    % Build state × time mean matrix
-    Heat = NaN(n_shape, n_t);
+    % Build state × time mean matrix and per-state observation counts
+    Heat  = NaN(n_shape, n_t);
+    N_obs = zeros(n_shape, n_t);
     for si = 1:n_shape
         s_mask = strcmpi(cellstr(cat_col), shape_upper{si});
         for tt = 1:n_t
             vals = ydata(s_mask & (tdata == t_vals(tt)));
             vals = vals(~isnan(vals));
-            if ~isempty(vals), Heat(si, tt) = mean(vals); end
+            if ~isempty(vals)
+                Heat(si, tt)  = mean(vals);
+                N_obs(si, tt) = numel(vals);
+            end
         end
     end
+    N_total = sum(N_obs, 1);   % total observations per time step
 
     vmin = min(Heat(:), [], 'omitnan');
     vmax = max(Heat(:), [], 'omitnan');
     if isnan(vmin) || vmin == vmax, continue; end
 
-    fig = figure( ...
-        'Name',        sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name), ...
-        'Color',       [0.97 0.97 0.97], ...
-        'NumberTitle', 'off', ...
-        'Units',       'normalized', ...
-        'Position',    [0.05 0.12 0.88 0.80]);
-
-    % usamap creates its own axes in the current figure; reposition afterward
-    figure(fig);
+    % usamap always creates its own figure — grab it afterward.
     ax = usamap('conus');
+    fig = ancestor(ax, 'figure');
+    fig.Name        = sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name);
+    fig.Color       = [0.97 0.97 0.97];
+    fig.NumberTitle = 'off';
+    fig.Units       = 'normalized';
+    fig.Position    = [0.05 0.12 0.88 0.80];
     set(ax, 'Units', 'normalized', 'Position', [0 0.10 1 0.84]);
     setm(ax, 'Frame', 'off', 'Grid', 'off', ...
         'MeridianLabel', 'off', 'ParallelLabel', 'off');
 
     % Draw patches for first time step.
     % States with islands return multiple handles from patchm — store in cell.
+    % Tag each handle with UserData for datacursormode tooltips.
     patch_h = cell(n_shape, 1);
     for si = 1:n_shape
         fc = se_val_to_color(Heat(si, 1), vmin, vmax, cmap_ch);
         patch_h{si} = patchm(S(si).Lat, S(si).Lon, 0, ...
             'FaceColor', fc, 'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.3, ...
             'Parent', ax);
+        hh = patch_h{si};
+        for hk = 1:numel(hh)
+            hh(hk).UserData = struct('state_idx', si, 'state_name', S(si).Name);
+        end
     end
 
     colormap(ax, cmap_ch);
@@ -2692,13 +2785,13 @@ for j = 1:numel(num_idxs)
     cb.Label.String = strrep(ncn, '_', ' ');
     cb.FontSize = 8;
 
-    yr_label = @(tt) se_choropleth_yr_str(t_vals, tt, is_year_axis);
-    title_h = title(ax, ...
-        sprintf('%s — %s  (%s)', short_name(ncn), prof.source_name, yr_label(1)), ...
-        'FontSize', 11, 'Interpreter', 'none');
+    yr_label   = @(tt) se_choropleth_yr_str(t_vals, tt, is_year_axis);
+    title_fmt  = @(tt) sprintf('mean(%s) — %s  (%s,  N = %d)', ...
+        short_name(ncn), prof.source_name, yr_label(tt), N_total(tt));
+    title_h = title(ax, title_fmt(1), 'FontSize', 11, 'Interpreter', 'none');
 
+    sld = [];
     if n_t > 1
-        % Slider along the bottom
         sld = uicontrol(fig, ...
             'Style',    'slider', ...
             'Units',    'normalized', ...
@@ -2715,7 +2808,6 @@ for j = 1:numel(num_idxs)
             'FontSize', 10, ...
             'BackgroundColor', [0.97 0.97 0.97]);
 
-        % Capture needed vars in closure
         Heat_c     = Heat;
         patch_h_c  = patch_h;
         vmin_c     = vmin; vmax_c = vmax;
@@ -2724,17 +2816,26 @@ for j = 1:numel(num_idxs)
         src_c      = prof.source_name;
         t_vals_c   = t_vals;
         is_yr_c    = is_year_axis;
+        N_total_c  = N_total;
 
         sld.Callback = @(src, ~) se_choropleth_update( ...
             src, Heat_c, patch_h_c, vmin_c, vmax_c, cmap_c, ...
-            ncn_c, src_c, t_vals_c, is_yr_c, title_h, lbl);
+            ncn_c, src_c, t_vals_c, is_yr_c, N_total_c, title_h, lbl);
     end
+
+    % Click-based tooltips via datacursormode (DataTipTemplate unreliable on map patches).
+    dcm = datacursormode(fig);
+    N_obs_dc    = N_obs;
+    Heat_dc     = Heat;
+    ncn_short_c = short_name(ncn);
+    sld_dc      = sld;
+    dcm.UpdateFcn = @(~, ev) se_choropleth_datatip(ev, Heat_dc, N_obs_dc, ncn_short_c, sld_dc);
 end
 end
 
 
 function se_choropleth_update(sld, Heat, patch_h, vmin, vmax, cmap, ... %#ok<DEFNU>
-        ncn, src_name, t_vals, is_year_axis, title_h, lbl)
+        ncn, src_name, t_vals, is_year_axis, N_total, title_h, lbl)
 tt = round(sld.Value);
 sld.Value = tt;
 n_shape = numel(patch_h);
@@ -2743,7 +2844,8 @@ for si = 1:n_shape
     set(patch_h{si}, 'FaceColor', fc);
 end
 yr_str = se_choropleth_yr_str(t_vals, tt, is_year_axis);
-title_h.String = sprintf('%s — %s  (%s)', short_name(ncn), src_name, yr_str);
+title_h.String = sprintf('mean(%s) — %s  (%s,  N = %d)', ...
+    short_name(ncn), src_name, yr_str, N_total(tt));
 lbl.String = yr_str;
 end
 
@@ -2753,6 +2855,28 @@ if is_year_axis
     s = sprintf('%g', t_vals(tt));
 else
     s = sprintf('%d', year(t_vals(tt)));
+end
+end
+
+
+function txt = se_choropleth_datatip(ev, Heat, N_obs, ncn_short, sld)
+% Click-tooltip for choropleth patches: state name, mean value, and n.
+ud = ev.Target.UserData;
+if ~isstruct(ud) || ~isfield(ud, 'state_idx')
+    txt = ''; return;
+end
+si = ud.state_idx;
+if ~isempty(sld) && isgraphics(sld)
+    tt = round(sld.Value);
+else
+    tt = 1;
+end
+val = Heat(si, tt);
+n   = N_obs(si, tt);
+if isnan(val)
+    txt = {ud.state_name, sprintf('mean(%s): N/A', ncn_short)};
+else
+    txt = {ud.state_name, sprintf('mean(%s): %.4g  (n = %d)', ncn_short, val, n)};
 end
 end
 
