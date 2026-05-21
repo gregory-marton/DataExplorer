@@ -951,7 +951,7 @@ np = numel(sel);   % number of columns in the plot grid
 fig = figure('Name', se_fig_title('Pairplot', prof.source_name), ...
     'Color', [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
-
+se_stamp_source(fig, prof.source_name);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
 n = height(T);
@@ -1076,7 +1076,7 @@ for pg = 1:n_pages
 
     fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], ...
         'NumberTitle', 'off');
-
+    se_stamp_source(fig, prof.source_name);
     tl = tiledlayout(fig, NROWS, NCOLS, 'TileSpacing', 'tight', 'Padding', 'compact');
 
     if n_pages == 1
@@ -1175,7 +1175,7 @@ end
 % ── Build figure ─────────────────────────────────────────────────────────────
 fig = figure('Name', se_fig_title('Map', prof.source_name),...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-
+se_stamp_source(fig, prof.source_name);
 BASE_SZ = 20;   % default marker area in points²
 
 if has_mapping
@@ -1364,6 +1364,7 @@ if use_stacked
     % Compositional data: stacked area figure first, then overlaid + Total.
     fig_s = figure('Name', se_fig_title('Time series (stacked)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    se_stamp_source(fig_s, prof.source_name);
     ax_s = axes(fig_s);
     Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
@@ -1378,6 +1379,7 @@ if use_stacked
 
     fig_o = figure('Name', se_fig_title('Time series (overlaid)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    se_stamp_source(fig_o, prof.source_name);
     ax_o = axes(fig_o);
     hold(ax_o, 'on');
     for k = 1:n_series
@@ -1393,8 +1395,8 @@ if use_stacked
             'LineWidth', 1.5, 'DisplayName', labels{k});
     end
     Y_total = sum(Y_mean, 2, 'omitnan');
-    plot(ax_o, tdata_u, Y_total, '--', 'Color', [0.15 0.15 0.15], ...
-        'LineWidth', 2, 'DisplayName', 'Total');
+    plot(ax_o, tdata_u, Y_total, '-', 'Color', [0.10 0.10 0.10], ...
+        'LineWidth', 3, 'DisplayName', 'Total');
     hold(ax_o, 'off');
     ylabel(ax_o, 'Value', 'FontSize', 8);
     legend(ax_o, [labels, {'Total'}], 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
@@ -1545,8 +1547,8 @@ if use_stacked
             'LineWidth', 1.5, 'DisplayName', labels{k});
     end
     Y_total = sum(Y_mean, 2, 'omitnan');
-    plot(ax_o, xdata_u, Y_total, '--', 'Color', [0.15 0.15 0.15], ...
-        'LineWidth', 2, 'DisplayName', 'Total');
+    plot(ax_o, xdata_u, Y_total, '-', 'Color', [0.10 0.10 0.10], ...
+        'LineWidth', 3, 'DisplayName', 'Total');
     hold(ax_o, 'off');
     ylabel(ax_o, 'Value', 'FontSize', 8);
     xlabel(ax_o, x_lbl, 'FontSize', 8, 'Interpreter', 'none');
@@ -2332,7 +2334,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     L{end+1} = '    end';
     if is_compositional
         L{end+1} = '    Y_total = sum(Y, 2, ''omitnan'');';
-        L{end+1} = '    plot(ax, t_u, Y_total, ''--'', ''Color'', [0.15 0.15 0.15], ''LineWidth'', 2, ''DisplayName'', ''Total'');';
+        L{end+1} = '    plot(ax, t_u, Y_total, ''-'', ''Color'', [0.10 0.10 0.10], ''LineWidth'', 3, ''DisplayName'', ''Total'');';
         L{end+1} = '    legend(ax, [ts_labels {''Total''}], ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
     else
         L{end+1} = '    legend(ax, ts_labels, ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
@@ -2985,24 +2987,27 @@ end
 
 
 % ── se_fig_title ─────────────────────────────────────────────────────────────
-function s = se_fig_title(label, source_name)
-% Build a figure window title. Omits the source suffix for table-input sessions.
-if strcmp(source_name, 'table input')
-    s = label;
-else
-    s = sprintf('%s — %s', label, source_name);
-end
+function s = se_fig_title(label, ~)
+s = label;
 end
 
 
 % ── se_src_prefix ─────────────────────────────────────────────────────────────
-function s = se_src_prefix(source_name, rest)
-% Build an axes title. Omits the source prefix for table-input sessions.
-if strcmp(source_name, 'table input')
-    s = rest;
-else
-    s = sprintf('%s  —  %s', source_name, rest);
+function s = se_src_prefix(~, rest)
+s = rest;
 end
+
+
+% ── se_stamp_source ───────────────────────────────────────────────────────────
+function se_stamp_source(fig, source_name)
+% Add a small gray source footnote at the bottom of the figure.
+if strcmp(source_name, 'table input'), return; end
+annotation(fig, 'textbox', [0.0, 0.0, 1.0, 0.022], ...
+    'String', source_name, ...
+    'EdgeColor', 'none', ...
+    'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
+    'FontSize', 7, 'Color', [0.55 0.55 0.55], 'Interpreter', 'none', ...
+    'FitBoxToText', 'off');
 end
 
 
