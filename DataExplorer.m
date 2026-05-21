@@ -11,6 +11,14 @@ function T = DataExplorer(source, options)
 %   MaxVars        (8)       columns shown in the plot matrix; prefers numeric
 %   Columns        ([])      override: specific names or indices to plot
 %   MissingStrings (list)    extra strings to recode as missing (see defaults)
+%   AutoSelect     (false)   skip all interactive prompts; pick defaults
+%                            (largest sheet/file; NetCDF: largest variable, flatten 3D+)
+%   Sheet          ("")      load a specific Excel sheet by name (bypasses prompt)
+%   InnerFile      ("")      load a specific file from a ZIP by name (bypasses prompt)
+%   NCVariable     ("")      NetCDF: variable name to load (bypasses variable prompt)
+%   NCReduction    ("")      NetCDF 3D+: "flatten" | "mean" | "slice" (bypasses reduction prompt)
+%   NCDimension    (1)       NetCDF: dimension index for "mean" or "slice" reduction
+%   NCSliceIndex   (1)       NetCDF: element index along NCDimension when NCReduction="slice"
 %
 %   Examples
 %   ────────
@@ -28,6 +36,22 @@ arguments
         "Suppressed", "N/A", "NA", "n/a", "--", "-", ...
         "None", "none", "null", "NULL", "missing", ...
         "Missing", "?", "Unknown", "unknown", "*"]
+    options.AutoSelect      (1,1) logical = false       % skip interactive prompts, pick default
+    options.Sheet           (1,1) string  = ""          % load a specific Excel sheet by name
+    options.InnerFile       (1,1) string  = ""          % load a specific file from a ZIP
+    options.NCVariable      (1,1) string  = ""          % NetCDF: variable name to load
+    options.NCReduction     (1,1) string  = ""          % NetCDF 3D+: "flatten"|"mean"|"slice"
+    options.NCDimension     (1,1) double  = 1           % NetCDF: dimension index for mean/slice
+    options.NCSliceIndex    (1,1) double  = 1           % NetCDF: element index when NCReduction="slice"
+end
+
+%% ── 0.  Version check ────────────────────────────────────────────────────
+% Developed and tested on R2025b (25.2). Features like DataTipTemplate,
+% boxchart, and the arguments block require recent releases.
+if verLessThan('matlab', '25.2')
+    warning('DataExplorer:oldMatlab', ...
+        'DataExplorer targets R2025b (25.2); running %s — tooltips, boxchart, and arguments blocks may not work.', ...
+        version('-release'));
 end
 
 %% ── 1.  Load ──────────────────────────────────────────────────────────────
@@ -158,7 +182,17 @@ function T = load_from_zip(filepath, options)
         error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX found inside the ZIP.');
     end
 
-    if isscalar(files)
+    if strlength(options.InnerFile) > 0
+        % Caller pinned a specific inner file — find it by name.
+        all_names = {files.name};
+        match = find(strcmp(all_names, char(options.InnerFile)), 1);
+        if isempty(match)
+            error('DataExplorer:innerFileNotFound', ...
+                'File "%s" not found inside ZIP. Available: %s', ...
+                options.InnerFile, strjoin(all_names, ', '));
+        end
+        choice_idx = match;
+    elseif isscalar(files)
         choice_idx = 1;
     else
         SMALL_FILE_BYTES = 5000;
@@ -198,26 +232,31 @@ function T = load_from_zip(filepath, options)
         fprintf('  Enter number (default %d = %s),\n', ...
             default_num, files_sorted(shown(default_num)).name);
 
-        while true
-            raw = input('  or filename for a hidden file: ', 's');
-            if isempty(raw)
-                choice_idx = shown(default_num);
-                break
-            elseif all(ismember(raw, '0123456789'))
-                n = str2double(raw);
-                if n >= 1 && n <= numel(shown)
-                    choice_idx = shown(n);
+        if options.AutoSelect
+            choice_idx = shown(default_num);
+            fprintf('  AutoSelect: picking default "%s"\n', files_sorted(choice_idx).name);
+        else
+            while true
+                raw = input('  or filename for a hidden file: ', 's');
+                if isempty(raw)
+                    choice_idx = shown(default_num);
                     break
+                elseif all(ismember(raw, '0123456789'))
+                    n = str2double(raw);
+                    if n >= 1 && n <= numel(shown)
+                        choice_idx = shown(n);
+                        break
+                    else
+                        fprintf('  Please enter a number between 1 and %d.\n', numel(shown));
+                    end
                 else
-                    fprintf('  Please enter a number between 1 and %d.\n', numel(shown));
-                end
-            else
-                match = find(strcmp({files_sorted.name}, raw), 1);
-                if ~isempty(match)
-                    choice_idx = match;
-                    break
-                else
-                    fprintf('  File "%s" not found in ZIP.\n', raw);
+                    match = find(strcmp({files_sorted.name}, raw), 1);
+                    if ~isempty(match)
+                        choice_idx = match;
+                        break
+                    else
+                        fprintf('  File "%s" not found in ZIP.\n', raw);
+                    end
                 end
             end
         end
@@ -238,7 +277,15 @@ end
 function T = load_excel(filepath, options)
     sheets = sheetnames(filepath);
 
-    if isscalar(sheets)
+    if strlength(options.Sheet) > 0
+        % Caller pinned a specific sheet — validate and use it directly.
+        if ~ismember(options.Sheet, sheets)
+            error('DataExplorer:sheetNotFound', ...
+                'Sheet "%s" not found. Available: %s', ...
+                options.Sheet, strjoin(sheets, ', '));
+        end
+        sheetname = char(options.Sheet);
+    elseif isscalar(sheets)
         sheetname = sheets{1};
     else
         % Get row and column count for each sheet
@@ -275,25 +322,30 @@ function T = load_excel(filepath, options)
         default_num = numel(sheets_s);
         fprintf('\n');
 
-        while true
-            raw = input(sprintf('  Which sheet? (name or number, Enter = %d = %s): ', ...
-                default_num, sheets_s{default_num}), 's');
-            if isempty(raw)
-                sheetname = sheets_s{default_num};
-                break
-            elseif all(ismember(raw, '0123456789'))
-                idx = str2double(raw);
-                if idx >= 1 && idx <= numel(sheets_s)
-                    sheetname = sheets_s{idx};
+        if options.AutoSelect
+            sheetname = sheets_s{default_num};
+            fprintf('  AutoSelect: picking largest sheet "%s"\n', sheetname);
+        else
+            while true
+                raw = input(sprintf('  Which sheet? (name or number, Enter = %d = %s): ', ...
+                    default_num, sheets_s{default_num}), 's');
+                if isempty(raw)
+                    sheetname = sheets_s{default_num};
+                    break
+                elseif all(ismember(raw, '0123456789'))
+                    idx = str2double(raw);
+                    if idx >= 1 && idx <= numel(sheets_s)
+                        sheetname = sheets_s{idx};
+                        break
+                    else
+                        fprintf('  Please enter a number between 1 and %d.\n', numel(sheets_s));
+                    end
+                elseif ismember(raw, sheets_s)
+                    sheetname = raw;
                     break
                 else
-                    fprintf('  Please enter a number between 1 and %d.\n', numel(sheets_s));
+                    fprintf('  Sheet "%s" not found. Options: %s\n', raw, strjoin(sheets_s, ', '));
                 end
-            elseif ismember(raw, sheets_s)
-                sheetname = raw;
-                break
-            else
-                fprintf('  Sheet "%s" not found. Options: %s\n', raw, strjoin(sheets_s, ', '));
             end
         end
     end
@@ -396,27 +448,40 @@ function T = load_netcdf(filepath, options)
     end
 
     default_num = nvars;   % largest = last = default
-    while true
-        raw = input(sprintf('  Which variable? (number or name, Enter = %d = %s): ', ...
-            default_num, var_names{ord(default_num)}), 's');
-        if isempty(raw)
-            var_idx = ord(default_num);
-            break
-        elseif all(ismember(raw, '0123456789'))
-            n = str2double(raw);
-            if n >= 1 && n <= nvars
-                var_idx = ord(n);
+    if strlength(options.NCVariable) > 0
+        match = find(strcmp(var_names, char(options.NCVariable)), 1);
+        if isempty(match)
+            error('DataExplorer:ncVariableNotFound', ...
+                'Variable "%s" not found. Available: %s', ...
+                options.NCVariable, strjoin(var_names, ', '));
+        end
+        var_idx = match;
+    elseif options.AutoSelect
+        var_idx = ord(default_num);
+        fprintf('  AutoSelect: picking largest variable "%s"\n', var_names{var_idx});
+    else
+        while true
+            raw = input(sprintf('  Which variable? (number or name, Enter = %d = %s): ', ...
+                default_num, var_names{ord(default_num)}), 's');
+            if isempty(raw)
+                var_idx = ord(default_num);
                 break
+            elseif all(ismember(raw, '0123456789'))
+                n = str2double(raw);
+                if n >= 1 && n <= nvars
+                    var_idx = ord(n);
+                    break
+                else
+                    fprintf('  Please enter a number between 1 and %d.\n', nvars);
+                end
             else
-                fprintf('  Please enter a number between 1 and %d.\n', nvars);
-            end
-        else
-            match = find(strcmp(var_names, raw), 1);
-            if ~isempty(match)
-                var_idx = match;
-                break
-            else
-                fprintf('  Variable "%s" not found.\n', raw);
+                match = find(strcmp(var_names, raw), 1);
+                if ~isempty(match)
+                    var_idx = match;
+                    break
+                else
+                    fprintf('  Variable "%s" not found.\n', raw);
+                end
             end
         end
     end
@@ -466,27 +531,44 @@ function T = load_netcdf(filepath, options)
         fprintf('    [2]  Single index along a dimension\n');
         fprintf('    [3]  Flatten everything to long-format table\n');
 
-        while true
-            raw = input('  Choice (Enter = 1): ', 's');
-            if isempty(raw), raw = '1'; end
-            if ismember(raw, {'1','2','3'}), break; end
-            fprintf('  Please enter 1, 2, or 3.\n');
+        % Resolve reduction choice non-interactively when requested
+        nc_red = lower(char(options.NCReduction));
+        if ismember(nc_red, {'flatten','mean','slice'})
+            raw = struct('flatten','3','mean','1','slice','2');
+            raw = raw.(nc_red);
+            fprintf('  NCReduction="%s": using option %s\n', nc_red, raw);
+        elseif options.AutoSelect
+            raw = '3';   % flatten preserves all coordinates — best for grouping flow
+            fprintf('  AutoSelect: flattening to long-format table\n');
+        else
+            while true
+                raw = input('  Choice (Enter = 1): ', 's');
+                if isempty(raw), raw = '1'; end
+                if ismember(raw, {'1','2','3'}), break; end
+                fprintf('  Please enter 1, 2, or 3.\n');
+            end
         end
 
-        % For options 1 and 2, ask which dimension
+        % For options 1 and 2, resolve which dimension non-interactively when possible
         if ismember(raw, {'1','2'})
-            while true
-                raw_dim = input(sprintf('  Which dimension? (1–%d, Enter = 1 = %s): ', ...
-                    ndim, dim_names{1}), 's');
-                if isempty(raw_dim)
-                    dim_choice = 1;
-                    break
+            if options.NCDimension >= 1 && options.NCDimension <= ndim && ...
+                    (strlength(options.NCReduction) > 0 || options.AutoSelect)
+                dim_choice = options.NCDimension;
+                fprintf('  Using NCDimension=%d ("%s")\n', dim_choice, dim_names{dim_choice});
+            else
+                while true
+                    raw_dim = input(sprintf('  Which dimension? (1–%d, Enter = 1 = %s): ', ...
+                        ndim, dim_names{1}), 's');
+                    if isempty(raw_dim)
+                        dim_choice = 1;
+                        break
+                    end
+                    dim_choice = str2double(raw_dim);
+                    if ~isnan(dim_choice) && dim_choice >= 1 && dim_choice <= ndim
+                        break
+                    end
+                    fprintf('  Please enter a number between 1 and %d.\n', ndim);
                 end
-                dim_choice = str2double(raw_dim);
-                if ~isnan(dim_choice) && dim_choice >= 1 && dim_choice <= ndim
-                    break
-                end
-                fprintf('  Please enter a number between 1 and %d.\n', ndim);
             end
         end
 
@@ -509,6 +591,12 @@ function T = load_netcdf(filepath, options)
                 fprintf('  Dimension "%s" has %d indices (1–%d).\n', ...
                     dim_names{dim_choice}, sz(dim_choice), sz(dim_choice));
                 while true
+                    if options.NCSliceIndex >= 1 && options.NCSliceIndex <= sz(dim_choice) && ...
+                            (strlength(options.NCReduction) > 0 || options.AutoSelect)
+                        ival = options.NCSliceIndex;
+                        fprintf('  Using NCSliceIndex=%d\n', ival);
+                        break;
+                    end
                     raw2 = input('  Which index? ', 's');
                     ival = str2double(raw2);
                     if ~isnan(ival) && ival >= 1 && ival <= sz(dim_choice), break; end
@@ -1431,7 +1519,7 @@ end
 
 % ── Cell-type plot helpers ────────────────────────────────────────────────────
 
-function plot_num_diag(ax, x, ~, nmissing, n)
+function plot_num_diag(ax, x, varname, nmissing, n)
 % Histogram with summary stats annotation (mean, std, min, max).
     valid = x(~isnan(x));
     if isempty(valid)
@@ -1440,8 +1528,11 @@ function plot_num_diag(ax, x, ~, nmissing, n)
             'Units', 'normalized', 'Color', [0.6 0.6 0.6]);
         return
     end
-    histogram(ax, valid, 'FaceColor', [0.35 0.55 0.75], ...
+    h = histogram(ax, valid, 'FaceColor', [0.35 0.55 0.75], ...
         'EdgeColor', 'none', 'FaceAlpha', 0.8);
+    nb = numel(h.Values);
+    h.DataTipTemplate.DataTipRows(end+1) = ...
+        dataTipTextRow('Variable', repmat({char(varname)}, nb, 1));
 
     % Stats block — top-right corner
     lo = min(valid);  hi = max(valid);
@@ -1463,7 +1554,7 @@ function plot_num_diag(ax, x, ~, nmissing, n)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_cat_diag(ax, x, ~, nmissing, n)
+function plot_cat_diag(ax, x, varname, nmissing, n)
 % Horizontal bar chart: quantile-spaced sample of categories by count.
     MAX_K = 15;
     if iscategorical(x)
@@ -1489,10 +1580,12 @@ function plot_cat_diag(ax, x, ~, nmissing, n)
 
     b = barh(ax, n_shown:-1:1, counts_s, 'FaceColor', [0.45 0.70 0.55], 'EdgeColor', 'none');
 
-    % Fix hover tooltip: replace numeric Y position with the category name
+    % Fix hover tooltip: variable name + category name + count
     b.DataTipTemplate.DataTipRows(1).Label = 'Count';
     b.DataTipTemplate.DataTipRows(2).Label = 'Category';
     b.DataTipTemplate.DataTipRows(2).Value = cats_s;   % bar i → cats_s{i}
+    b.DataTipTemplate.DataTipRows(end+1) = ...
+        dataTipTextRow('Variable', repmat({char(varname)}, n_shown, 1));
 
     % Category name tick labels, truncated to fit
     yticks(ax, 1:n_shown);
@@ -1509,7 +1602,7 @@ function plot_cat_diag(ax, x, ~, nmissing, n)
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-function plot_time_diag(ax, x, ~)
+function plot_time_diag(ax, x, varname)
 % Histogram of datetime values by year (or month if span < 2 years).
     if isduration(x)
         x = datetime(0,0,0) + x;   % convert to datetime for uniform handling
@@ -1518,18 +1611,21 @@ function plot_time_diag(ax, x, ~)
     if isempty(valid), axis(ax,'off'); return; end
     span_yrs = years(max(valid) - min(valid));
     if span_yrs < 2
-        histogram(ax, month(valid), 1:13, 'FaceColor', [0.65 0.50 0.75], ...
+        h = histogram(ax, month(valid), 1:13, 'FaceColor', [0.65 0.50 0.75], ...
             'EdgeColor', 'none');
         text(ax, 0.98, 0.97, sprintf('%d months', round(span_yrs*12)), ...
             'Units','normalized','HorizontalAlignment','right', ...
             'VerticalAlignment','top','FontSize',6.5,'Color',[0.2 0.2 0.2]);
     else
-        histogram(ax, year(valid), 'FaceColor', [0.65 0.50 0.75], ...
+        h = histogram(ax, year(valid), 'FaceColor', [0.65 0.50 0.75], ...
             'EdgeColor', 'none');
         text(ax, 0.98, 0.97, sprintf('%d–%d', year(min(valid)), year(max(valid))), ...
             'Units','normalized','HorizontalAlignment','right', ...
             'VerticalAlignment','top','FontSize',6.5,'Color',[0.2 0.2 0.2]);
     end
+    nb = numel(h.Values);
+    h.DataTipTemplate.DataTipRows(end+1) = ...
+        dataTipTextRow('Variable', repmat({char(varname)}, nb, 1));
     set(ax, 'YTick', [], 'FontSize', 7);
     box(ax, 'off');
 end
@@ -1990,6 +2086,12 @@ end
 % ── cg_load_code ───────────────────────────────────────────────────────
 function code = cg_load_code(filepath, T)
 %SE_BUILD_LOAD_CODE  Return MATLAB code string that reloads this dataset.
+
+% Resolve to absolute path so the recipe works regardless of working directory.
+d = dir(filepath);
+if ~isempty(d)
+    filepath = fullfile(d(1).folder, d(1).name);
+end
 
 [~, ~, ext] = fileparts(filepath);
 ext = lower(string(ext));
