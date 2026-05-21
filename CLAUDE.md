@@ -148,9 +148,27 @@ Three new figure types, in priority order:
 
 All three figure types can generate many figures quickly. Apply the interestingness ranker from Task 8 to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
 
-**Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines.
+**Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines. Compositional data now generates both a stacked area figure AND an overlaid-lines figure with a dashed Total line.
+
+**Choropleth refactored (2026-05-21):** `se_plot_state_choropleth` is now a thin wrapper over `de_usamap.m` — a standalone library function. Supports US CONUS + Alaska inset + Hawaii inset, point scatter overlay, TimeCol slider, custom shapefile.
+
+**Internal title prefix (2026-05-21):** `se_src_prefix(source_name, rest)` helper suppresses the "source —" prefix from axes titles when the source is "table input" (i.e., when T was passed directly rather than loaded from a file). Heatmap title format changed to "Time × CatName".
 
 ### Task 9 — Create and maintain a Python version
 Full Python port with the same five-phase pipeline. Natural equivalents: pandas (load/profile), matplotlib/seaborn (plots), xarray/netCDF4 (NetCDF), scikit-learn `GaussianMixture` (task 6), scipy `f_oneway` (task 8 ANOVA ranker). Recipe output should be a Jupyter notebook (`.ipynb`) — the native Python exploration format — rather than a `.m` file. This is a meaningful divergence from the MATLAB version (not a strict translation) and gives a better Python-native experience.
 
 **Maintenance:** every feature added to the MATLAB version needs a parallel Python implementation. Manage with a shared test matrix (same example datasets, same expected behaviors) and a feature parity checklist updated whenever either version changes. Resolve early: strict parity vs. Python-idiomatic reimagining (the latter is recommended but makes "in sync" harder to define precisely).
+
+### Task 11 — Create a JS/D3 browser variant
+Zero-install version deployable to GitHub Pages or any static host. Same five-phase pipeline adapted for the browser: `FileReader` API for load, D3 for plots, no server required.
+
+Recipe output format: a self-contained HTML file that is the *minimum code a student needs* to reproduce or extend the analysis — analogous to the MATLAB recipe using `de_histogram` as vocabulary. Not a no-code tool; the student is expected to edit the code.
+
+**Library candidates for recipe output:** Observable Plot (Jeremy Ashkenas, spiritual successor to D3, much less boilerplate than raw D3) or Plotly.js. Crossfilter is more suited to linked dashboards and is probably overkill for a starting recipe. D3 raw is too verbose for a recipe that students will edit. Recommend Observable Plot as default.
+
+**Design questions to resolve before starting:**
+- Do the three target variants (MATLAB, Python, JS) share a recipe spec, or does each do the idiomatic thing? Recommended: idiomatic per language (`.m`, `.ipynb`, standalone `.html`), with a shared test matrix verifying pipeline equivalence.
+- Subset of features for v1: load (CSV/TSV/Excel via SheetJS), profile, overview plots, pairplot, time series. NetCDF and ZIP deferred (harder in browser).
+- `de_geomap` equivalent: Leaflet or D3-geo with TopoJSON (natural fit for browser; no Mapping Toolbox dependency).
+
+**Relationship to Task 9:** Decide the feature parity checklist scope once Task 9 is underway — the JS variant follows the same checklist but may lag behind.

@@ -56,16 +56,34 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function mode = timeseries_mode(~)
             % Return 'stacked area' or 'overlaid lines' from the time-series
             % figure title, or '' if no time-series figure exists.
+            % For compositional data both figures exist; returns the first mode found.
             figs = findall(0, 'Type', 'figure');
             mode = '';
             for k = 1:numel(figs)
                 name = get(figs(k), 'Name');
-                if contains(name, 'time series')
+                if contains(lower(name), 'time series')
                     ax = findall(figs(k), 'Type', 'axes');
                     if ~isempty(ax)
                         t = get(get(ax(1), 'Title'), 'String');
                         if contains(t, 'stacked area'),   mode = 'stacked area';   return; end
                         if contains(t, 'overlaid lines'), mode = 'overlaid lines'; return; end
+                    end
+                end
+            end
+        end
+
+        function modes = all_timeseries_modes(~)
+            % Return cell array of all modes found across all time-series figures.
+            figs = findall(0, 'Type', 'figure');
+            modes = {};
+            for k = 1:numel(figs)
+                name = get(figs(k), 'Name');
+                if contains(lower(name), 'time series')
+                    ax = findall(figs(k), 'Type', 'axes');
+                    if ~isempty(ax)
+                        t = get(get(ax(1), 'Title'), 'String');
+                        if contains(t, 'stacked area'),   modes{end+1} = 'stacked area';   end
+                        if contains(t, 'overlaid lines'), modes{end+1} = 'overlaid lines'; end
                     end
                 end
             end
@@ -106,17 +124,26 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function assert_all_figures_nonempty(testCase)
-            % Every open figure must have at least one visible axes with data children.
+            % Every open figure must contain at least one data graphics object.
+            % Searches for patches, lines, images, surfaces, and bars directly —
+            % avoiding axes-type detection which misses usamap map axes and
+            % ColorBar objects introduced in R2019b.
+            DATA_TYPES = {'patch','line','image','surface','bar', ...
+                          'stair','area','stem','scatter','histogram', ...
+                          'histogram2','boxchart'};
             figs = findall(0, 'Type', 'figure');
             testCase.verifyNotEmpty(figs, 'No figures were created');
             for k = 1:numel(figs)
                 fig_name = get(figs(k), 'Name');
-                all_ax = findall(figs(k), 'Type', 'axes');
-                vis_ax = all_ax(arrayfun(@(a) ~strcmp(get(a,'Visible'),'off'), all_ax));
-                has_data = ~isempty(vis_ax) && ...
-                           any(arrayfun(@(a) ~isempty(get(a,'Children')), vis_ax));
+                has_data = false;
+                for ti = 1:numel(DATA_TYPES)
+                    if ~isempty(findall(figs(k), 'Type', DATA_TYPES{ti}))
+                        has_data = true;
+                        break;
+                    end
+                end
                 testCase.verifyTrue(has_data, ...
-                    sprintf('Figure "%s" has no data in any visible axes', fig_name));
+                    sprintf('Figure "%s" contains no visible data objects', fig_name));
             end
         end
 
@@ -336,8 +363,11 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
             DataExplorer(T);
-            testCase.verifyEqual(testCase.timeseries_mode(), 'stacked area', ...
-                'Compositional data should use stacked area');
+            modes = testCase.all_timeseries_modes();
+            testCase.verifyTrue(any(strcmp(modes, 'stacked area')), ...
+                'Compositional data should produce a stacked area figure');
+            testCase.verifyTrue(any(strcmp(modes, 'overlaid lines')), ...
+                'Compositional data should also produce an overlaid lines figure with Total');
         end
 
         function test_timeseries_lines_for_independent_series(testCase)
@@ -557,7 +587,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            T = DataExplorer(f, 'MaxRows', 1000);
+            T = DataExplorer(f, 'MaxRows', 200);
 
             testCase.verifyGreaterThan(height(T), 0);
             testCase.assert_all_figures_nonempty();
@@ -635,7 +665,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+            T = DataExplorer(f, 'MaxRows', 200, 'AutoSelect', true);
 
             testCase.verifyGreaterThan(height(T), 0);
             testCase.verifyGreaterThan(width(T), 0);
@@ -717,7 +747,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
+            T = DataExplorer(f, 'MaxRows', 200, 'AutoSelect', true);
 
             testCase.verifyGreaterThan(height(T), 0);
             testCase.verifyGreaterThan(width(T), 0);

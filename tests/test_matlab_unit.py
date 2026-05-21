@@ -1,27 +1,29 @@
 """Run the MATLAB matlab.unittest test class and report results to pytest."""
 import re
 import pytest
+from pathlib import Path
 from conftest import ROOT, run_matlab
 
 # ---------------------------------------------------------------------------
-# Discover test names by running runtests in 'dry-run' mode (list only).
-# We do this at collection time so pytest can show individual test IDs.
+# Discover test names by parsing the .m file — no MATLAB startup at collection
+# time, which would time out running the full integration suite.
 # ---------------------------------------------------------------------------
 
+_TEST_FILE = ROOT / "tests" / "test_DataExplorer.m"
+
+
 def _collect_test_names() -> list[str]:
-    result = run_matlab(
-        "results = runtests('tests/test_DataExplorer.m');"
-        "for k = 1:numel(results), disp(results(k).Name); end"
-    )
-    if result.returncode != 0:
-        return []
-    names = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
-    return [n for n in names if "/" in n or "test_" in n.lower()]
+    source = _TEST_FILE.read_text(encoding="utf-8")
+    # Match public test methods: "function test_<name>(testCase)"
+    methods = re.findall(r"^\s*function\s+(test_\w+)\s*\(testCase\)", source, re.MULTILINE)
+    class_name = "test_DataExplorer"
+    return [f"{class_name}/{m}" for m in methods]
 
 
 _TEST_NAMES = _collect_test_names()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("test_name", _TEST_NAMES)
 def test_matlab_unit(test_name):
     """Run a single MATLAB unittest method and assert it passed."""

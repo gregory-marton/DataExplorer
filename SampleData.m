@@ -41,7 +41,7 @@ end
 
 [~, fname, ext] = fileparts(filepath);
 ext = lower(ext);
-if ~ismember(ext, [".csv", ".tsv", ".txt", ".dat", ".tab"])
+if ~ismember(ext, [".csv", ".tsv", ".txt", ".dat", ".tab", ".asc"])
     warning('SampleData:format', ...
         'Unexpected extension "%s". Attempting to read as delimited text.', ext);
 end
@@ -78,7 +78,7 @@ try
     ds = datastore(filepath, 'Type', 'tabulartext', ...
         'Delimiter',      delim, ...
         'ReadSize',       options.ChunkSize, ...
-        'FileExtensions', {'.csv','.tsv','.txt','.dat','.tab'});
+        'FileExtensions', {'.csv','.tsv','.txt','.dat','.tab','.asc'});
 
     % Force all columns to read as text — prevents crashes when datastore
     % infers numeric but later rows contain strings. se_profile handles

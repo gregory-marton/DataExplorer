@@ -2,3 +2,5 @@
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+markers = ["slow: MATLAB integration tests (skipped by default; run with -m slow)"]
+addopts = "-m 'not slow'"

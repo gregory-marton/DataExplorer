@@ -48,9 +48,9 @@ end
 %% ── 0.  Version check ────────────────────────────────────────────────────
 % Developed and tested on R2025b (25.2). Features like DataTipTemplate,
 % boxchart, and the arguments block require recent releases.
-if verLessThan('matlab', '25.2')
+if isMATLABReleaseOlderThan('R2025b')
     warning('DataExplorer:oldMatlab', ...
-        'DataExplorer targets R2025b (25.2); running %s — tooltips, boxchart, and arguments blocks may not work.', ...
+        'DataExplorer targets R2025b; running %s — tooltips, boxchart, and arguments blocks may not work.', ...
         version('-release'));
 end
 
@@ -114,7 +114,9 @@ if ischar(source) || isstring(source)
     recipe_path = se_assemble_recipe(string(source), T, prof, options);
     if ~isempty(recipe_path)
         fprintf('  Running recipe to produce best-of plots…\n');
+        T_return = T;   % run() shares our workspace; save T so recipe can't overwrite it
         run(recipe_path);
+        T = T_return;
         [~, bname, ~] = fileparts(source);
         fprintf('\n  ══════════════════════════════════════════════════════════\n');
         fprintf('  Recipe script: %s\n', recipe_path);
@@ -171,15 +173,19 @@ function T = load_from_zip(filepath, options)
     mkdir(tmpdir);
     unzip(filepath, tmpdir);
 
-    % collect candidate data files recursively
-    exts   = {'*.csv','*.tsv','*.txt','*.xlsx','*.xls'};
-    files  = [];
-    for k = 1:numel(exts)
-        files = [files; dir(fullfile(tmpdir, '**', exts{k}))]; %#ok<AGROW>
+    % collect candidate data files recursively (case-insensitive extension match)
+    ok_exts = {'.csv', '.tsv', '.txt', '.xlsx', '.xls', '.asc'};
+    all_files = dir(fullfile(tmpdir, '**', '*.*'));
+    all_files = all_files(~[all_files.isdir]);
+    keep = false(1, numel(all_files));
+    for k = 1:numel(all_files)
+        [~, ~, ext] = fileparts(all_files(k).name);
+        keep(k) = ismember(lower(ext), ok_exts);
     end
+    files = all_files(keep);
 
     if isempty(files)
-        error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX found inside the ZIP.');
+        error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX/ASC found inside the ZIP.');
     end
 
     if strlength(options.InnerFile) > 0
@@ -942,7 +948,7 @@ end
 np = numel(sel);   % number of columns in the plot grid
 
 % ── Build figure ────────────────────────────────────────────────────────────
-fig = figure('Name', sprintf('DataExplorer — %s', prof.source_name), ...
+fig = figure('Name', se_fig_title('Pairplot', prof.source_name), ...
     'Color', [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
 
@@ -1029,10 +1035,10 @@ end
 
 n_total_plottable = sum(~prof.skip);
 if np < n_total_plottable
-    title_str = sprintf('%s  —  n = %d  (%d of %d variables shown)', ...
-        prof.source_name, n, np, n_total_plottable);
+    title_str = se_src_prefix(prof.source_name, ...
+        sprintf('n = %d  (%d of %d variables shown)', n, np, n_total_plottable));
 else
-    title_str = sprintf('%s  —  n = %d', prof.source_name, n);
+    title_str = se_src_prefix(prof.source_name, sprintf('n = %d', n));
 end
 title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
 
@@ -1063,10 +1069,9 @@ for pg = 1:n_pages
     n_this    = numel(idx_range);
 
     if n_pages == 1
-        fig_name = sprintf('DataExplorer (overview) — %s', prof.source_name);
+        fig_name = se_fig_title('Overview', prof.source_name);
     else
-        fig_name = sprintf('DataExplorer (overview %d/%d) — %s', ...
-            pg, n_pages, prof.source_name);
+        fig_name = se_fig_title(sprintf('Overview %d/%d', pg, n_pages), prof.source_name);
     end
 
     fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], ...
@@ -1075,10 +1080,11 @@ for pg = 1:n_pages
     tl = tiledlayout(fig, NROWS, NCOLS, 'TileSpacing', 'tight', 'Padding', 'compact');
 
     if n_pages == 1
-        title_str = sprintf('%s  —  all %d variables', prof.source_name, nv);
+        title_str = se_src_prefix(prof.source_name, sprintf('all %d variables', nv));
     else
-        title_str = sprintf('%s  —  variables %d–%d of %d  (page %d/%d)', ...
-            prof.source_name, idx_range(1), idx_range(end), nv, pg, n_pages);
+        title_str = se_src_prefix(prof.source_name, ...
+            sprintf('variables %d–%d of %d  (page %d/%d)', ...
+                idx_range(1), idx_range(end), nv, pg, n_pages));
     end
     title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
 
@@ -1167,7 +1173,7 @@ elseif isscalar(cat_cols)
 end
 
 % ── Build figure ─────────────────────────────────────────────────────────────
-fig = figure('Name', sprintf('DataExplorer (map) — %s', prof.source_name), ...
+fig = figure('Name', se_fig_title('Map', prof.source_name),...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 
 BASE_SZ = 20;   % default marker area in points²
@@ -1272,7 +1278,7 @@ else
     fprintf('    (Mapping Toolbox not found — using plain scatter as fallback)\n');
 end
 
-title(ax, sprintf('%s  —  map  (n = %d)', prof.source_name, sum(valid)), ...
+title(ax, se_src_prefix(prof.source_name, sprintf('map  (n = %d)', sum(valid))), ...
     'FontSize', 11, 'Interpreter', 'none');
 end
 
@@ -1352,49 +1358,75 @@ else
     use_stacked = false;
 end
 
-fig = figure( ...
-    'Name',        sprintf('DataExplorer (time series) — %s', prof.source_name), ...
-    'Color',       [0.97 0.97 0.97], ...
-    'NumberTitle', 'off');
-ax = axes(fig);
 colors_ts = lines(n_series);
 
 if use_stacked
-    Y_plot = Y_mean;
-    Y_plot(isnan(Y_plot)) = 0;
+    % Compositional data: stacked area figure first, then overlaid + Total.
+    fig_s = figure('Name', se_fig_title('Time series (stacked)', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax_s = axes(fig_s);
+    Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
-    Y_plot = Y_plot(:, sord);
-    labels = labels(sord);
-    area(ax, tdata_u, Y_plot, 'LineStyle', 'none', 'FaceAlpha', 0.85);
-    ylabel(ax, 'Value (stacked)', 'FontSize', 8);
-    mode_note = 'stacked area';
+    labels_s = labels(sord);
+    area(ax_s, tdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    ylabel(ax_s, 'Value (stacked)', 'FontSize', 8);
+    legend(ax_s, labels_s, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax_s, 'FontSize', 8); box(ax_s, 'off');
+    title(ax_s, se_src_prefix(prof.source_name, ...
+        sprintf('time series, stacked area  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
+
+    fig_o = figure('Name', se_fig_title('Time series (overlaid)', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax_o = axes(fig_o);
+    hold(ax_o, 'on');
+    for k = 1:n_series
+        has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
+        if sum(has_ci) >= 2
+            t_fwd = tdata_u(has_ci); t_rev = t_fwd(end:-1:1);
+            patch(ax_o, [t_fwd; t_rev], [Y_hi(has_ci,k); Y_lo(has_ci(end:-1:1),k)], ...
+                colors_ts(k,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+        end
+    end
+    for k = 1:n_series
+        plot(ax_o, tdata_u, Y_mean(:,k), '-', 'Color', colors_ts(k,:), ...
+            'LineWidth', 1.5, 'DisplayName', labels{k});
+    end
+    Y_total = sum(Y_mean, 2, 'omitnan');
+    plot(ax_o, tdata_u, Y_total, '--', 'Color', [0.15 0.15 0.15], ...
+        'LineWidth', 2, 'DisplayName', 'Total');
+    hold(ax_o, 'off');
+    ylabel(ax_o, 'Value', 'FontSize', 8);
+    legend(ax_o, [labels, {'Total'}], 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax_o, 'FontSize', 8); box(ax_o, 'off');
+    title(ax_o, se_src_prefix(prof.source_name, ...
+        sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
 else
+    fig = figure('Name', se_fig_title('Time series', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax = axes(fig);
     hold(ax, 'on');
     for k = 1:n_series
         has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
         if sum(has_ci) >= 2
-            t_fwd = tdata_u(has_ci);
-            t_rev = t_fwd(end:-1:1);
-            upper = Y_hi(has_ci, k);
-            lower = Y_lo(has_ci, k);
-            patch(ax, [t_fwd; t_rev], [upper; lower(end:-1:1)], colors_ts(k,:), ...
-                'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+            t_fwd = tdata_u(has_ci); t_rev = t_fwd(end:-1:1);
+            patch(ax, [t_fwd; t_rev], [Y_hi(has_ci,k); Y_lo(has_ci(end:-1:1),k)], ...
+                colors_ts(k,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
         end
     end
     for k = 1:n_series
-        plot(ax, tdata_u, Y_mean(:, k), '-', ...
-            'Color', colors_ts(k, :), 'LineWidth', 1.5, 'DisplayName', labels{k});
+        plot(ax, tdata_u, Y_mean(:,k), '-', 'Color', colors_ts(k,:), ...
+            'LineWidth', 1.5, 'DisplayName', labels{k});
     end
+    hold(ax, 'off');
     ylabel(ax, 'Value', 'FontSize', 8);
-    mode_note = 'overlaid lines';
+    legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax, 'FontSize', 8); box(ax, 'off');
+    title(ax, se_src_prefix(prof.source_name, ...
+        sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
 end
-
-legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
-set(ax, 'FontSize', 8);
-box(ax, 'off');
-title(ax, sprintf('%s  —  time series, %s  (n = %d, %d series)', ...
-    prof.source_name, mode_note, height(T), n_series), ...
-    'FontSize', 11, 'Interpreter', 'none');
 end
 
 
@@ -1425,6 +1457,12 @@ end
 % Aggregate by unique year: mean + bootstrap 95% CI
 [xdata_u, ~, xidx] = unique(xdata_s);
 n_u    = numel(xdata_u);
+if n_u < 2
+    % Only one unique time point — nothing to plot as a time series
+    fprintf('  ℹ "%s" has only one unique value — skipping time series.\n', ...
+        prof.name{year_idx});
+    return
+end
 Y_mean = NaN(n_u, n_series);
 Y_lo   = NaN(n_u, n_series);
 Y_hi   = NaN(n_u, n_series);
@@ -1470,47 +1508,79 @@ else
     use_stacked = false;
 end
 
-fig = figure('Name', sprintf('DataExplorer (time series) — %s', prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-ax = axes(fig);
 colors_ts = lines(n_series);
+x_lbl     = prof.name{year_idx};
 
 if use_stacked
-    Y_plot = Y_mean;
-    Y_plot(isnan(Y_plot)) = 0;
+    % Compositional: stacked area first, then overlaid + Total.
+    fig_s = figure('Name', se_fig_title('Time series (stacked)', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax_s = axes(fig_s);
+    Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
-    Y_plot = Y_plot(:, sord);  labels = labels(sord);
-    area(ax, xdata_u, Y_plot, 'LineStyle', 'none', 'FaceAlpha', 0.85);
-    ylabel(ax, 'Value (stacked)', 'FontSize', 8);
-    mode_note = 'stacked area';
+    labels_s = labels(sord);
+    area(ax_s, xdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    ylabel(ax_s, 'Value (stacked)', 'FontSize', 8);
+    xlabel(ax_s, x_lbl, 'FontSize', 8, 'Interpreter', 'none');
+    legend(ax_s, labels_s, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax_s, 'FontSize', 8); box(ax_s, 'off');
+    title(ax_s, se_src_prefix(prof.source_name, ...
+        sprintf('time series, stacked area  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
+
+    fig_o = figure('Name', se_fig_title('Time series (overlaid)', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax_o = axes(fig_o);
+    hold(ax_o, 'on');
+    for k = 1:n_series
+        has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
+        if sum(has_ci) >= 2
+            x_fwd = xdata_u(has_ci); x_rev = x_fwd(end:-1:1);
+            patch(ax_o, [x_fwd; x_rev], [Y_hi(has_ci,k); Y_lo(has_ci(end:-1:1),k)], ...
+                colors_ts(k,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+        end
+    end
+    for k = 1:n_series
+        plot(ax_o, xdata_u, Y_mean(:,k), '-', 'Color', colors_ts(k,:), ...
+            'LineWidth', 1.5, 'DisplayName', labels{k});
+    end
+    Y_total = sum(Y_mean, 2, 'omitnan');
+    plot(ax_o, xdata_u, Y_total, '--', 'Color', [0.15 0.15 0.15], ...
+        'LineWidth', 2, 'DisplayName', 'Total');
+    hold(ax_o, 'off');
+    ylabel(ax_o, 'Value', 'FontSize', 8);
+    xlabel(ax_o, x_lbl, 'FontSize', 8, 'Interpreter', 'none');
+    legend(ax_o, [labels, {'Total'}], 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax_o, 'FontSize', 8); box(ax_o, 'off');
+    title(ax_o, se_src_prefix(prof.source_name, ...
+        sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
 else
+    fig = figure('Name', se_fig_title('Time series', prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax = axes(fig);
     hold(ax, 'on');
     for k = 1:n_series
         has_ci = ~isnan(Y_lo(:, k)) & ~isnan(Y_hi(:, k));
         if sum(has_ci) >= 2
-            x_fwd = xdata_u(has_ci);
-            x_rev = x_fwd(end:-1:1);
-            upper = Y_hi(has_ci, k);
-            lower = Y_lo(has_ci, k);
-            patch(ax, [x_fwd; x_rev], [upper; lower(end:-1:1)], colors_ts(k,:), ...
-                'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+            x_fwd = xdata_u(has_ci); x_rev = x_fwd(end:-1:1);
+            patch(ax, [x_fwd; x_rev], [Y_hi(has_ci,k); Y_lo(has_ci(end:-1:1),k)], ...
+                colors_ts(k,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
         end
     end
     for k = 1:n_series
-        plot(ax, xdata_u, Y_mean(:, k), '-', ...
-            'Color', colors_ts(k, :), 'LineWidth', 1.5, 'DisplayName', labels{k});
+        plot(ax, xdata_u, Y_mean(:,k), '-', 'Color', colors_ts(k,:), ...
+            'LineWidth', 1.5, 'DisplayName', labels{k});
     end
+    hold(ax, 'off');
     ylabel(ax, 'Value', 'FontSize', 8);
-    mode_note = 'overlaid lines';
+    xlabel(ax, x_lbl, 'FontSize', 8, 'Interpreter', 'none');
+    legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+    set(ax, 'FontSize', 8); box(ax, 'off');
+    title(ax, se_src_prefix(prof.source_name, ...
+        sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
+        'FontSize', 11, 'Interpreter', 'none');
 end
-
-xlabel(ax, prof.name{year_idx}, 'FontSize', 8, 'Interpreter', 'none');
-legend(ax, labels, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
-set(ax, 'FontSize', 8);
-box(ax, 'off');
-title(ax, sprintf('%s  —  time series, %s  (n = %d, %d series)', ...
-    prof.source_name, mode_note, height(T), n_series), ...
-    'FontSize', 11, 'Interpreter', 'none');
 end
 
 
@@ -1521,6 +1591,7 @@ end
 
 function plot_num_diag(ax, x, varname, nmissing, n)
 % Histogram with summary stats annotation (mean, std, min, max).
+    x = double(x);   % NetCDF and some other sources yield integer arrays
     valid = x(~isnan(x));
     if isempty(valid)
         axis(ax, 'off');
@@ -1530,9 +1601,7 @@ function plot_num_diag(ax, x, varname, nmissing, n)
     end
     h = histogram(ax, valid, 'FaceColor', [0.35 0.55 0.75], ...
         'EdgeColor', 'none', 'FaceAlpha', 0.8);
-    nb = numel(h.Values);
-    h.DataTipTemplate.DataTipRows(end+1) = ...
-        dataTipTextRow('Variable', repmat({char(varname)}, nb, 1));
+    h.DataTipTemplate.DataTipRows(1).Label = char(varname);
 
     % Stats block — top-right corner
     lo = min(valid);  hi = max(valid);
@@ -1623,9 +1692,7 @@ function plot_time_diag(ax, x, varname)
             'Units','normalized','HorizontalAlignment','right', ...
             'VerticalAlignment','top','FontSize',6.5,'Color',[0.2 0.2 0.2]);
     end
-    nb = numel(h.Values);
-    h.DataTipTemplate.DataTipRows(end+1) = ...
-        dataTipTextRow('Variable', repmat({char(varname)}, nb, 1));
+    h.DataTipTemplate.DataTipRows(1).Label = char(varname);
     set(ax, 'YTick', [], 'FontSize', 7);
     box(ax, 'off');
 end
@@ -1662,14 +1729,21 @@ function plot_num_num(ax, x, y, ~, ~)
         'MarkerFaceAlpha', min(1, 500/numel(xv)));
     hold(ax, 'on');
 
-    % Least-squares line
+    % Least-squares line — skip silently when polyfit is badly conditioned
+    prev_warn = warning('off', 'MATLAB:polyfit:RepeatedPointsOrRescale');
+    lastwarn('');
     p = polyfit(xv, yv, 1);
-    xl = xlim(ax);
-    plot(ax, xl, polyval(p, xl), 'r-', 'LineWidth', 1.2);
+    [~, wid] = lastwarn();
+    warning(prev_warn);
+    if isempty(wid)
+        xl = xlim(ax);
+        plot(ax, xl, polyval(p, xl), 'r-', 'LineWidth', 1.2);
+    end
 
     % Pearson r in corner — bold with background box for readability
     r = corr(xv, yv, 'rows', 'complete');
-    text(ax, 0.03, 0.97, sprintf('r = %.2f', r), ...
+    if isnan(r), r_str = 'r = ?'; else, r_str = sprintf('r = %.2f', r); end
+    text(ax, 0.03, 0.97, r_str, ...
         'Units', 'normalized', 'VerticalAlignment', 'top', 'FontSize', 7.5, ...
         'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7], 'Margin', 1);
 
@@ -1904,7 +1978,7 @@ num_idx = not_skip(prof.type(not_skip) == "numeric");
 num_scores = zeros(1, numel(num_idx));
 for k = 1:numel(num_idx)
     col = T.(prof.name{num_idx(k)});
-    col = col(~isnan(col));
+    col = double(col(~isnan(col)));
     if numel(col) < 2
         num_scores(k) = 0;
         continue
@@ -2041,6 +2115,15 @@ end
 end
 
 
+function s = se_label_name(name, compact)
+% Return short_name (compact) or wrapped_name (full) depending on flag.
+if compact
+    s = short_name(name);
+else
+    s = wrapped_name(name);
+end
+end
+
 function s = short_name(name)
 % Shorten a variable name for axis labels.
     MAX = 18;
@@ -2134,8 +2217,7 @@ else
         sampled_n = ud.sampled;
     end
     if sampled_n > 0
-        L{end+1} = sprintf('T = SampleData(''%s'', %d);', filepath, sampled_n);
-        L{end+1} = sprintf('%% Add Seed=42 for a reproducible sample.');
+        L{end+1} = sprintf('T = SampleData(''%s'', %d, ''Seed'', 42);', filepath, sampled_n);
     else
         L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
         L{end+1} = 'opts.MissingRule = ''fill'';';
@@ -2156,68 +2238,121 @@ end
 
 
 % ── cg_best_plots_code ─────────────────────────────────────────────────
-function code = cg_best_plots_code(prof, sel, source_name)
-%CG_BEST_PLOTS_CODE  Emit recipe code for 1-2 standalone full-page plots.
+function code = cg_best_plots_code(T, prof, sel, source_name)
+%CG_BEST_PLOTS_CODE  Emit recipe code for standalone full-page plots.
 %
-%   Picks the top numeric column (best histogram) and the top numeric pair
-%   (best scatter) from the already-selected columns in SEL.
-%   If a datetime column exists, also generates a time-series plot.
+%   Top histogram, top scatter, and a full multi-series time-series block
+%   (both overlaid + Total and stacked, when the data is compositional).
 
 COLOR = '[0.35 0.55 0.75]';
 L = {};
+src_sq = strrep(source_name, '''', '''''');
 
-% ── Identify best numeric columns from sel ───────────────────────────────────
+% ── Numeric columns in sel ───────────────────────────────────────────────────
 sel_num = sel(prof.type(sel) == "numeric");
 
+% ── Best histogram ───────────────────────────────────────────────────────────
 if ~isempty(sel_num)
     cn1 = prof.name{sel_num(1)};
-    cn1_sq = strrep(cn1, '''', '''''');
     L{end+1} = sprintf('%% Best histogram: %s', cn1);
-    L{end+1} = sprintf('de_histogram(T.%s, ''%s'');', cn1, cn1_sq);
+    L{end+1} = sprintf('de_histogram(T.%s, ''%s'');', cn1, strrep(cn1,'''',''''''));
     L{end+1} = '';
 end
 
+% ── Best scatter ─────────────────────────────────────────────────────────────
 if numel(sel_num) >= 2
     cn1 = prof.name{sel_num(1)};
     cn2 = prof.name{sel_num(2)};
-
     L{end+1} = sprintf('%% Best scatter: %s vs %s', cn1, cn2);
-    L{end+1} = sprintf('figure(''Name'', ''%s — %s vs %s'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
-        source_name, cn1, cn2);
     L{end+1} = sprintf('x = T.%s; y = T.%s;', cn1, cn2);
-    L{end+1} = 'valid = ~isnan(x) & ~isnan(y);';
-    L{end+1} = 'n_pts = sum(valid);';
-    L{end+1} = sprintf('alpha = max(0.05, min(0.8, 500 / max(n_pts, 1)));');
-    L{end+1} = sprintf('scatter(x(valid), y(valid), 20, %s, ''filled'', ''MarkerFaceAlpha'', alpha);', COLOR);
-    L{end+1} = sprintf('xlabel(''%s''); ylabel(''%s'');', ...
-        strrep(cn1, '''', ''''''), strrep(cn2, '''', ''''''));
-    L{end+1} = sprintf('title(sprintf(''%s vs %s  (n=%%d)'', n_pts));', ...
-        strrep(cn1, '''', ''''''), strrep(cn2, '''', ''''''));
-    L{end+1} = 'box off;';
-    L{end+1} = '';
+    L{end+1} = 'if isnumeric(x) && isnumeric(y)';
+    L{end+1} = sprintf('    figure(''Name'', ''%s — %s vs %s'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
+        src_sq, strrep(cn1,'''',''''''), strrep(cn2,'''',''''''));
+    L{end+1} = '    valid = ~isnan(x) & ~isnan(y); n_pts = sum(valid);';
+    L{end+1} = '    alpha = max(0.05, min(0.8, 500 / max(n_pts, 1)));';
+    L{end+1} = sprintf('    scatter(x(valid), y(valid), 20, %s, ''filled'', ''MarkerFaceAlpha'', alpha);', COLOR);
+    L{end+1} = sprintf('    xlabel(''%s''); ylabel(''%s'');', ...
+        strrep(cn1,'''',''''''), strrep(cn2,'''',''''''));
+    L{end+1} = sprintf('    title(sprintf(''%s vs %s  (n=%%d)'', n_pts));', ...
+        strrep(cn1,'''',''''''), strrep(cn2,'''',''''''));
+    L{end+1} = '    box off;';
+    L{end+1} = 'end'; L{end+1} = '';
 end
 
-% ── Time series if a datetime column exists ───────────────────────────────────
-dt_idx = find(prof.type == "datetime" & ~prof.skip, 1, 'first');
-num_idx = sel_num;
-if ~isempty(dt_idx) && ~isempty(num_idx)
-    tcn = prof.name{dt_idx};
-    ncn = prof.name{num_idx(1)};
+% ── Time series (datetime or year-axis) ──────────────────────────────────────
+[time_idx, is_year_axis] = se_find_time_axis(prof);
+ts_num = sel_num;
+if ~isempty(time_idx) && is_year_axis
+    ts_num = ts_num(ts_num ~= time_idx);
+end
 
-    L{end+1} = sprintf('%% Time series: %s over %s', ncn, tcn);
-    L{end+1} = sprintf('figure(''Name'', ''%s — %s over time'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
-        source_name, ncn);
-    L{end+1} = sprintf('t = T.%s; y = T.%s;', tcn, ncn);
-    L{end+1} = 'valid = ~isnat(t) & ~isnan(y);';
-    L{end+1} = '[ts, ord] = sort(t(valid));';
-    L{end+1} = 'ys = y(valid); ys = ys(ord);';
-    L{end+1} = sprintf('plot(ts, ys, ''-'', ''Color'', %s, ''LineWidth'', 1.5);', COLOR);
-    L{end+1} = sprintf('xlabel(''%s''); ylabel(''%s'');', ...
-        strrep(tcn, '''', ''''''), strrep(ncn, '''', ''''''));
-    L{end+1} = sprintf('title(sprintf(''%s over time  (n=%%d)'', sum(valid)));', ...
-        strrep(ncn, '''', ''''''));
-    L{end+1} = 'box off;';
+if ~isempty(time_idx) && ~isempty(ts_num)
+    tcn      = prof.name{time_idx};
+    tcn_sq   = strrep(tcn, '''', '''''');
+    ncn_list = prof.name(ts_num);
+    n_ts     = numel(ts_num);
+
+    % Compositional: all non-negative across all selected numeric columns?
+    is_compositional = false;
+    if n_ts > 1
+        all_ok = true;
+        for kk = 1:n_ts
+            v = double(T.(ncn_list{kk}));
+            v = v(~isnan(v));
+            if isempty(v) || any(v < 0), all_ok = false; break; end
+        end
+        is_compositional = all_ok;
+    end
+
+    col_args  = strjoin(cellfun(@(s) sprintf('T.%s', s), ncn_list, 'UniformOutput', false), ' ');
+    lbl_items = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ncn_list, 'UniformOutput', false), ', ');
+
+    L{end+1} = sprintf('%% Time series: %d series over %s', n_ts, tcn);
+    L{end+1} = sprintf('t_col = T.%s;', tcn);
+    L{end+1} = 'if isdatetime(t_col) || isnumeric(t_col)';
+    L{end+1} = '    valid_t = ~ismissing(t_col);';
+    L{end+1} = sprintf('    col_mat = [%s];', col_args);
+    L{end+1} = sprintf('    ts_labels = {%s};', lbl_items);
+    L{end+1} = '    t_u = unique(t_col(valid_t));';
+    L{end+1} = sprintf('    n_u = numel(t_u); n_s = %d; Y = NaN(n_u, n_s);', n_ts);
+    L{end+1} = '    for i = 1:n_u';
+    L{end+1} = '        mask = t_col == t_u(i);';
+    L{end+1} = '        for k = 1:n_s';
+    L{end+1} = '            v = col_mat(mask, k); v = v(~isnan(v));';
+    L{end+1} = '            if ~isempty(v), Y(i,k) = mean(v); end';
+    L{end+1} = '        end';
+    L{end+1} = '    end';
     L{end+1} = '';
+
+    % Overlaid + Total
+    L{end+1} = sprintf('    figure(''Name'', ''%s — time series (overlaid)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', src_sq);
+    L{end+1} = '    ax = gca; hold(ax, ''on''); colors_ts = lines(n_s);';
+    L{end+1} = '    for k = 1:n_s';
+    L{end+1} = '        plot(ax, t_u, Y(:,k), ''-'', ''Color'', colors_ts(k,:), ''LineWidth'', 1.5, ''DisplayName'', ts_labels{k});';
+    L{end+1} = '    end';
+    if is_compositional
+        L{end+1} = '    Y_total = sum(Y, 2, ''omitnan'');';
+        L{end+1} = '    plot(ax, t_u, Y_total, ''--'', ''Color'', [0.15 0.15 0.15], ''LineWidth'', 2, ''DisplayName'', ''Total'');';
+        L{end+1} = '    legend(ax, [ts_labels {''Total''}], ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
+    else
+        L{end+1} = '    legend(ax, ts_labels, ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
+    end
+    L{end+1} = sprintf('    xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value''); box off; hold(ax, ''off'');', tcn_sq);
+    L{end+1} = '';
+
+    % Stacked (only when compositional and ≥2 time points)
+    if is_compositional
+        L{end+1} = '    if n_u > 1';
+        L{end+1} = sprintf('        figure(''Name'', ''%s — time series (stacked)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', src_sq);
+        L{end+1} = '        ax = gca; Y_plot = Y; Y_plot(isnan(Y_plot)) = 0;';
+        L{end+1} = '        [~, sord] = sort(mean(Y_plot, 1), ''descend'');';
+        L{end+1} = '        area(ax, t_u, Y_plot(:, sord), ''LineStyle'', ''none'', ''FaceAlpha'', 0.85);';
+        L{end+1} = '        legend(ax, ts_labels(sord), ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
+        L{end+1} = sprintf('        xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value (stacked)''); box off;', tcn_sq);
+        L{end+1} = '    end';
+        L{end+1} = '';
+    end
+    L{end+1} = 'end';  % close: if isdatetime(t_col) || isnumeric(t_col)
 end
 
 if isempty(L)
@@ -2254,7 +2389,7 @@ end
 
 load_code  = cg_load_code(filepath, T);
 clean_code = cg_clean_code();
-plots_code = cg_best_plots_code(prof, sel, prof.source_name);
+plots_code = cg_best_plots_code(T, prof, sel, prof.source_name);
 
 header = sprintf([...
     '%% DataExplorer recipe — %s\n' ...
@@ -2437,7 +2572,7 @@ tdata   = T.(prof.name{time_idx});
 n_num  = numel(num_idxs);
 
 fig = figure( ...
-    'Name',        sprintf('DataExplorer (by %s) — %s', catname, prof.source_name), ...
+    'Name',        se_fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color',       [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -2516,7 +2651,7 @@ for j = 1:n_num
     box(ax, 'off');
 end
 
-title(tl, sprintf('%s — by %s', prof.source_name, catname), ...
+title(tl, se_src_prefix(prof.source_name, sprintf('by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 end
 
@@ -2538,7 +2673,7 @@ sel_num = sel_num(1:min(end, MAX_NP));
 np = numel(sel_num);
 
 fig = figure( ...
-    'Name',        sprintf('DataExplorer (%s) — %s', catname, prof.source_name), ...
+    'Name',        se_fig_title(catname, prof.source_name), ...
     'Color',       [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
@@ -2574,12 +2709,8 @@ for r = 1:np
                     'EdgeColor',     'none', ...
                     'DisplayName',   levels{lk});
                 hold(ax, 'on');
-                try
-                    nb = numel(h.Values);
-                    h.DataTipTemplate.DataTipRows(end+1) = ...
-                        dataTipTextRow(catname, repmat(levels(lk), nb, 1));
-                catch
-                end
+                h.DataTipTemplate.DataTipRows(1).Label = ...
+                    sprintf('%s = %s', char(catname), char(levels{lk}));
                 if ~isgraphics(legend_handles(lk))
                     legend_handles(lk) = h;
                 end
@@ -2604,10 +2735,10 @@ for r = 1:np
                         h_fill = fill(ax, x_poly, y_poly, ...
                             colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
                             'HandleVisibility', 'off');
-                        try
-                            h_fill.DataTipTemplate.DataTipRows(end+1) = ...
-                                dataTipTextRow(catname, repmat(levels(lk), numel(x_poly), 1));
-                        catch
+                        if isprop(h_fill, 'DataTipTemplate') && ...
+                                ~isempty(h_fill.DataTipTemplate.DataTipRows)
+                            h_fill.DataTipTemplate.DataTipRows(1).Label = ...
+                                sprintf('%s = %s (CI)', char(catname), char(levels{lk}));
                         end
                         h_line = plot(ax, x_fit, y_fit, '-', 'Color', colors(lk,:), ...
                             'LineWidth', 1.5, 'HandleVisibility', 'off');
@@ -2634,19 +2765,41 @@ for r = 1:np
             end
         end
 
-        set(ax, 'XTick', [], 'YTick', []);
+        % Tick strategy: full auto-ticks for small grids (≤5), endpoint-only for large.
+        show_y = (c == 1 && r ~= c);
+        show_x = (r == np && r ~= c);
+        if np <= 5
+            if show_y, set(ax, 'YTickMode', 'auto', 'FontSize', 6);
+            else,       set(ax, 'YTick', []); end
+            if show_x, set(ax, 'XTickMode', 'auto', 'FontSize', 6, 'XTickLabelRotation', 45);
+            else,       set(ax, 'XTick', []); end
+        else
+            if show_y
+                yl = ylim(ax);
+                set(ax, 'YTick', [yl(1) yl(2)], 'FontSize', 5.5);
+            else
+                set(ax, 'YTick', []);
+            end
+            if show_x
+                xl = xlim(ax);
+                set(ax, 'XTick', [xl(1) xl(2)], 'FontSize', 5.5, 'XTickLabelRotation', 45);
+            else
+                set(ax, 'XTick', []);
+            end
+        end
         box(ax, 'off');
 
+        name_fn = @(s) se_label_name(s, np >= 6);
         if r == 1
-            title(ax, short_name(xname), 'FontSize', 7, ...
+            title(ax, name_fn(xname), 'FontSize', 7, ...
                 'FontWeight', 'bold', 'Interpreter', 'none');
         end
         if r == c && r > 1
-            title(ax, short_name(yname), 'FontSize', 7, ...
+            title(ax, name_fn(yname), 'FontSize', 7, ...
                 'FontWeight', 'bold', 'Interpreter', 'none');
         end
         if c == 1
-            yl = ylabel(ax, short_name(yname), 'FontSize', 6, 'Interpreter', 'none');
+            yl = ylabel(ax, name_fn(yname), 'FontSize', 6, 'Interpreter', 'none');
             set(yl, 'Rotation', 0, 'HorizontalAlignment', 'right');
         end
     end
@@ -2662,7 +2815,7 @@ if ~isempty(valid_h)
     lgd.Layout.Tile = 'east';
 end
 
-title(tl, sprintf('%s — colored by %s', prof.source_name, catname), ...
+title(tl, se_src_prefix(prof.source_name, sprintf('colored by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 end
 
@@ -2733,7 +2886,7 @@ fprintf('  State summary: %d states × %d variables.\n', n_st, n_num);
 n_cols = min(n_num, 3);
 n_rows = ceil(n_num / n_cols);
 
-fig = figure('Name', sprintf('DataExplorer (by %s) — %s', catname, prof.source_name), ...
+fig = figure('Name', se_fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 tl = tiledlayout(fig, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -2752,10 +2905,10 @@ for j = 1:n_num
     barh(ax, 1:n_st, means_s, 'FaceColor', [0.3 0.5 0.8], 'EdgeColor', 'none');
     set(ax, 'YTick', 1:n_st, 'YTickLabel', states_s, 'FontSize', 5, ...
         'YDir', 'reverse');
-    title(ax, short_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
 end
-title(tl, sprintf('%s — mean by %s', prof.source_name, catname), ...
+title(tl, se_src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 
 % ── Figure 2: state × time heatmap ───────────────────────────────────────────
@@ -2771,7 +2924,7 @@ t_vals = unique(tdata(valid_t));
 n_t    = numel(t_vals);
 if n_t < 2, return; end
 
-fig2 = figure('Name', sprintf('DataExplorer (%s × time) — %s', catname, prof.source_name), ...
+fig2 = figure('Name', se_fig_title(sprintf('%s × time', catname), prof.source_name),...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -2800,10 +2953,10 @@ for j = 1:n_num
         set(ax, 'XTick', []);
     end
     set(ax, 'YTick', 1:n_st, 'YTickLabel', states, 'FontSize', 5);
-    title(ax, short_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
 end
-title(tl2, sprintf('%s — %s over time', prof.source_name, catname), ...
+title(tl2, se_src_prefix(prof.source_name, sprintf('Time %s %s', char(215), catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 
 % ── Animated choropleth (Mapping Toolbox) ─────────────────────────────────────
@@ -2812,199 +2965,43 @@ end
 
 
 % ── se_plot_state_choropleth ──────────────────────────────────────────────────
-function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis)
-%SE_PLOT_STATE_CHOROPLETH  Interactive U.S. choropleth map via the Mapping Toolbox.
-%   One figure per numeric variable.  A year slider lets the user scrub through
-%   time without blocking MATLAB — the callback updates patch FaceColors.
-%   Requires the Mapping Toolbox and usastatelo.shp.
-
-if isempty(ver('map'))
-    fprintf('  ℹ Mapping Toolbox not available — skipping choropleth.\n');
-    return;
-end
-try
-    S = shaperead('usastatelo.shp', 'UseGeoCoords', true);
-catch ME
-    fprintf('  ℹ Cannot load usastatelo.shp: %s\n', ME.message);
-    return;
-end
-n_shape     = numel(S);
-shape_upper = upper({S.Name});
-
+function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis) %#ok<INUSL>
+%SE_PLOT_STATE_CHOROPLETH  Thin wrapper: calls de_usamap for each numeric variable.
 catname = prof.name{cat_idx};
-cat_col = T.(catname);
-
-tdata = T.(prof.name{time_idx});
-if is_year_axis
-    t_vals = unique(tdata(~isnan(tdata)));
-else
-    t_vals = unique(tdata(~isnat(tdata)));
-end
-n_t = numel(t_vals);
-if n_t == 0, return; end
-
-cmap_ch = parula(256);
+tcn     = '';
+if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 
 for j = 1:numel(num_idxs)
-    ncn   = prof.name{num_idxs(j)};
-    ydata = T.(ncn);
-
-    % Build state × time mean matrix and per-state observation counts
-    Heat  = NaN(n_shape, n_t);
-    N_obs = zeros(n_shape, n_t);
-    for si = 1:n_shape
-        s_mask = strcmpi(cellstr(cat_col), shape_upper{si});
-        for tt = 1:n_t
-            vals = ydata(s_mask & (tdata == t_vals(tt)));
-            vals = vals(~isnan(vals));
-            if ~isempty(vals)
-                Heat(si, tt)  = mean(vals);
-                N_obs(si, tt) = numel(vals);
-            end
-        end
+    ncn        = prof.name{num_idxs(j)};
+    fig_title  = se_fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
+    if isempty(tcn)
+        de_usamap(T, 'StateCol', catname, 'ColorCol', ncn, 'Title', fig_title);
+    else
+        de_usamap(T, 'StateCol', catname, 'ColorCol', ncn, ...
+            'TimeCol', tcn, 'Title', fig_title);
     end
-    N_total = sum(N_obs, 1);   % total observations per time step
-
-    vmin = min(Heat(:), [], 'omitnan');
-    vmax = max(Heat(:), [], 'omitnan');
-    if isnan(vmin) || vmin == vmax, continue; end
-
-    % Create a fresh figure first so usamap draws its axes into it,
-    % not into whatever figure was current (e.g. the heatmap).
-    fig = figure('Color', [0.97 0.97 0.97], 'NumberTitle', 'off', ...
-        'Units', 'normalized', 'Position', [0.05 0.12 0.88 0.80]);
-    ax = usamap('conus');   % draws into current figure (fig)
-    fig.Name = sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name);
-    set(ax, 'Units', 'normalized', 'Position', [0 0.10 1 0.84]);
-    setm(ax, 'Frame', 'off', 'Grid', 'off', ...
-        'MeridianLabel', 'off', 'ParallelLabel', 'off');
-
-    % Draw patches for first time step.
-    % States with islands return multiple handles from patchm — store in cell.
-    % Tag each handle with UserData for datacursormode tooltips.
-    patch_h = cell(n_shape, 1);
-    for si = 1:n_shape
-        fc = se_val_to_color(Heat(si, 1), vmin, vmax, cmap_ch);
-        patch_h{si} = patchm(S(si).Lat, S(si).Lon, 0, ...
-            'FaceColor', fc, 'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.3, ...
-            'Parent', ax);
-        hh = patch_h{si};
-        for hk = 1:numel(hh)
-            hh(hk).UserData = struct('state_idx', si, 'state_name', S(si).Name);
-        end
-    end
-
-    colormap(ax, cmap_ch);
-    clim(ax, [vmin vmax]);
-    cb = colorbar(ax, 'Location', 'southoutside');
-    cb.Label.String = strrep(ncn, '_', ' ');
-    cb.FontSize = 8;
-
-    yr_label   = @(tt) se_choropleth_yr_str(t_vals, tt, is_year_axis);
-    title_fmt  = @(tt) sprintf('mean(%s) — %s  (%s,  N = %d)', ...
-        short_name(ncn), prof.source_name, yr_label(tt), N_total(tt));
-    title_h = title(ax, title_fmt(1), 'FontSize', 11, 'Interpreter', 'none');
-
-    sld = [];
-    if n_t > 1
-        sld = uicontrol(fig, ...
-            'Style',    'slider', ...
-            'Units',    'normalized', ...
-            'Position', [0.10 0.02 0.80 0.05], ...
-            'Min',      1, 'Max', n_t, ...
-            'Value',    1, ...
-            'SliderStep', [1/(n_t-1) max(0.1, 5/(n_t-1))]);
-
-        lbl = uicontrol(fig, ...
-            'Style',    'text', ...
-            'Units',    'normalized', ...
-            'Position', [0.91 0.02 0.08 0.05], ...
-            'String',   yr_label(1), ...
-            'FontSize', 10, ...
-            'BackgroundColor', [0.97 0.97 0.97]);
-
-        Heat_c     = Heat;
-        patch_h_c  = patch_h;
-        vmin_c     = vmin; vmax_c = vmax;
-        cmap_c     = cmap_ch;
-        ncn_c      = ncn;
-        src_c      = prof.source_name;
-        t_vals_c   = t_vals;
-        is_yr_c    = is_year_axis;
-        N_total_c  = N_total;
-
-        sld.Callback = @(src, ~) se_choropleth_update( ...
-            src, Heat_c, patch_h_c, vmin_c, vmax_c, cmap_c, ...
-            ncn_c, src_c, t_vals_c, is_yr_c, N_total_c, title_h, lbl);
-    end
-
-    % Click-based tooltips via datacursormode (DataTipTemplate unreliable on map patches).
-    dcm = datacursormode(fig);
-    N_obs_dc    = N_obs;
-    Heat_dc     = Heat;
-    ncn_short_c = short_name(ncn);
-    sld_dc      = sld;
-    dcm.UpdateFcn = @(~, ev) se_choropleth_datatip(ev, Heat_dc, N_obs_dc, ncn_short_c, sld_dc);
 end
 end
 
 
-function se_choropleth_update(sld, Heat, patch_h, vmin, vmax, cmap, ... %#ok<DEFNU>
-        ncn, src_name, t_vals, is_year_axis, N_total, title_h, lbl)
-tt = round(sld.Value);
-sld.Value = tt;
-n_shape = numel(patch_h);
-for si = 1:n_shape
-    fc = se_val_to_color(Heat(si, tt), vmin, vmax, cmap);
-    set(patch_h{si}, 'FaceColor', fc);
-end
-yr_str = se_choropleth_yr_str(t_vals, tt, is_year_axis);
-title_h.String = sprintf('mean(%s) — %s  (%s,  N = %d)', ...
-    short_name(ncn), src_name, yr_str, N_total(tt));
-lbl.String = yr_str;
-end
-
-
-function s = se_choropleth_yr_str(t_vals, tt, is_year_axis)
-if is_year_axis
-    s = sprintf('%g', t_vals(tt));
+% ── se_fig_title ─────────────────────────────────────────────────────────────
+function s = se_fig_title(label, source_name)
+% Build a figure window title. Omits the source suffix for table-input sessions.
+if strcmp(source_name, 'table input')
+    s = label;
 else
-    s = sprintf('%d', year(t_vals(tt)));
+    s = sprintf('%s — %s', label, source_name);
 end
 end
 
 
-function txt = se_choropleth_datatip(ev, Heat, N_obs, ncn_short, sld)
-% Click-tooltip for choropleth patches: state name, mean value, and n.
-ud = ev.Target.UserData;
-if ~isstruct(ud) || ~isfield(ud, 'state_idx')
-    txt = ''; return;
-end
-si = ud.state_idx;
-if ~isempty(sld) && isgraphics(sld)
-    tt = round(sld.Value);
+% ── se_src_prefix ─────────────────────────────────────────────────────────────
+function s = se_src_prefix(source_name, rest)
+% Build an axes title. Omits the source prefix for table-input sessions.
+if strcmp(source_name, 'table input')
+    s = rest;
 else
-    tt = 1;
-end
-val = Heat(si, tt);
-n   = N_obs(si, tt);
-if isnan(val)
-    txt = {ud.state_name, sprintf('mean(%s): N/A', ncn_short)};
-else
-    txt = {ud.state_name, sprintf('mean(%s): %.4g  (n = %d)', ncn_short, val, n)};
-end
-end
-
-
-% ── se_val_to_color ───────────────────────────────────────────────────────────
-function fc = se_val_to_color(val, vmin, vmax, cmap)
-%SE_VAL_TO_COLOR  Scalar → RGB via colormap.  Returns gray for NaN.
-if isnan(val)
-    fc = [0.85 0.85 0.85];
-else
-    norm = max(0, min(1, (val - vmin) / (vmax - vmin)));
-    ci   = max(1, min(size(cmap, 1), floor(norm * size(cmap, 1)) + 1));
-    fc   = cmap(ci, :);
+    s = sprintf('%s  —  %s', source_name, rest);
 end
 end
 
