@@ -58,8 +58,8 @@ end
 
 % Attach a display name for the figure title
 if ischar(source) || isstring(source)
-    [~, fname, fext] = fileparts(source);
-    base = [fname, fext];
+    [~, fname, fext] = fileparts(string(source));
+    base = fname + fext;
     ud   = T.Properties.UserData;
     if isstruct(ud)
         if ~isempty(ud.inner_file)
@@ -1929,6 +1929,22 @@ function s = truncate(str, maxlen)
     end
 end
 
+function [colors, plot_order] = se_level_colors(levels)
+% Assign colors to category levels.  The "Other" bucket (last level when it
+% matches the "N more groups" pattern) gets light gray and is drawn first so
+% it is occluded by the named levels.
+n = numel(levels);
+colors = lines(n);
+is_other = n > 0 && ~isempty(regexp(levels{n}, '^\d+ more groups', 'once'));
+if is_other
+    colors(n, :) = [0.78 0.78 0.78];
+    plot_order = [n, 1:n-1];
+else
+    plot_order = 1:n;
+end
+end
+
+
 function s = short_name(name)
 % Shorten a variable name for axis labels.
     MAX = 18;
@@ -2312,8 +2328,7 @@ function se_plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_yea
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
-n_lev   = numel(levels);
-colors  = lines(n_lev);
+[colors, plot_order] = se_level_colors(levels);
 tdata   = T.(prof.name{time_idx});
 
 % Vertical layout: one row per numeric variable, legend on every subplot
@@ -2331,7 +2346,7 @@ for j = 1:n_num
     ncn   = prof.name{num_idxs(j)};
     ydata = T.(ncn);
 
-    for lk = 1:n_lev
+    for lk = plot_order
         mask = cat_col == levels{lk};
         t_sub = tdata(mask);
         y_sub = ydata(mask);
@@ -2414,7 +2429,7 @@ catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
 n_lev   = numel(levels);
-colors  = lines(n_lev);
+[colors, plot_order] = se_level_colors(levels);
 
 MAX_NP = 6;
 sel_num = sel_num(1:min(end, MAX_NP));
@@ -2445,7 +2460,7 @@ for r = 1:np
 
         if r == c
             % Diagonal: overlapping normalized histograms
-            for lk = 1:n_lev
+            for lk = plot_order
                 mask = cat_col == levels{lk};
                 x = xdata(mask);
                 x = x(~isnan(x));
@@ -2469,7 +2484,7 @@ for r = 1:np
             end
         else
             % Off-diagonal: colored scatter + per-level regression line + r
-            for lk = 1:n_lev
+            for lk = plot_order
                 mask  = cat_col == levels{lk};
                 x     = xdata(mask);
                 y     = ydata(mask);
@@ -2752,14 +2767,12 @@ for j = 1:numel(num_idxs)
     vmax = max(Heat(:), [], 'omitnan');
     if isnan(vmin) || vmin == vmax, continue; end
 
-    % usamap always creates its own figure — grab it afterward.
-    ax = usamap('conus');
-    fig = ancestor(ax, 'figure');
-    fig.Name        = sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name);
-    fig.Color       = [0.97 0.97 0.97];
-    fig.NumberTitle = 'off';
-    fig.Units       = 'normalized';
-    fig.Position    = [0.05 0.12 0.88 0.80];
+    % Create a fresh figure first so usamap draws its axes into it,
+    % not into whatever figure was current (e.g. the heatmap).
+    fig = figure('Color', [0.97 0.97 0.97], 'NumberTitle', 'off', ...
+        'Units', 'normalized', 'Position', [0.05 0.12 0.88 0.80]);
+    ax = usamap('conus');   % draws into current figure (fig)
+    fig.Name = sprintf('DataExplorer (choropleth: %s) — %s', ncn, prof.source_name);
     set(ax, 'Units', 'normalized', 'Position', [0 0.10 1 0.84]);
     setm(ax, 'Frame', 'off', 'Grid', 'off', ...
         'MeridianLabel', 'off', 'ParallelLabel', 'off');
