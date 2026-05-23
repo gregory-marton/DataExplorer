@@ -29,7 +29,11 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session, exitstatus):
     slow_ran = any(item.get_closest_marker("slow") for item in session.items)
 
-    if exitstatus == 0 and not slow_ran:
+    if exitstatus == 0 and slow_ran:
+        # We just ran the full integration suite — nothing deferred; clear sentinel.
+        SENTINEL.unlink(missing_ok=True)
+        LAST_RUN.unlink(missing_ok=True)
+    elif exitstatus == 0 and not slow_ran:
         uid = SENTINEL.read_text().strip() if SENTINEL.exists() else None
         if uid:
             script = ROOT / "scripts" / "run_integration_deferred.sh"
