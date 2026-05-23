@@ -238,17 +238,34 @@ end
 
 %% ── Draw state patches ───────────────────────────────────────────────────────
 patch_h = cell(n_shape, 1);
+% patchm uses the CURRENT map axes' projection, not the 'Parent' argument.
+% Group states by target axes so we call axes() once per group.
+si_groups = {[], [], []};
+ax_groups = {ax_main, ax_ak, ax_hi};
 for si = 1:n_shape
-    fc = de_usamap_val2color(Heat(si,1), vmin, vmax, cmap_ch, has_choro);
     ax_for = de_usamap_axes_for(si, ak_si, hi_si, ax_main, ax_ak, ax_hi);
-    patch_h{si} = patchm(S(si).Lat, S(si).Lon, 0, ...
-        'FaceColor', fc, 'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.3, ...
-        'Parent', ax_for);
-    hh = patch_h{si};
-    for hk = 1:numel(hh)
-        hh(hk).UserData = struct('state_idx', si, 'state_name', S(si).Name);
+    for gi = 1:3
+        if isequal(ax_for, ax_groups{gi})
+            si_groups{gi}(end+1) = si;
+            break
+        end
     end
 end
+for gi = 1:3
+    ax_g = ax_groups{gi};
+    if isempty(ax_g) || isempty(si_groups{gi}), continue; end
+    axes(ax_g); %#ok<LAXES>
+    for si = si_groups{gi}
+        fc = de_usamap_val2color(Heat(si,1), vmin, vmax, cmap_ch, has_choro);
+        patch_h{si} = patchm(S(si).Lat, S(si).Lon, 0, ...
+            'FaceColor', fc, 'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.3);
+        hh = patch_h{si};
+        for hk = 1:numel(hh)
+            hh(hk).UserData = struct('state_idx', si, 'state_name', S(si).Name);
+        end
+    end
+end
+axes(ax_main); %#ok<LAXES>
 
 %% ── Colorbar ─────────────────────────────────────────────────────────────────
 if has_choro
@@ -418,23 +435,24 @@ for si = 1:n_shape
 
     lbl = de_usamap_label_str(code, heat_t1(si), has_choro);
     ax_for = de_usamap_axes_for(si, ak_si, hi_si, ax_main, ax_ak, ax_hi);
+    axes(ax_for); %#ok<LAXES>  % textm/plotm use current map axes' projection
 
     small_idx = find(strcmp(SMALL_CODES, code), 1);
     if ~isempty(small_idx) && isequal(ax_for, ax_main)
         pos = SMALL_POS{small_idx};
         plotm([lat_c, pos(1)], [lon_c, pos(2)], '-', ...
-            'Color', [0.55 0.55 0.55], 'LineWidth', 0.6, 'Parent', ax_main, ...
+            'Color', [0.55 0.55 0.55], 'LineWidth', 0.6, ...
             'HitTest', 'off', 'PickableParts', 'none');
         label_h{si} = textm(pos(1), pos(2), lbl, ...
             'FontSize', 5.5, 'HorizontalAlignment', 'center', ...
             'VerticalAlignment', 'middle', 'FontWeight', 'bold', ...
-            'Color', [0.1 0.1 0.1], 'Parent', ax_main);
+            'Color', [0.1 0.1 0.1]);
     else
         fs = 5.5 + 0.5 * double(isequal(ax_for, ax_ak) || isequal(ax_for, ax_hi));
         label_h{si} = textm(lat_c, lon_c, lbl, ...
             'FontSize', fs, 'HorizontalAlignment', 'center', ...
             'VerticalAlignment', 'middle', 'FontWeight', 'bold', ...
-            'Color', [0.1 0.1 0.1], 'Parent', ax_for);
+            'Color', [0.1 0.1 0.1]);
     end
 end
 end

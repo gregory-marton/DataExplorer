@@ -171,15 +171,136 @@ end
 function T = load_from_zip(filepath, options)
     tmpdir = tempname;
     mkdir(tmpdir);
-    unzip(filepath, tmpdir);
+    cleanup_tmp = onCleanup(@() rmdir(tmpdir, 's'));
 
-    % collect candidate data files recursively (case-insensitive extension match)
     ok_exts = {'.csv', '.tsv', '.txt', '.xlsx', '.xls', '.asc'};
-    all_files = dir(fullfile(tmpdir, '**', '*.*'));
+    SMALL_FILE_BYTES = 5000;
+
+    % Try Java listing first: avoids full extraction of large archives (e.g.
+    % DWCA zips with 20 000 files).  Entry names may have trailing spaces
+    % (common in some zip tools) — use strtrim for extension checks but keep
+    % the raw name for Java lookups, then strtrim when writing to disk.
+    did_selective = false;
+    zip_entries   = zip_list_entries(filepath);   % struct array: .name, .bytes
+
+    if ~isempty(zip_entries)
+        % Filter to data-file candidates
+        keep = false(1, numel(zip_entries));
+        for k = 1:numel(zip_entries)
+            [~, ~, ext] = fileparts(strtrim(zip_entries(k).name));
+            keep(k) = ismember(lower(ext), ok_exts);
+        end
+        cand = zip_entries(keep);   % struct array: .name, .bytes
+
+        if ~isempty(cand)
+            % InnerFile override — compare trimmed names
+            if strlength(options.InnerFile) > 0
+                target = char(options.InnerFile);
+                idx    = find(strcmp(strtrim({cand.name}), strtrim(target)), 1);
+                if isempty(idx)
+                    error('DataExplorer:innerFileNotFound', ...
+                        'File "%s" not found inside ZIP. Available: %s', ...
+                        target, strjoin(strtrim({cand.name}), ', '));
+                end
+                cand = cand(idx);
+            end
+
+            % If multiple candidates, pick ONE before extracting so we never
+            % decompress multi-GB archives we won't use.
+            if numel(cand) > 1
+                [sizes_s, ord] = sort([cand.bytes], 'ascend');
+                cand_s         = cand(ord);
+                names_s        = strtrim({cand_s.name});
+
+                if numel(cand) > 10
+                    shown_k      = find(sizes_s >= SMALL_FILE_BYTES);
+                    suppressed_n = sum(sizes_s < SMALL_FILE_BYTES);
+                else
+                    shown_k      = 1:numel(cand_s);
+                    suppressed_n = 0;
+                end
+
+                fprintf('  Files found inside ZIP (sorted by size):\n');
+                for k = 1:numel(shown_k)
+                    sk = shown_k(k);
+                    sz = sizes_s(sk);
+                    if sz >= 1e6
+                        sz_str = sprintf('%.1f MB', sz/1e6);
+                    else
+                        sz_str = sprintf('%.0f KB', sz/1e3);
+                    end
+                    fprintf('    [%2d]  %-40s  %s\n', k, names_s{sk}, sz_str);
+                end
+                if suppressed_n > 0
+                    fprintf('  (%d lookup/admin files under 5 KB hidden)\n', suppressed_n);
+                end
+                fprintf('\n');
+                default_k = shown_k(end);
+                fprintf('  Enter number (default %d = %s),\n', ...
+                    numel(shown_k), names_s{default_k});
+
+                if options.AutoSelect
+                    pick_idx = default_k;
+                    fprintf('  AutoSelect: picking largest "%s"\n', names_s{default_k});
+                else
+                    pick_idx = default_k; %#ok<NASGU> overwritten in loop below
+                    while true
+                        raw = input('  or filename for a hidden file: ', 's');
+                        if isempty(raw)
+                            pick_idx = default_k;
+                            break
+                        elseif all(ismember(raw, '0123456789'))
+                            n = str2double(raw);
+                            if n >= 1 && n <= numel(shown_k)
+                                pick_idx = shown_k(n);
+                                break
+                            else
+                                fprintf('  Please enter a number between 1 and %d.\n', numel(shown_k));
+                            end
+                        else
+                            match = find(strcmp(names_s, raw), 1);
+                            if ~isempty(match)
+                                pick_idx = match;
+                                break
+                            else
+                                fprintf('  File "%s" not found in ZIP.\n', raw);
+                            end
+                        end
+                    end
+                end
+                cand = cand_s(pick_idx);
+            end
+
+            % Extract only the chosen candidate(s)
+            selected_zip_entry = cand(1).name;   % original name (may have trailing space)
+            all_ok = true;
+            for k = 1:numel(cand)
+                try
+                    zip_extract_entry(filepath, cand(k).name, tmpdir);
+                catch
+                    all_ok = false;
+                    break;
+                end
+            end
+            if all_ok
+                did_selective = true;
+            end
+        end
+    end
+
+    if ~did_selective
+        unzip(filepath, tmpdir);
+    end
+
+    % Collect extracted files (search root and subdirs; ** may miss root on macOS)
+    all_files = [dir(fullfile(tmpdir, '*.*')); dir(fullfile(tmpdir, '**', '*.*'))];
     all_files = all_files(~[all_files.isdir]);
+    full_paths = fullfile({all_files.folder}, {all_files.name});
+    [~, ia]   = unique(full_paths);
+    all_files  = all_files(ia);
     keep = false(1, numel(all_files));
     for k = 1:numel(all_files)
-        [~, ~, ext] = fileparts(all_files(k).name);
+        [~, ~, ext] = fileparts(strtrim(all_files(k).name));  % strtrim defensive
         keep(k) = ismember(lower(ext), ok_exts);
     end
     files = all_files(keep);
@@ -188,26 +309,14 @@ function T = load_from_zip(filepath, options)
         error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX/ASC found inside the ZIP.');
     end
 
-    if strlength(options.InnerFile) > 0
-        % Caller pinned a specific inner file — find it by name.
-        all_names = {files.name};
-        match = find(strcmp(all_names, char(options.InnerFile)), 1);
-        if isempty(match)
-            error('DataExplorer:innerFileNotFound', ...
-                'File "%s" not found inside ZIP. Available: %s', ...
-                options.InnerFile, strjoin(all_names, ', '));
-        end
-        choice_idx = match;
-    elseif isscalar(files)
+    if did_selective || isscalar(files)
         choice_idx = 1;
     else
-        SMALL_FILE_BYTES = 5000;
-
-        % Always sort ascending by size so largest (default) is at the bottom
+        % Fallback picker — only reached when Java listing failed and full
+        % unzip produced multiple data files.
         [~, size_ord] = sort([files.bytes], 'ascend');
         files_sorted  = files(size_ord);
 
-        % Suppress tiny files only when there are many files overall
         if numel(files) > 10
             shown      = find([files_sorted.bytes] >= SMALL_FILE_BYTES);
             suppressed = find([files_sorted.bytes] <  SMALL_FILE_BYTES);
@@ -227,12 +336,10 @@ function T = load_from_zip(filepath, options)
             end
             fprintf('    [%2d]  %-40s  %s\n', k, files_sorted(idx).name, sz_str);
         end
-
         if ~isempty(suppressed)
             fprintf('  (%d lookup/admin files under 5 KB hidden — enter filename to load one)\n', ...
                 numel(suppressed));
         end
-
         fprintf('\n');
         default_num = numel(shown);
         fprintf('  Enter number (default %d = %s),\n', ...
@@ -271,11 +378,15 @@ function T = load_from_zip(filepath, options)
     end
 
     T = se_load(fullfile(files(choice_idx).folder, files(choice_idx).name), options);
-    % Annotate with the inner filename so source_name can reference it
     if isempty(T.Properties.UserData)
-        T.Properties.UserData = struct('sheet', '', 'inner_file', files(choice_idx).name);
+        T.Properties.UserData = struct('sheet', '', 'inner_file', strtrim(files(choice_idx).name));
     else
-        T.Properties.UserData.inner_file = files(choice_idx).name;
+        T.Properties.UserData.inner_file = strtrim(files(choice_idx).name);
+    end
+    % Preserve the original ZIP entry name (may have trailing whitespace) so
+    % the recipe's unzip command can reference it exactly.
+    if did_selective && exist('selected_zip_entry', 'var')
+        T.Properties.UserData.inner_file_zip = selected_zip_entry;
     end
 end
 
@@ -361,7 +472,11 @@ function T = load_excel(filepath, options)
     opts.MissingRule = 'fill';
     T = readtable(filepath, opts, 'Sheet', sheetname);
     T.Properties.UserData = struct('sheet', sheetname, 'inner_file', '');
+    names_before = T.Properties.VariableNames;
     T = se_fix_names(T, filepath, '.xlsx', sheetname);
+    if ~isequal(names_before, T.Properties.VariableNames)
+        T.Properties.UserData.explicit_header = true;
+    end
     T = se_sample(T, options.MaxRows);
 end
 
@@ -632,6 +747,7 @@ function T = load_netcdf(filepath, options)
 
     T = se_sample(T, options.MaxRows);
     fprintf('  ✓ Loaded %d × %d table from "%s".\n', height(T), width(T), varname);
+    T.Properties.UserData = struct('sheet', '', 'inner_file', '', 'nc_varname', varname);
 end
 
 function rc = filter_coords(coord_vars, dim_names)
@@ -771,18 +887,45 @@ function T = se_fix_names(T, filepath, ext, sheet)
 
         firstrow = table2cell(raw(1, :));
 
-        % A row looks like a header if every cell is non-numeric text
+        % A row looks like a pure-text header if every cell is non-numeric text
         is_text = cellfun(@(v) ischar(v) || isstring(v), firstrow);
         is_num  = cellfun(@(v) ~isnan(str2double(string(v))), firstrow);
         looks_like_header = all(is_text) && ~all(is_num);
 
-        if looks_like_header
-            candidate = string(firstrow);
-            valid     = matlab.lang.makeValidName(candidate);
+        % Also detect mixed headers: some text labels + year-like integers
+        % (e.g. "Data_Status, StateCode, MSN, 1960, 1961, …, 2023").
+        % Require ≥3 year-like integers to avoid false positives on data rows
+        % that happen to include one year value (e.g. survey year).
+        year_vals = cellfun(@(v) isnumeric(v) && isscalar(v) && ~isnan(v) && ...
+            v >= 1900 && v <= 2100 && v == floor(v), firstrow);
+        looks_like_mixed_header = any(is_text) && sum(year_vals) >= 3 && ~looks_like_header;
+
+        if looks_like_header || looks_like_mixed_header
+            % Build candidate names; convert numeric cells (e.g. 1960) to
+            % their string representation before makeValidName.
+            cand = cell(1, numel(firstrow));
+            for j = 1:numel(firstrow)
+                v = firstrow{j};
+                if isnumeric(v) && isscalar(v)
+                    cand{j} = sprintf('%g', v);   % 1960 → '1960' → x1960
+                else
+                    cand{j} = char(string(v));
+                end
+            end
+            valid = matlab.lang.makeValidName(cand);
             T.Properties.VariableNames = cellstr(valid);
             T(1, :) = [];   % drop the now-redundant first row
-            fprintf('  ✓ Reassigned variable names from first data row:\n');
-            fprintf('      %s\n', strjoin(valid, ',  '));
+            if looks_like_mixed_header
+                fprintf('  ✓ Header row has mixed text + year columns — names reassigned:\n');
+            else
+                fprintf('  ✓ Reassigned variable names from first data row:\n');
+            end
+            preview = strjoin(valid(1:min(6, end)), ',  ');
+            if numel(valid) > 6
+                fprintf('      %s, … (%d more)\n', preview, numel(valid) - 6);
+            else
+                fprintf('      %s\n', preview);
+            end
         else
             fprintf('  First row looks like data (not headers). Keeping Var1/Var2/…\n');
             fprintf('  TODO: rename columns manually via T.Properties.VariableNames\n');
@@ -1705,8 +1848,8 @@ function plot_num_num(ax, x, y, ~, ~)
 % When one axis is discrete (few unique integer values, e.g. years), uses
 % box plots instead.
     valid = ~isnan(x) & ~isnan(y);
-    xv = x(valid);
-    yv = y(valid);
+    xv = double(x(valid));
+    yv = double(y(valid));
     if isempty(xv), axis(ax,'off'); return; end
 
     x_disc = num_is_discrete(xv);
@@ -2022,7 +2165,7 @@ for k = 1:numel(num_ranked)
         else
             existing = cell2mat(arrayfun(@(s) T.(prof.name{s})(valid), ...
                 num_sel, 'UniformOutput', false));
-            r_vals = abs(corr(cand_col(valid), existing));
+            r_vals = abs(corr(double(cand_col(valid)), double(existing)));
             if max(r_vals) < CORR_THRESH
                 num_sel(end+1) = candidate; %#ok<AGROW>
             end
@@ -2184,34 +2327,66 @@ ud  = T.Properties.UserData;
 L   = {};   % lines
 
 if ext == ".zip"
-    inner = '';
-    if isstruct(ud) && ~isempty(ud.inner_file)
-        inner = ud.inner_file;
+    inner     = '';
+    inner_zip = '';   % original ZIP entry name (may have trailing whitespace)
+    sampled_n = 0;
+    if isstruct(ud)
+        if isfield(ud, 'inner_file')     && ~isempty(ud.inner_file),     inner     = ud.inner_file; end
+        if isfield(ud, 'inner_file_zip') && ~isempty(ud.inner_file_zip), inner_zip = ud.inner_file_zip; end
+        if isfield(ud, 'sampled')        && ~isempty(ud.sampled),        sampled_n = ud.sampled; end
     end
+    if isempty(inner_zip), inner_zip = inner; end
     [~, ~, inner_ext] = fileparts(inner);
     inner_ext = lower(inner_ext);
-    L{end+1} = sprintf('tmpdir = tempname; mkdir(tmpdir);');
-    L{end+1} = sprintf('unzip(''%s'', tmpdir);', filepath);
+    % Use system unzip -j for selective extraction: avoids unpacking the
+    % entire archive (critical for large ZIPs like DWCA with 20 000+ files).
+    % inner_zip preserves any trailing whitespace in the original entry name.
+    L{end+1} = 'tmpdir = tempname; mkdir(tmpdir);';
+    L{end+1} = sprintf('system([''unzip -j -d "'' tmpdir ''" "%s" "%s"'']);', ...
+        filepath, inner_zip);
+    % Handle ZIP entries whose names have trailing whitespace (some ZIP tools
+    % add it); the clean name is what we reference below.
+    L{end+1} = sprintf('inner_path = fullfile(tmpdir, ''%s'');', inner);
+    L{end+1} = 'if ~exist(inner_path, ''file'')';
+    L{end+1} = '    d__ = dir([inner_path ''*'']);';
+    L{end+1} = '    if ~isempty(d__), movefile(fullfile(d__(1).folder,d__(1).name),inner_path); end';
+    L{end+1} = 'end';
     if ismember(inner_ext, {'.xlsx','.xls','.xlsm'})
         sheet = '';
         if isstruct(ud) && ~isempty(ud.sheet), sheet = ud.sheet; end
-        L{end+1} = sprintf('opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''Sheet'', ''%s'');', inner, sheet);
+        L{end+1} = sprintf('opts = detectImportOptions(inner_path, ''Sheet'', ''%s'');', sheet);
         L{end+1} = 'opts.MissingRule = ''fill'';';
-        L{end+1} = sprintf('T = readtable(fullfile(tmpdir, ''%s''), opts, ''Sheet'', ''%s'');', inner, sheet);
+        L{end+1} = sprintf('T = readtable(inner_path, opts, ''Sheet'', ''%s'');', sheet);
+    elseif sampled_n > 0
+        L{end+1} = sprintf('T = SampleData(inner_path, %d, ''Seed'', 42);', sampled_n);
     else
-        L{end+1} = sprintf('opts = detectImportOptions(fullfile(tmpdir, ''%s''), ''FileType'', ''text'');', inner);
+        L{end+1} = 'opts = detectImportOptions(inner_path, ''FileType'', ''text'');';
         L{end+1} = 'opts.MissingRule = ''fill'';';
-        L{end+1} = sprintf('T = readtable(fullfile(tmpdir, ''%s''), opts);', inner);
+        L{end+1} = 'T = readtable(inner_path, opts);';
     end
 elseif ismember(ext, [".xlsx", ".xls", ".xlsm"])
     sheet = '';
-    if isstruct(ud) && ~isempty(ud.sheet), sheet = ud.sheet; end
-    L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''Sheet'', ''%s'');', filepath, sheet);
+    explicit_hdr = false;
+    if isstruct(ud)
+        if ~isempty(ud.sheet), sheet = ud.sheet; end
+        if isfield(ud, 'explicit_header') && ud.explicit_header
+            explicit_hdr = true;
+        end
+    end
+    if explicit_hdr
+        L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''Sheet'', ''%s'', ''VariableNamesRange'', ''A1'', ''DataRange'', ''A2'');', filepath, sheet);
+    else
+        L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''Sheet'', ''%s'');', filepath, sheet);
+    end
     L{end+1} = 'opts.MissingRule = ''fill'';';
     L{end+1} = sprintf('T = readtable(''%s'', opts, ''Sheet'', ''%s'');', filepath, sheet);
 elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
+    nc_var = 'varname';
+    if isstruct(ud) && isfield(ud, 'nc_varname') && ~isempty(ud.nc_varname)
+        nc_var = char(ud.nc_varname);
+    end
     L{end+1} = sprintf('%% NetCDF — adjust variable/start/count as needed:');
-    L{end+1} = sprintf('data = ncread(''%s'', ''varname'');', filepath);
+    L{end+1} = sprintf('data = ncread(''%s'', ''%s'');', filepath, nc_var);
     L{end+1} = sprintf('%% See ncinfo(''%s'') for available variables.', filepath);
 else
     sampled_n = 0;
@@ -2466,6 +2641,7 @@ cat_useful = cat_all(prof.nunique(cat_all) > 1 & ...
 cat_big    = cat_all(prof.nunique(cat_all) > MAX_LEVELS);
 
 [time_idx, is_year_axis] = se_find_time_axis(prof);
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
 
 % Numeric columns for scatter matrix: selected numerics excluding time axis
 sel_num = sel(prof.type(sel) == "numeric");
@@ -2478,10 +2654,11 @@ if numel(sel_num) > MAX_NP_DRILL
     sel_num = sel_num(1:MAX_NP_DRILL);
 end
 
-% All non-skip numerics excluding time axis for time series subplots
+% All non-skip numerics excluding time axis and wide year columns for time series subplots
 if ~isempty(time_idx)
     ts_num = find(prof.type == "numeric" & ~prof.skip);
     ts_num = ts_num(ts_num ~= time_idx);
+    ts_num = setdiff(ts_num, wide_yr_idxs);
 else
     ts_num = [];
 end
@@ -2492,6 +2669,8 @@ if ~isempty(cat_useful)
         ci = cat_useful(k);
         if ~isempty(time_idx) && ~isempty(ts_num)
             se_plot_grouped_timeseries(T, prof, ci, time_idx, ts_num, is_year_axis);
+        elseif ~isempty(wide_yr_idxs)
+            se_plot_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
         end
         if numel(sel_num) >= 2
             se_plot_scatter_by_cat(T, prof, ci, sel_num);
@@ -2547,6 +2726,8 @@ for k = 1:numel(cat_big)
 
         if ~isempty(time_idx) && ~isempty(ts_num)
             se_plot_grouped_timeseries(T_sub, prof, ci, time_idx, ts_num, is_year_axis);
+        elseif ~isempty(wide_yr_idxs)
+            se_plot_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
         end
         if numel(sel_num) >= 2
             se_plot_scatter_by_cat(T_sub, prof, ci, sel_num);
@@ -2873,6 +3054,12 @@ states  = cellstr(unique(cat_col(~isundefined(cat_col))));
 n_st    = numel(states);
 if n_st == 0, return; end
 
+% Exclude aggregate-level codes (e.g. 'US' = national total) from per-state breakdowns.
+TOTAL_CODES = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
+states_plot = states(~ismember(upper(states), TOTAL_CODES));
+if isempty(states_plot), states_plot = states; end
+n_st_plot = numel(states_plot);
+
 % Numeric columns to show: union of sel_num and ts_num
 num_idxs = unique([sel_num, ts_num(:)']);
 num_idxs = num_idxs(prof.type(num_idxs) == "numeric");
@@ -2882,7 +3069,7 @@ end
 n_num = numel(num_idxs);
 if n_num == 0, return; end
 
-fprintf('  State summary: %d states × %d variables.\n', n_st, n_num);
+fprintf('  State summary: %d states × %d variables.\n', n_st_plot, n_num);
 
 % ── Figure 1: horizontal bar charts of mean per state ────────────────────────
 n_cols = min(n_num, 3);
@@ -2896,16 +3083,16 @@ for j = 1:n_num
     ax = nexttile(tl);
     ncn   = prof.name{num_idxs(j)};
     ydata = T.(ncn);
-    means = NaN(n_st, 1);
-    for s = 1:n_st
-        vals = ydata(cat_col == states{s});
+    means = NaN(n_st_plot, 1);
+    for s = 1:n_st_plot
+        vals = ydata(cat_col == states_plot{s});
         vals = vals(~isnan(vals));
         if ~isempty(vals), means(s) = mean(vals); end
     end
     [means_s, sord] = sort(means, 'descend', 'MissingPlacement', 'last');
-    states_s = states(sord);
-    barh(ax, 1:n_st, means_s, 'FaceColor', [0.3 0.5 0.8], 'EdgeColor', 'none');
-    set(ax, 'YTick', 1:n_st, 'YTickLabel', states_s, 'FontSize', 5, ...
+    states_s = states_plot(sord);
+    barh(ax, 1:n_st_plot, means_s, 'FaceColor', [0.3 0.5 0.8], 'EdgeColor', 'none');
+    set(ax, 'YTick', 1:n_st_plot, 'YTickLabel', states_s, 'FontSize', 5, ...
         'YDir', 'reverse');
     title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
@@ -2913,56 +3100,103 @@ end
 title(tl, se_src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 
-% ── Figure 2: state × time heatmap ───────────────────────────────────────────
-if isempty(time_idx), return; end
+% ── Animated choropleth (Mapping Toolbox) — fires with or without time axis ──
+se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis);
 
-tdata = T.(prof.name{time_idx});
-if is_year_axis
-    valid_t = ~isnan(tdata);
-else
-    valid_t = ~isnat(tdata);
+% ── Stacked % area chart (fires when a total code like 'US' exists + wide years) ──
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+TOTAL_CODES_ST = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
+total_code_found = '';
+for tc__ = TOTAL_CODES_ST
+    if any(ismember(upper(states), tc__{1}))
+        total_code_found = tc__{1};
+        break;
+    end
 end
-t_vals = unique(tdata(valid_t));
-n_t    = numel(t_vals);
-if n_t < 2, return; end
+if ~isempty(total_code_found) && ~isempty(wide_yr_idxs)
+    se_plot_state_pct_area(T, prof, cat_idx, total_code_found, states_plot, ...
+        wide_yr_idxs, wide_yr_vals);
+end
 
-fig2 = figure('Name', se_fig_title(sprintf('%s × time', catname), prof.source_name),...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+% ── Figure 2: state × time heatmap ───────────────────────────────────────────
+if isempty(time_idx) && isempty(wide_yr_idxs), return; end
 
-for j = 1:n_num
-    ax = nexttile(tl2);
-    ncn   = prof.name{num_idxs(j)};
-    ydata = T.(ncn);
-    Heat  = NaN(n_st, n_t);
-    for s = 1:n_st
-        s_mask = cat_col == states{s};
-        for tt = 1:n_t
-            mask = s_mask & (tdata == t_vals(tt));
-            vals = ydata(mask);
+if ~isempty(wide_yr_idxs)
+    % Wide-format year columns: one heatmap of (state × year), averaged across other dims
+    [t_vals, sort_ord] = sort(wide_yr_vals);
+    yr_names_s = string(prof.name(wide_yr_idxs(sort_ord)));
+    n_t = numel(t_vals);
+
+    fig2 = figure('Name', se_fig_title(sprintf('%s × year', catname), prof.source_name), ...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    ax = axes(fig2); %#ok<LAXES>
+
+    Heat = NaN(n_st_plot, n_t);
+    for s = 1:n_st_plot
+        s_mask = cat_col == states_plot{s};
+        for t = 1:n_t
+            vals = double(T.(char(yr_names_s(t)))(s_mask));
             vals = vals(~isnan(vals));
-            if ~isempty(vals), Heat(s, tt) = mean(vals); end
+            if ~isempty(vals), Heat(s, t) = mean(vals); end
         end
     end
     imagesc(ax, Heat);
     colorbar(ax);
-    if is_year_axis
-        step = max(1, floor(n_t / 8));
-        set(ax, 'XTick', 1:step:n_t, ...
-            'XTickLabel', t_vals(1:step:n_t), ...
-            'XTickLabelRotation', 45);
-    else
-        set(ax, 'XTick', []);
-    end
-    set(ax, 'YTick', 1:n_st, 'YTickLabel', states, 'FontSize', 5);
-    title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    step = max(1, floor(n_t / 8));
+    set(ax, 'XTick', 1:step:n_t, 'XTickLabel', t_vals(1:step:n_t), ...
+        'XTickLabelRotation', 45, 'YTick', 1:n_st_plot, ...
+        'YTickLabel', states_plot, 'FontSize', 5);
+    xlabel(ax, 'Year', 'FontSize', 8);
+    title(ax, se_src_prefix(prof.source_name, sprintf('by %s over time', catname)), ...
+        'FontSize', 9, 'Interpreter', 'none');
     box(ax, 'off');
-end
-title(tl2, se_src_prefix(prof.source_name, sprintf('Time %s %s', char(215), catname)), ...
-    'FontSize', 10, 'Interpreter', 'none');
+else
+    % Normal time axis
+    tdata = T.(prof.name{time_idx});
+    if is_year_axis
+        valid_t = ~isnan(tdata);
+    else
+        valid_t = ~isnat(tdata);
+    end
+    t_vals = unique(tdata(valid_t));
+    n_t    = numel(t_vals);
+    if n_t < 2, return; end
 
-% ── Animated choropleth (Mapping Toolbox) ─────────────────────────────────────
-se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis);
+    fig2 = figure('Name', se_fig_title(sprintf('%s × time', catname), prof.source_name),...
+        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    for j = 1:n_num
+        ax = nexttile(tl2);
+        ncn   = prof.name{num_idxs(j)};
+        ydata = T.(ncn);
+        Heat  = NaN(n_st_plot, n_t);
+        for s = 1:n_st_plot
+            s_mask = cat_col == states_plot{s};
+            for tt = 1:n_t
+                mask = s_mask & (tdata == t_vals(tt));
+                vals = ydata(mask);
+                vals = vals(~isnan(vals));
+                if ~isempty(vals), Heat(s, tt) = mean(vals); end
+            end
+        end
+        imagesc(ax, Heat);
+        colorbar(ax);
+        if is_year_axis
+            step = max(1, floor(n_t / 8));
+            set(ax, 'XTick', 1:step:n_t, ...
+                'XTickLabel', t_vals(1:step:n_t), ...
+                'XTickLabelRotation', 45);
+        else
+            set(ax, 'XTick', []);
+        end
+        set(ax, 'YTick', 1:n_st_plot, 'YTickLabel', states_plot, 'FontSize', 5);
+        title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+        box(ax, 'off');
+    end
+    title(tl2, se_src_prefix(prof.source_name, sprintf('Time %s %s', char(215), catname)), ...
+        'FontSize', 10, 'Interpreter', 'none');
+end
 end
 
 
@@ -3011,5 +3245,205 @@ annotation(fig, 'textbox', [0.0, 0.0, 1.0, 0.022], ...
 end
 
 
+% ── zip_extract_entry ─────────────────────────────────────────────────────────
+function zip_extract_entry(zippath, entry_name, outdir)
+% Extract one named entry using the system unzip tool (-j junks paths).
+    cmd = sprintf('unzip -j -d "%s" "%s" "%s"', outdir, zippath, entry_name);
+    [status, out] = system(cmd);
+    if status ~= 0
+        error('DataExplorer:zipExtractFailed', ...
+            'unzip failed for entry "%s":\n%s', entry_name, out);
+    end
+    % Some ZIP tools encode filenames with trailing whitespace.  unzip
+    % preserves that in the output filename; rename to the clean version.
+    [~, base, ext] = fileparts(entry_name);
+    raw_base   = [base ext];
+    clean_base = strtrim(raw_base);
+    if ~strcmp(raw_base, clean_base)
+        src = fullfile(outdir, raw_base);
+        dst = fullfile(outdir, clean_base);
+        if exist(src, 'file') && ~exist(dst, 'file')
+            movefile(src, dst);
+        end
+    end
+end
+
+
+% ── zip_list_entries ──────────────────────────────────────────────────────────
+function entries = zip_list_entries(filepath)
+% Return struct array (.name, .bytes) for all non-directory ZIP entries.
+% Uses system unzip -l — fast even for archives with 20 000+ entries.
+entries = struct('name', {}, 'bytes', {});
+[status, out] = system(sprintf('unzip -l "%s" 2>/dev/null', filepath));
+if status ~= 0, return; end
+lines = strsplit(out, newline);
+% Data lines: leading spaces, byte count, date MM-DD-YY[YY], time HH:MM, name
+pat = '^\s*(\d+)\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$';
+for k = 1:numel(lines)
+    tok = regexp(lines{k}, pat, 'tokens', 'once');
+    if isempty(tok), continue; end
+    name = tok{2};
+    if isempty(name), continue; end
+    if name(end) == '/', continue; end  % skip directory entries
+    entries(end+1).name  = name; %#ok<AGROW>
+    entries(end).bytes   = str2double(tok{1});
+end
+end
+
+
 % de_profile, de_histogram, de_bootstrap_poly_ci are standalone .m files
+
+
+% ── se_plot_state_pct_area ───────────────────────────────────────────────────
+function se_plot_state_pct_area(T, prof, cat_idx, total_code, states_plot, yr_idxs, yr_vals)
+%SE_PLOT_STATE_PCT_AREA  Stacked area chart of each state's share of national total by year.
+%
+%   For each (state, year): sum values across all other dimensions (e.g. energy types),
+%   divide by the reference-total row (identified by total_code, e.g. 'US'), then
+%   show as a stacked 100%-area chart.  States sorted by mean contribution (largest
+%   at bottom).
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+
+[yr_sorted, sort_ord] = sort(yr_vals);
+yr_names_s = string(prof.name(yr_idxs(sort_ord)));
+n_yrs = numel(yr_sorted);
+n_st  = numel(states_plot);
+
+% Compute sum per (state, year) and US-total per year
+pct_mat = NaN(n_st, n_yrs);
+us_mask = upper(string(cat_col)) == total_code;
+for t = 1:n_yrs
+    col_vals = double(T.(char(yr_names_s(t))));
+    us_total = sum(col_vals(us_mask), 'omitnan');
+    if isnan(us_total) || us_total == 0, continue; end
+    for s = 1:n_st
+        st_sum = sum(col_vals(cat_col == states_plot{s}), 'omitnan');
+        pct_mat(s, t) = st_sum / us_total * 100;
+    end
+end
+
+% Drop states with no data
+valid = any(~isnan(pct_mat), 2);
+if ~any(valid), return; end
+pct_mat = pct_mat(valid, :);
+st_labels = states_plot(valid);
+
+% Sort largest contributors to the bottom of the stack
+[~, ord] = sort(mean(pct_mat, 2, 'omitnan'), 'descend');
+pct_mat  = pct_mat(ord, :);
+st_labels = st_labels(ord);
+
+pct_mat(isnan(pct_mat)) = 0;
+
+fig = figure('Name', se_fig_title( ...
+    sprintf('%% of %s total by %s', total_code, catname), prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+ax = axes(fig); %#ok<LAXES>
+
+% area() cycles through ColorOrder; hold(on) prevents reset on first call
+n_shown = size(pct_mat, 1);
+hold(ax, 'on');
+ax.ColorOrder = lines(n_shown);
+
+% area() expects (n_timepoints × n_states)
+area(ax, yr_sorted(:), pct_mat');
+hold(ax, 'off');
+legend(ax, st_labels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
+xlabel(ax, 'Year', 'FontSize', 9);
+ylabel(ax, sprintf('%% of %s total', total_code), 'FontSize', 8);
+ylim(ax, [0 max(sum(pct_mat, 1), [], 'omitnan') * 1.05]);
+title(ax, se_src_prefix(prof.source_name, ...
+    sprintf('State share of %s total (sum across energy types)', total_code)), ...
+    'FontSize', 9, 'Interpreter', 'none');
+box(ax, 'off');
+end
+
+
+% ── se_detect_wide_years ─────────────────────────────────────────────────────
+function [yr_idxs, yr_vals] = se_detect_wide_years(prof)
+%SE_DETECT_WIDE_YEARS  Find non-skip numeric columns named x#### (year 1900–2100).
+%   Returns empty arrays if fewer than 3 such columns exist.
+yr_idxs = [];
+yr_vals = [];
+for i = 1:numel(prof.name)
+    if prof.skip(i) || prof.type(i) ~= "numeric", continue; end
+    tok = regexp(prof.name{i}, '^x(\d{4})$', 'tokens', 'once');
+    if isempty(tok), continue; end
+    yr = str2double(tok{1});
+    if yr >= 1900 && yr <= 2100
+        yr_idxs(end+1) = i; %#ok<AGROW>
+        yr_vals(end+1) = yr; %#ok<AGROW>
+    end
+end
+if numel(yr_idxs) < 3, yr_idxs = []; yr_vals = []; end
+end
+
+
+% ── se_plot_grouped_timeseries_wide ──────────────────────────────────────────
+function se_plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
+%SE_PLOT_GROUPED_TIMESERIES_WIDE  Trend lines per category level using wide-format year columns.
+TOP_K   = 8;
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+
+% Exclude national-aggregate codes from per-group lines
+TOTAL_CODES = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
+levels_all = cellstr(categories(cat_col));
+levels = levels_all(~ismember(upper(levels_all), TOTAL_CODES));
+if isempty(levels), levels = levels_all; end
+
+[yr_sorted, sort_ord] = sort(yr_vals);
+yr_names_s = string(prof.name(yr_idxs(sort_ord)));
+
+% Select top-K levels by mean value across all years
+if numel(levels) > TOP_K
+    means = NaN(numel(levels), 1);
+    for li = 1:numel(levels)
+        m = cat_col == levels{li};
+        all_vals = [];
+        for yi = 1:numel(yr_names_s)
+            v = double(T.(char(yr_names_s(yi)))(m));
+            all_vals = [all_vals; v(~isnan(v))]; %#ok<AGROW>
+        end
+        if ~isempty(all_vals), means(li) = mean(all_vals); end
+    end
+    [~, ord] = sort(means, 'descend', 'MissingPlacement', 'last');
+    levels_show = levels(ord(1:min(TOP_K, numel(ord))));
+    title_suf = sprintf(' — top %d of %d', TOP_K, numel(levels_all));
+else
+    levels_show = levels;
+    title_suf = '';
+end
+
+[colors, plot_order] = se_level_colors(levels_show);
+
+fig = figure('Name', se_fig_title(sprintf('By %s over time', catname), prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+ax = axes(fig); %#ok<LAXES>
+hold(ax, 'on');
+
+for lk = plot_order
+    lv = levels_show{lk};
+    m  = cat_col == lv;
+    y_vals_t = NaN(numel(yr_sorted), 1);
+    for yi = 1:numel(yr_sorted)
+        v = double(T.(char(yr_names_s(yi)))(m));
+        v = v(~isnan(v));
+        if ~isempty(v), y_vals_t(yi) = mean(v); end
+    end
+    plot(ax, yr_sorted, y_vals_t, '-', 'Color', colors(lk,:), ...
+        'LineWidth', 1.2, 'DisplayName', strrep(lv, '_', ' '));
+end
+
+hold(ax, 'off');
+xlabel(ax, 'Year', 'FontSize', 9);
+ylabel(ax, 'Mean value', 'FontSize', 8);
+legend(ax, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
+title(ax, se_src_prefix(prof.source_name, ...
+    sprintf('Trend by %s%s', catname, title_suf)), ...
+    'FontSize', 10, 'Interpreter', 'none');
+box(ax, 'off');
+end
 % in the same directory as DataExplorer.m — callable from any script on the path.

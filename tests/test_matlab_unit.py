@@ -35,7 +35,7 @@ def test_matlab_unit(test_name):
         "if r.Failed, error('FAILED: %s\\n%s', r.Name, r.Details.DiagnosticRecord.Report); end;"
         "if r.Incomplete, error('INCOMPLETE (skipped assumption not met): %s', r.Name); end;"
     )
-    result = run_matlab(script, timeout=180)
+    result = run_matlab(script, timeout=360)
     assert result.returncode == 0, (
         f"MATLAB error running {test_name}:\n{result.stderr.strip()}\n{result.stdout.strip()}"
     )

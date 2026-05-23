@@ -502,11 +502,30 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             T = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true);
 
             testCase.verifyGreaterThan(height(T), 0);
-            % TODO (Task 3 + baseline): after header fix, column names should include
-            % Data_Status, StateCode, MSN plus correctly-named year columns.
-            % TODO (baseline): figure count, time series mode (wide year-format data
-            % will trigger Task 4 pivot before time series is meaningful).
+            % Task 3: header row has mix of text + year integers; must not be
+            % discarded.  After the fix, the Data sheet's first three columns
+            % keep their names and year columns become x1960..x2023.
+            cols = string(T.Properties.VariableNames);
+            testCase.verifyTrue(ismember("Data_Status", cols), ...
+                'Column Data_Status missing — header row was dropped');
+            testCase.verifyTrue(ismember("StateCode", cols), ...
+                'Column StateCode missing — header row was dropped');
+            testCase.verifyTrue(any(cellfun(@(n) ~isempty(regexp(n, '^x\d{4}$', 'once')), ...
+                T.Properties.VariableNames)), ...
+                'No year columns (x1960…x2023) found — header row was dropped');
             testCase.assert_all_figures_nonempty();
+            % StateCode (54 levels) is a state column: bar chart must exist.
+            figs_state = testCase.figures_named('StateCode');
+            testCase.verifyNotEmpty(figs_state, ...
+                'No "By StateCode" figure — state column not recognized');
+            % Choropleth must fire regardless of whether a time axis exists.
+            % If Mapping Toolbox is absent de_usamap silently skips; only
+            % assert when the toolbox is present.
+            if ~isempty(ver('map'))
+                figs_choro = testCase.figures_named('choropleth');
+                testCase.verifyNotEmpty(figs_choro, ...
+                    'Choropleth not produced despite Mapping Toolbox being available');
+            end
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
