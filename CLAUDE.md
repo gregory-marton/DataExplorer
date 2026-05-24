@@ -87,11 +87,11 @@ These tasks were designed in conversation and not yet implemented. Read them bef
 ### Task 1 — Automated regression testing
 Interactive baseline session: load each dataset in `examples/`, show resulting PNGs one page at a time, discuss what to assert for each before moving on. Then build a MATLAB (`matlab.unittest`) test harness around the agreed expectations. Pre-sampled small fixtures for large datasets. Visual correctness requires human sign-off; automated checks verify: syntactic validity (`checkcode`), headless execution without errors, expected figure count.
 
-### Task 3 — Fix Excel header detection when header row is mostly numeric
-`detectImportOptions` mistakes a row of year values (`1960, 1961, …`) for a data row and generates `Var1, Var2, …` names. Fix: after detection, if variable names are all auto-generated, peek at the raw first row; if it contains a mix of text and year-like integers (4-digit, ~1900–2100), re-run with explicit `VariableNamesRange='A1'`, `DataRange='A2'`.
+### ~~Task 3~~ — DONE (Excel header detection)
+`se_fix_names` detects all-`Var1/Var2/…` column names, peeks at the raw first row, and re-assigns names when it finds a mix of text labels and year-like integers (≥3 values in 1900–2100 range). Verified by `test_excel_prod_dataset` against `Prod_dataset.xlsx`.
 
-### Task 4 — Detect wide-format year columns and pivot to long for timeline plots
-When column headers are 4-digit years, pivot wide-to-long into `(grouping_keys, Year, Value)` before passing to `se_plot_timeseries`. Grouping keys are non-year non-numeric columns (e.g., `StateCode`, `MSN`).
+### ~~Task 4~~ — DONE (Wide-format year columns)
+`se_detect_wide_years` finds `x####` columns; `se_plot_grouped_timeseries_wide` renders trend lines per category level directly from the wide columns (no long-format materialisation needed). The choropleth path pivots via `se_pivot_wide_to_long` to pass `TimeCol='Year'` to `de_statebins`. Both paths verified by `test_excel_prod_dataset` and `test_dataexplorer_wide_year_state_choropleth_has_slider`.
 
 ### Task 5 — Detect→summarize→drill-down for high-dimensional grouped datasets
 When a dataset has multiple categorical grouping dimensions + a time axis + numeric values, replace the flat pairplot with:
@@ -144,13 +144,19 @@ Three new figure types, in priority order:
 
 2. **Scatter matrix × categorical** — for each qualifying categorical, one page of np×np scatters where points are colored by that categorical's levels. Expands the existing correlation heatmap cells into grouped scatter views. Cap at `MaxVars` columns for the scatter grid.
 
-3. **Choropleth maps** — when a categorical matches a known geographic key pattern (2-letter state codes, FIPS, country ISO) and the Mapping Toolbox is available, produce one map per numeric variable showing values by geography. Extend the existing `se_plot_geo` (which handles lat/lon) to also handle administrative-key columns.
+3. **Choropleth maps** — when a categorical matches a known geographic key pattern (2-letter state codes → `de_statebins`; ISO country codes → `de_countrybins`), produce one map per numeric variable. No Mapping Toolbox required. For lat/lon point data, `se_plot_geo` continues to handle that path. `de_countrybins` is not yet wired into DataExplorer — needs a `se_looks_like_countries` detector analogous to `se_looks_like_states`.
 
 All three figure types can generate many figures quickly. Apply the interestingness ranker from Task 8 to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
 
 **Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines. Compositional data now generates both a stacked area figure AND an overlaid-lines figure with a dashed Total line.
 
-**Choropleth refactored (2026-05-21):** `se_plot_state_choropleth` is now a thin wrapper over `de_usamap.m` — a standalone library function. Supports US CONUS + Alaska inset + Hawaii inset, point scatter overlay, TimeCol slider, custom shapefile.
+**Choropleth refactored (2026-05-21→2026-05-24):** `se_plot_state_choropleth` calls `de_statebins` (no Mapping Toolbox required). Wide-format year columns (x1960..x2023) are detected and pivoted to long format so the TimeCol slider appears.
+
+**Tile-grid library (2026-05-24):** Three standalone files form a layered tile-grid system:
+- `de_tilegrid.m` — shared rendering engine (grid struct + pre-normalised codes → choropleth figure with optional slider).
+- `de_statebins.m` — US state choropleth by default; accepts a `Grid` argument (string preset, struct array, or path to `{code,row,col}` JSON) for any region (provinces, counties, etc.).  Built-in name→code normaliser for US states.  Custom grids: place JSON in `data/grids/<name>.json` and pass `Grid='<name>'`.
+- `de_countrybins.m` — world tile choropleth using `data/world_tile_grid.json` (Maarten Lambrechts / BBC standard, 195 countries). 4-tier normaliser (alpha-2 > alpha-3 > full name > historical alias). Overflow row for unrecognised codes. Update script: `python scripts/update_world_tile_grid.py`.
+- `de_usamap.m` — **teaching demo only**. Single `usamap('conus')` axes; AK and HI placed via affine transform in projected coordinates. Requires Mapping Toolbox. `AKScale`, `AKOffset`, `HIOffset` exposed so students can explore the transform.
 
 **Internal title prefix (2026-05-21):** `se_src_prefix(source_name, rest)` helper suppresses the "source —" prefix from axes titles when the source is "table input" (i.e., when T was passed directly rather than loaded from a file). Heatmap title format changed to "Time × CatName".
 

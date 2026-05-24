@@ -3207,16 +3207,49 @@ catname = prof.name{cat_idx};
 tcn     = '';
 if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 
+% Wide-format year columns (x####): pivot to long and create one animated
+% choropleth with a year slider rather than one static figure per year column.
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+if ~isempty(wide_yr_idxs) && isempty(time_idx)
+    fig_title = se_fig_title(sprintf('Choropleth: %s over time', catname), prof.source_name);
+    T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
+    de_statebins(T_long, 'StateCol', catname, 'ColorCol', 'Value', ...
+        'TimeCol', 'Year', 'Title', fig_title);
+    num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
+end
+
 for j = 1:numel(num_idxs)
     ncn        = prof.name{num_idxs(j)};
     fig_title  = se_fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
     if isempty(tcn)
-        de_usamap(T, 'StateCol', catname, 'ColorCol', ncn, 'Title', fig_title);
+        de_statebins(T, 'StateCol', catname, 'ColorCol', ncn, 'Title', fig_title);
     else
-        de_usamap(T, 'StateCol', catname, 'ColorCol', ncn, ...
+        de_statebins(T, 'StateCol', catname, 'ColorCol', ncn, ...
             'TimeCol', tcn, 'Title', fig_title);
     end
 end
+end
+
+
+% ── se_pivot_wide_to_long ─────────────────────────────────────────────────────
+function T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals)
+%SE_PIVOT_WIDE_TO_LONG  Stack wide-format year columns into long format.
+%   Adds 'Year' (double) and 'Value' (double) columns; drops original year columns.
+yr_names  = string(prof.name(wide_yr_idxs));
+all_cols  = string(T.Properties.VariableNames);
+keep_cols = cellstr(all_cols(~ismember(all_cols, yr_names)));
+
+[yr_sorted, yr_ord] = sort(wide_yr_vals);
+yr_names_s = yr_names(yr_ord);
+
+n_rows = height(T);
+n_t    = numel(yr_sorted);
+
+T_long       = repmat(T(:, keep_cols), n_t, 1);
+T_long.Year  = repelem(yr_sorted(:), n_rows);
+value_col    = cell2mat(arrayfun(@(ti) double(T.(yr_names_s(ti))), ...
+                   (1:n_t)', 'UniformOutput', false));
+T_long.Value = value_col;
 end
 
 

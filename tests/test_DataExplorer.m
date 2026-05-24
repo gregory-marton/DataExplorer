@@ -300,6 +300,106 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'UserData.sampled should be set when MaxRows forces a sample');
         end
 
+        function test_de_usamap_patches_in_correct_axes(testCase)
+            % Single-axes rewrite: AK and HI use affine-transformed patches in
+            % the same axes as CONUS — no separate axes structs.  Verify:
+            %   - de_usamap returns a plain axes handle (not a struct)
+            %   - patches exist for CONUS states (CA, TX, NY)
+            %   - AK and HI patches are present (identified by UserData)
+            %   - all patches are children of the single returned axes
+            testCase.assumeTrue(~isempty(ver('map')), 'Mapping Toolbox not available');
+
+            state_codes = {'CA'; 'TX'; 'NY'; 'FL'; 'OH'; 'WA'; 'OR'; 'AK'; 'HI'};
+            values      = (1:9)';
+            T = table(state_codes, values, 'VariableNames', {'State', 'Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            [fig, ax] = de_usamap(T, 'StateCol', 'State', 'ColorCol', 'Value');
+            fig_cleanup = onCleanup(@() close(fig));
+
+            % ax is a plain axes handle, not a struct
+            testCase.verifyTrue(isgraphics(ax) && strcmp(ax.Type, 'axes'), ...
+                'de_usamap should return a plain axes handle');
+
+            % All state patches live in the single axes
+            all_patches = findobj(ax, 'Type', 'patch');
+            testCase.verifyNotEmpty(all_patches, 'No patches found in map axes');
+
+            % AK and HI must be present (identified by UserData set on each patch)
+            ak_patches = findobj(ax, 'Type', 'patch', 'UserData', 'AK');
+            hi_patches = findobj(ax, 'Type', 'patch', 'UserData', 'HI');
+            testCase.verifyNotEmpty(ak_patches, 'No AK patch found in map axes');
+            testCase.verifyNotEmpty(hi_patches, 'No HI patch found in map axes');
+
+            % CONUS states must be present
+            ca_patches = findobj(ax, 'Type', 'patch', 'UserData', 'CA');
+            testCase.verifyNotEmpty(ca_patches, 'No CA patch found in map axes');
+
+            % Sanity: far more patches total than just AK alone (CONUS has many)
+            testCase.verifyGreaterThan(numel(all_patches), numel(ak_patches) * 5, ...
+                'Expected many more total patches than AK alone (CONUS has many states)');
+        end
+
+        function test_de_usamap_slider_appears_with_timecol(testCase)
+            % de_usamap creates a slider when TimeCol has more than one unique value.
+            testCase.assumeTrue(~isempty(ver('map')), 'Mapping Toolbox not available');
+
+            states = {'CA'; 'CA'; 'TX'; 'TX'; 'NY'; 'NY'};
+            years  = [2020; 2021; 2020; 2021; 2020; 2021];
+            values = [100; 110; 200; 210; 150; 160];
+            T = table(states, years, values, 'VariableNames', {'State', 'Year', 'Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            [fig, ~] = de_usamap(T, 'StateCol', 'State', 'ColorCol', 'Value', 'TimeCol', 'Year');
+            fig_cleanup = onCleanup(@() close(fig));
+
+            sliders = findobj(fig, 'Style', 'slider');
+            testCase.verifyNotEmpty(sliders, ...
+                'de_usamap with TimeCol having >1 unique value should create a slider');
+        end
+
+        function test_dataexplorer_wide_year_state_choropleth_has_slider(testCase)
+            % DataExplorer should produce an animated choropleth (with slider) when
+            % the input table has wide-format year columns (x####) and a state column.
+            % Regression: se_plot_state_choropleth did not pivot wide years to long,
+            % so it called de_usamap without TimeCol and no slider appeared.
+            testCase.assumeTrue(~isempty(ver('map')), 'Mapping Toolbox not available');
+
+            % 20 states × 3 MSN codes = 60 rows.  Each state appears 3 times so
+            % the profiler does not flag it as an all-unique ID column.  20 unique
+            % values > MAX_LEVELS=15 triggers the cat_big → se_plot_state_summary path.
+            US20 = {'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA', ...
+                    'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD'};
+            msn3 = {'COAL','GAS','OIL'};
+            [st, ms] = ndgrid(US20, msn3);
+            T = table(categorical(st(:)), categorical(ms(:)), ...
+                100 + 50*randn(60,1), ...
+                110 + 50*randn(60,1), ...
+                120 + 50*randn(60,1), ...
+                'VariableNames', {'StateCode','MSN','x2020','x2021','x2022'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after  = findobj(0, 'Type', 'figure');
+            new_figs    = setdiff(figs_after, figs_before);
+            fig_cleanup = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            sliders = findobj(new_figs, 'Style', 'slider');
+            testCase.verifyNotEmpty(sliders, ...
+                'DataExplorer with wide-year state data should produce a choropleth with slider');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
