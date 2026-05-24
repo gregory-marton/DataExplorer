@@ -122,6 +122,26 @@ for ri = 1:numel(raw_codes)
     if isKey(norm, k), normed(ri) = string(norm(k)); end
 end
 
+%% ── Detect overflow codes ────────────────────────────────────────────────────
+grid_set  = containers.Map(CODES, true(numel(CODES), 1));
+data_uniq = unique(normed);
+data_uniq = data_uniq(strtrim(data_uniq) ~= "" & ~ismissing(data_uniq));
+is_orph   = ~cellfun(@(c) isKey(grid_set, c), cellstr(data_uniq));
+orphans   = cellstr(data_uniq(is_orph));
+n_ov      = numel(orphans);
+if n_ov > 0
+    fprintf('  de_statebins: %d unrecognized code(s) → overflow row: %s\n', ...
+        n_ov, strjoin(orphans, ', '));
+    ov_cols = double(max(COLS)) + 1;
+    ov_base = double(max(ROWS)) + 2;
+    for k = 1:n_ov
+        CODES{end+1}       = orphans{k}; %#ok<AGROW>
+        ROWS(end+1)        = ov_base + floor((k-1)/ov_cols);
+        COLS(end+1)        = mod(k-1, ov_cols);
+        IS_OVERFLOW(end+1) = true;
+    end
+end
+
 %% ── Assemble grid struct and delegate ────────────────────────────────────────
 g.codes       = CODES;
 g.rows        = ROWS;

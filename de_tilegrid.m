@@ -106,28 +106,20 @@ vmax = max(Heat(:), [], 'omitnan');
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 
 %% ── Figure and axes ──────────────────────────────────────────────────────────
-has_slider = has_time && n_t > 1;
-sldr_lift  = 0.07 * double(has_slider);
+has_spark = has_time && n_t > 1;
 BG = [0.97 0.97 0.97];
 
 max_col = max(COLS);
 max_row = max(ROWS);
-aspect  = (max_col + 2) / (max_row + 2);
-if aspect >= 1.2
-    fig_pos = [0.02 0.04 0.96 0.90];
-elseif aspect >= 0.8
-    fig_pos = [0.05 0.05 0.88 0.85];
-else
-    fig_pos = [0.10 0.04 0.70 0.90];
-end
-
-fig = figure('Color', BG, 'NumberTitle', 'off', ...
-    'Units', 'normalized', 'Position', fig_pos);
+tile_px = 36;
+fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(has_choro)));
+fig_h   = min(1000, max(380, round((max_row + 2) * tile_px)));
+fig = figure('Color', BG, 'NumberTitle', 'off', 'Position', [100 100 fig_w fig_h]);
 if options.Title ~= "", fig.Name = char(options.Title); end
 
 ax_right = 0.82 + 0.10 * double(~has_choro);
 ax = axes(fig, 'Units', 'normalized', ...
-    'Position', [0.02, 0.04+sldr_lift, ax_right, 0.92-sldr_lift], ...
+    'Position', [0.02, 0.04, ax_right, 0.92], ...
     'Color', BG, 'XColor', 'none', 'YColor', 'none', 'Box', 'off');
 hold(ax, 'on');
 
@@ -141,9 +133,20 @@ fs      = options.FontSize;
 patch_h = cell(n_tiles, 1);
 label_h = cell(n_tiles, 1);
 
+% When sparklines are drawn, background = mean over all time steps.
+if has_spark
+    Heat_bg = mean(Heat, 2, 'omitnan');
+else
+    Heat_bg = Heat(:, 1);
+end
+% Sparklines occupy the lower 28% of each tile; label sits in the upper portion.
+SPARK_FRAC = 0.28;
+lbl_y_frac = 0.50;
+if has_spark, lbl_y_frac = 0.28; end
+
 for ti = 1:n_tiles
     r  = ROWS(ti);  c = COLS(ti);
-    fc = tg_val2color(Heat(ti,1), vmin, vmax, cmap_ch, has_choro);
+    fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
     if IS_OVERFLOW(ti)
         ec = options.OverflowEdgeColor;  lw = 1.5;
     else
@@ -155,8 +158,12 @@ for ti = 1:n_tiles
     patch_h{ti} = patch(ax, xv, yv, fc, 'EdgeColor', ec, 'LineWidth', lw);
 
     tc  = tg_text_color(fc);
-    lbl = tg_label(CODES{ti}, Heat(ti,1), has_choro);
-    lh  = text(ax, c+0.5, r+0.5, lbl, ...
+    if has_spark
+        lbl = CODES{ti};
+    else
+        lbl = tg_label(CODES{ti}, Heat(ti,1), has_choro);
+    end
+    lh  = text(ax, c+0.5, r+lbl_y_frac, lbl, ...
         'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
         'FontSize', fs, 'FontWeight', 'bold', 'Color', tc, ...
         'Interpreter', 'none', 'UserData', CODES{ti});
@@ -175,43 +182,66 @@ end
 if has_choro
     colormap(ax, cmap_ch);
     clim(ax, [vmin vmax]);
-    cb = colorbar(ax, 'Position', [0.86, 0.04+sldr_lift, 0.03, 0.92-sldr_lift]);
-    cb.Label.String = strrep(char(options.ColorCol), '_', ' ');
+    cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
+    lbl = strrep(char(options.ColorCol), '_', ' ');
+    if has_spark
+        t1s_cb = tg_yr_str(t_vals, 1, is_year_axis);
+        tns_cb = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
+        lbl = sprintf('mean(%s, %s – %s)', lbl, t1s_cb, tns_cb);
+    end
+    cb.Label.String = lbl;
     cb.FontSize = 8;
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
 title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
-    t_vals, 1, is_year_axis, has_choro, has_time), ...
+    t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', 11, 'Interpreter', 'none');
 
-%% ── Slider ───────────────────────────────────────────────────────────────────
-sld = []; lbl_ctrl = [];
-if has_slider
-    sld = uicontrol(fig, 'Style', 'slider', 'Units', 'normalized', ...
-        'Position', [0.08 0.01 0.76 0.04], ...
-        'Min', 1, 'Max', n_t, 'Value', 1, ...
-        'SliderStep', [1/max(n_t-1,1), max(0.1, 5/max(n_t-1,1))]);
-    lbl_ctrl = uicontrol(fig, 'Style', 'text', 'Units', 'normalized', ...
-        'Position', [0.85 0.01 0.13 0.04], ...
-        'String', tg_yr_str(t_vals, 1, is_year_axis), ...
-        'FontSize', 10, 'BackgroundColor', BG, 'HorizontalAlignment', 'left');
+%% ── Sparklines ───────────────────────────────────────────────────────────────
+if has_spark && has_choro
+    tile_h   = 1 - 2*GAP;
+    SPARK_MX = 0.10;
+    x_ticks  = linspace(0, 1, n_t);
+    for ti = 1:n_tiles
+        if all(isnan(Heat(ti,:))), continue; end
+        r = ROWS(ti);  c = COLS(ti);
+        spark_y_top = r + GAP + (1 - SPARK_FRAC) * tile_h;
+        spark_y_bot = r + 1 - GAP - 0.01;
 
-    ph_c=patch_h; lh_c=label_h; Heat_c=Heat;
-    vmin_c=vmin; vmax_c=vmax; cmap_c=cmap_ch;
-    tvals_c=t_vals; iyr_c=is_year_axis;
-    th_c=ax.Title; cc_c=options.ColorCol;
-    ht_c=has_time; hchoro_c=has_choro; ml_c=options.MapLabel;
+        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
+        heat_row = Heat(ti, :);
+        if vmax > vmin
+            norm_h = (heat_row - vmin) / (vmax - vmin);
+        else
+            norm_h = 0.5 * ones(1, n_t);
+        end
+        % High value → top of spark area → smaller y (axes YDir=reverse)
+        y_spark = spark_y_bot - norm_h * (spark_y_bot - spark_y_top);
+        y_spark(isnan(heat_row)) = NaN;
 
-    sld.Callback = @(src,~) tg_update(src, ph_c, lh_c, Heat_c, ...
-        vmin_c, vmax_c, cmap_c, tvals_c, iyr_c, th_c, lbl_ctrl, ...
-        cc_c, ht_c, hchoro_c, ml_c);
+        fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
+        tc = tg_text_color(fc);
+        line(ax, x_spark, y_spark, 'Color', tc, 'LineWidth', 0.8, 'Tag', 'sparkline');
+    end
+end
+
+%% ── Legend key ───────────────────────────────────────────────────────────────
+if has_spark && has_choro
+    t1s = tg_yr_str(t_vals, 1, is_year_axis);
+    tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
+    key_str = ['color: mean  |  spark: ' t1s ' → ' tns];
+    text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
+        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
+        'FontSize', 6.5, 'Interpreter', 'none', 'Tag', 'legend_key', ...
+        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+        'Margin', 3, 'LineWidth', 0.5);
 end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────
 dcm = datacursormode(fig);
-Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorCol); sld_dc=sld;
-dcm.UpdateFcn = @(~,ev) tg_datatip(ev, Heat_dc, N_dc, cn_dc, sld_dc, code_map);
+Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorCol); hs_dc=has_spark;
+dcm.UpdateFcn = @(~,ev) tg_datatip(ev, Heat_dc, N_dc, cn_dc, hs_dc, code_map);
 
 end % de_tilegrid
 
@@ -243,10 +273,12 @@ if ~has_choro || isnan(val), s = code;
 else, s = sprintf('%s\n%.3g', code, val); end
 end
 
-function s = tg_title_str(color_col, map_label, t_vals, tt, is_year_axis, has_choro, has_time)
+function s = tg_title_str(color_col, map_label, t_vals, is_year_axis, has_choro, has_spark)
 if ~has_choro, s = char(map_label); return; end
-if has_time && ~isempty(t_vals)
-    s = sprintf('mean(%s)  —  %s', char(color_col), tg_yr_str(t_vals, tt, is_year_axis));
+if has_spark && numel(t_vals) >= 2
+    t1 = tg_yr_str(t_vals, 1, is_year_axis);
+    tn = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
+    s = sprintf('mean(%s)  —  %s to %s', char(color_col), t1, tn);
 else
     s = sprintf('mean(%s)', char(color_col));
 end
@@ -257,33 +289,18 @@ if is_year_axis, s = sprintf('%g', t_vals(tt));
 else, s = char(datetime(t_vals(tt), 'Format', 'MMM yyyy')); end
 end
 
-function tg_update(sld, patch_h, label_h, Heat, vmin, vmax, cmap, ...
-        t_vals, is_year_axis, title_h, lbl_ctrl, color_col, has_time, has_choro, map_label)
-tt = round(sld.Value);  sld.Value = tt;
-for ti = 1:numel(patch_h)
-    if isempty(patch_h{ti}) || ~isgraphics(patch_h{ti}), continue; end
-    fc = tg_val2color(Heat(ti,tt), vmin, vmax, cmap, has_choro);
-    set(patch_h{ti}, 'FaceColor', fc);
-    if ~isempty(label_h{ti}) && isgraphics(label_h{ti})
-        label_h{ti}.String = tg_label(label_h{ti}.UserData, Heat(ti,tt), has_choro);
-        label_h{ti}.Color  = tg_text_color(fc);
-    end
-end
-title_h.String = tg_title_str(color_col, map_label, t_vals, tt, is_year_axis, has_choro, has_time);
-if ~isempty(lbl_ctrl) && isgraphics(lbl_ctrl)
-    lbl_ctrl.String = tg_yr_str(t_vals, tt, is_year_axis);
-end
-end
-
-function txt = tg_datatip(ev, Heat, N_obs, color_col, sld, code_map)
+function txt = tg_datatip(ev, Heat, N_obs, color_col, has_spark, code_map)
 ud = ev.Target.UserData;
 if ~(ischar(ud) || isstring(ud)), txt = ''; return; end
 code = char(ud);
 if ~isKey(code_map, code), txt = code; return; end
 ti = code_map(code);
-tt = 1;
-if ~isempty(sld) && isgraphics(sld), tt = round(sld.Value); end
-val = Heat(ti,tt);  n = N_obs(ti,tt);
+if has_spark
+    val = mean(Heat(ti,:), 'omitnan');
+    n   = sum(N_obs(ti,:));
+else
+    val = Heat(ti,1);  n = N_obs(ti,1);
+end
 if isnan(val), txt = {code, sprintf('%s: N/A', color_col)};
 else, txt = {code, sprintf('%s: %.4g  (n=%d)', color_col, val, n)}; end
 end

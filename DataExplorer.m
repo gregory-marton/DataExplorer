@@ -1786,9 +1786,12 @@ function plot_cat_diag(ax, x, varname, nmissing, n)
     cats_s = cats(ord);
     nc = numel(cats_s);
     if nc > MAX_K
-        pick = unique(round(linspace(1, nc, MAX_K)));
-        counts_s = counts_s(pick);
-        cats_s   = cats_s(pick);
+        n_top     = MAX_K - 1;
+        n_rest    = nc - n_top;
+        rest_cnt  = sum(counts_s(n_top+1:end));
+        other_str = sprintf('Other (%d, n=%d)', n_rest, rest_cnt);
+        counts_s  = [counts_s(1:n_top); rest_cnt];
+        cats_s    = [cats_s(1:n_top); {other_str}];
     end
     n_shown = numel(counts_s);
 
@@ -1797,13 +1800,19 @@ function plot_cat_diag(ax, x, varname, nmissing, n)
     % Fix hover tooltip: variable name + category name + count
     b.DataTipTemplate.DataTipRows(1).Label = 'Count';
     b.DataTipTemplate.DataTipRows(2).Label = 'Category';
-    b.DataTipTemplate.DataTipRows(2).Value = cats_s;   % bar i → cats_s{i}
+    b.DataTipTemplate.DataTipRows(2).Value = cats_s;
     b.DataTipTemplate.DataTipRows(end+1) = ...
         dataTipTextRow('Variable', repmat({char(varname)}, n_shown, 1));
 
-    % Category name tick labels, truncated to fit
+    % Tick labels: named cats get "(n=M)"; Other already has counts embedded
+    cats_lbl = cats_s;
+    for ki = 1:n_shown
+        if ~strncmp(cats_s{ki}, 'Other (', 7)
+            cats_lbl{ki} = [truncate(cats_s{ki}, 9) sprintf(' (%d)', counts_s(ki))];
+        end
+    end
     yticks(ax, 1:n_shown);
-    yticklabels(ax, flip(cellfun(@(s) truncate(s, 14), cats_s, 'UniformOutput', false)));
+    yticklabels(ax, flip(cats_lbl));
     set(ax, 'XTick', [], 'FontSize', 6.5, 'TickDir', 'out');
 
     if nmissing > 0
@@ -2250,7 +2259,7 @@ function [colors, plot_order] = se_level_colors(levels)
 % it is occluded by the named levels.
 n = numel(levels);
 colors = lines(n);
-is_other = n > 0 && ~isempty(regexp(levels{n}, '^\d+ more groups', 'once'));
+is_other = n > 0 && strncmp(levels{n}, 'Other (', 7);
 if is_other
     colors(n, :) = [0.78 0.78 0.78];
     plot_order = [n, 1:n-1];
@@ -2684,6 +2693,11 @@ for k = 1:numel(cat_big)
     ci = cat_big(k);
     if se_looks_like_states(prof, ci, T)
         se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis);
+    elseif se_looks_like_countries(prof, ci, T)
+        num_idxs = unique([sel_num, ts_num(:)']);
+        num_idxs = num_idxs(prof.type(num_idxs) == "numeric");
+        if ~isempty(time_idx), num_idxs = num_idxs(num_idxs ~= time_idx); end
+        se_plot_country_choropleth(T, prof, ci, num_idxs, time_idx, is_year_axis);
     else
         catname_k  = prof.name{ci};
         cat_col_k  = T.(catname_k);
@@ -2700,7 +2714,7 @@ for k = 1:numel(cat_big)
 
         if n_other > 0
             n_other_rows = sum(~ismember(cat_col_k, top_levels) & ~isundefined(cat_col_k));
-            other_label  = sprintf('%d more groups (n=%d)', n_other, n_other_rows);
+            other_label  = sprintf('Other (%d classes, n=%d)', n_other, n_other_rows);
             cat_str = string(cat_col_k);
             for ti = 1:n_show
                 cat_str(cat_col_k == top_levels{ti}) = top_labels{ti};
@@ -3037,6 +3051,85 @@ if numel(levels) >= 3
         tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_CODES)), levels)) / numel(levels) >= 0.8;
     else
         tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_NAMES)), levels)) / numel(levels) >= 0.8;
+    end
+end
+end
+
+
+% ── se_looks_like_countries ───────────────────────────────────────────────────
+function tf = se_looks_like_countries(prof, idx, T)
+%SE_LOOKS_LIKE_COUNTRIES  True if categorical column looks like country identifiers.
+%   Matches on: column name containing 'country', 'nation', or 'iso'; or
+%   ≥60% of levels are ISO alpha-2 codes; or ≥60% are ISO alpha-3 codes.
+tf = false;
+catname = prof.name{idx};
+if any(contains(lower(catname), {'country','nation','iso'}))
+    tf = true;
+    return;
+end
+ISO2 = ["AF","AL","DZ","AO","AR","AM","AU","AT","AZ","BS","BH","BD","BY","BE", ...
+        "BZ","BJ","BT","BO","BA","BW","BR","BN","BG","BF","BI","CV","KH","CM", ...
+        "CA","CF","TD","CL","CN","CO","KM","CG","CD","CR","HR","CU","CY","CZ", ...
+        "DK","DJ","DO","EC","EG","SV","GQ","ER","EE","SZ","ET","FJ","FI","FR", ...
+        "GA","GM","GE","DE","GH","GR","GT","GN","GW","GY","HT","HN","HU","IS", ...
+        "IN","ID","IR","IQ","IE","IL","IT","JM","JP","JO","KZ","KE","KP","KR", ...
+        "KW","KG","LA","LV","LB","LS","LR","LY","LT","LU","MG","MW","MY","MV", ...
+        "ML","MT","MR","MU","MX","MD","MN","ME","MA","MZ","MM","NA","NP","NL", ...
+        "NZ","NI","NE","NG","MK","NO","OM","PK","PA","PG","PY","PE","PH","PL", ...
+        "PT","QA","RO","RU","RW","SA","SN","RS","SL","SO","ZA","SS","ES","LK", ...
+        "SD","SR","SE","CH","SY","TJ","TZ","TH","TL","TG","TT","TN","TR","TM", ...
+        "UG","UA","AE","GB","US","UY","UZ","VE","VN","YE","ZM","ZW"];
+ISO3 = ["AFG","ALB","DZA","AGO","ARG","ARM","AUS","AUT","AZE","BHS","BHR","BGD", ...
+        "BLR","BEL","BLZ","BEN","BTN","BOL","BIH","BWA","BRA","BRN","BGR","BFA", ...
+        "BDI","CPV","KHM","CMR","CAN","CAF","TCD","CHL","CHN","COL","COM","COG", ...
+        "COD","CRI","HRV","CUB","CYP","CZE","DNK","DJI","DOM","ECU","EGY","SLV", ...
+        "GNQ","ERI","EST","SWZ","ETH","FJI","FIN","FRA","GAB","GMB","GEO","DEU", ...
+        "GHA","GRC","GTM","GIN","GNB","GUY","HTI","HND","HUN","ISL","IND","IDN", ...
+        "IRN","IRQ","IRL","ISR","ITA","JAM","JPN","JOR","KAZ","KEN","PRK","KOR", ...
+        "KWT","KGZ","LAO","LVA","LBN","LSO","LBR","LBY","LTU","LUX","MDG","MWI", ...
+        "MYS","MDV","MLI","MLT","MRT","MUS","MEX","MDA","MNG","MNE","MAR","MOZ", ...
+        "MMR","NAM","NPL","NLD","NZL","NIC","NER","NGA","MKD","NOR","OMN","PAK", ...
+        "PAN","PNG","PRY","PER","PHL","POL","PRT","QAT","ROU","RUS","RWA","SAU", ...
+        "SEN","SRB","SLE","SOM","ZAF","SSD","ESP","LKA","SDN","SUR","SWE","CHE", ...
+        "SYR","TJK","TZA","THA","TLS","TGO","TTO","TUN","TUR","TKM","UGA","UKR", ...
+        "ARE","GBR","USA","URY","UZB","VEN","VNM","YEM","ZMB","ZWE"];
+levels = upper(cellstr(categories(T.(catname))));
+n_lev  = numel(levels);
+if n_lev < 3, return; end
+all_len2 = all(cellfun(@numel, levels) == 2);
+all_len3 = all(cellfun(@numel, levels) == 3);
+if all_len2
+    tf = sum(cellfun(@(lv) ismember(lv, cellstr(ISO2)), levels)) / n_lev >= 0.6;
+elseif all_len3
+    tf = sum(cellfun(@(lv) ismember(lv, cellstr(ISO3)), levels)) / n_lev >= 0.6;
+end
+end
+
+
+% ── se_plot_country_choropleth ────────────────────────────────────────────────
+function se_plot_country_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis) %#ok<INUSL>
+%SE_PLOT_COUNTRY_CHOROPLETH  Thin wrapper: calls de_countrybins for each numeric variable.
+catname = prof.name{cat_idx};
+tcn = '';
+if ~isempty(time_idx), tcn = prof.name{time_idx}; end
+
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+if ~isempty(wide_yr_idxs) && isempty(time_idx)
+    fig_title = se_fig_title(sprintf('World choropleth: %s over time', catname), prof.source_name);
+    T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
+    de_countrybins(T_long, 'CountryCol', catname, 'ColorCol', 'Value', ...
+        'TimeCol', 'Year', 'Title', fig_title);
+    num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
+end
+
+for j = 1:numel(num_idxs)
+    ncn       = prof.name{num_idxs(j)};
+    fig_title = se_fig_title(sprintf('World choropleth: %s', ncn), prof.source_name);
+    if isempty(tcn)
+        de_countrybins(T, 'CountryCol', catname, 'ColorCol', ncn, 'Title', fig_title);
+    else
+        de_countrybins(T, 'CountryCol', catname, 'ColorCol', ncn, ...
+            'TimeCol', tcn, 'Title', fig_title);
     end
 end
 end
@@ -3416,40 +3509,47 @@ end
 
 % ── se_plot_grouped_timeseries_wide ──────────────────────────────────────────
 function se_plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
-%SE_PLOT_GROUPED_TIMESERIES_WIDE  Trend lines per category level using wide-format year columns.
-TOP_K   = 8;
+%SE_PLOT_GROUPED_TIMESERIES_WIDE  Trend lines per category using wide-format year columns.
+%   Shows top-K levels by overall mean + aggregated "Other" for the rest.
+%   Bootstrap 95% CI shading on every line.
+TOP_K = 8;
+B_CI  = 500;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 
-% Exclude national-aggregate codes from per-group lines
-TOTAL_CODES = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
+TOTAL_CODES = {'US','ALL','TOTAL','GRAND TOTAL'};
 levels_all = cellstr(categories(cat_col));
-levels = levels_all(~ismember(upper(levels_all), TOTAL_CODES));
-if isempty(levels), levels = levels_all; end
+levels_all = levels_all(~ismember(upper(levels_all), TOTAL_CODES));
+if isempty(levels_all), return; end
 
 [yr_sorted, sort_ord] = sort(yr_vals);
+yr_sorted  = yr_sorted(:);          % ensure column for fill polygon math
 yr_names_s = string(prof.name(yr_idxs(sort_ord)));
+n_yr = numel(yr_sorted);
 
-% Select top-K levels by mean value across all years
-if numel(levels) > TOP_K
-    means = NaN(numel(levels), 1);
-    for li = 1:numel(levels)
-        m = cat_col == levels{li};
-        all_vals = [];
-        for yi = 1:numel(yr_names_s)
-            v = double(T.(char(yr_names_s(yi)))(m));
-            all_vals = [all_vals; v(~isnan(v))]; %#ok<AGROW>
-        end
-        if ~isempty(all_vals), means(li) = mean(all_vals); end
+% Per-level row count and overall mean (for top-K selection)
+n_rows_all   = zeros(numel(levels_all), 1);
+overall_mean = NaN(numel(levels_all), 1);
+for li = 1:numel(levels_all)
+    m = cat_col == levels_all{li};
+    n_rows_all(li) = sum(m);
+    yr_means = NaN(n_yr, 1);
+    for yi = 1:n_yr
+        v = double(T.(char(yr_names_s(yi)))(m));
+        v = v(~isnan(v));
+        if ~isempty(v), yr_means(yi) = mean(v); end
     end
-    [~, ord] = sort(means, 'descend', 'MissingPlacement', 'last');
-    levels_show = levels(ord(1:min(TOP_K, numel(ord))));
-    title_suf = sprintf(' — top %d of %d', TOP_K, numel(levels_all));
-else
-    levels_show = levels;
-    title_suf = '';
+    overall_mean(li) = mean(yr_means, 'omitnan');
 end
 
+[~, ord]  = sort(overall_mean, 'descend', 'MissingPlacement', 'last');
+n_show    = min(TOP_K, numel(levels_all));
+top_idx   = ord(1:n_show);
+other_idx = ord(n_show+1:end);
+has_other = ~isempty(other_idx);
+
+levels_show = levels_all(top_idx);
+n_rows_show = n_rows_all(top_idx);
 [colors, plot_order] = se_level_colors(levels_show);
 
 fig = figure('Name', se_fig_title(sprintf('By %s over time', catname), prof.source_name), ...
@@ -3457,25 +3557,75 @@ fig = figure('Name', se_fig_title(sprintf('By %s over time', catname), prof.sour
 ax = axes(fig); %#ok<LAXES>
 hold(ax, 'on');
 
-for lk = plot_order
-    lv = levels_show{lk};
-    m  = cat_col == lv;
-    y_vals_t = NaN(numel(yr_sorted), 1);
-    for yi = 1:numel(yr_sorted)
-        v = double(T.(char(yr_names_s(yi)))(m));
-        v = v(~isnan(v));
-        if ~isempty(v), y_vals_t(yi) = mean(v); end
+% "Other" line first (dashed gray, rendered behind named lines)
+if has_other
+    n_other_cats = numel(other_idx);
+    n_other_rows = sum(n_rows_all(other_idx));
+    other_label  = sprintf('Other (%d classes, n=%d)', n_other_cats, n_other_rows);
+    other_mask   = ismember(cat_col, levels_all(other_idx));
+    GRAY = [0.55 0.55 0.55];
+    y_o = NaN(n_yr,1);  lo_o = NaN(n_yr,1);  hi_o = NaN(n_yr,1);
+    for yi = 1:n_yr
+        v = double(T.(char(yr_names_s(yi)))(other_mask));
+        v = v(~isnan(v));  nv = numel(v);
+        if nv == 0, continue; end
+        y_o(yi) = mean(v);
+        if nv >= 2
+            bm = sort(mean(v(randi(nv,nv,B_CI)),1));
+            lo_o(yi) = bm(max(1, round(0.025*B_CI)));
+            hi_o(yi) = bm(min(B_CI, round(0.975*B_CI)));
+        else
+            lo_o(yi) = v;  hi_o(yi) = v;
+        end
     end
-    plot(ax, yr_sorted, y_vals_t, '-', 'Color', colors(lk,:), ...
-        'LineWidth', 1.2, 'DisplayName', strrep(lv, '_', ' '));
+    ok_ci = ~isnan(lo_o) & ~isnan(hi_o);
+    if sum(ok_ci) >= 2
+        t_ci = yr_sorted(ok_ci);
+        fill(ax, [t_ci; flipud(t_ci)], [hi_o(ok_ci); flipud(lo_o(ok_ci))], ...
+            GRAY, 'FaceAlpha', 0.12, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+    end
+    plot(ax, yr_sorted, y_o, '--', 'Color', GRAY, 'LineWidth', 1.0, ...
+        'DisplayName', other_label);
+end
+
+% Named top-K lines with CI
+for lk = plot_order
+    lv_mask  = cat_col == levels_show{lk};
+    disp_lbl = sprintf('%s (n=%d)', strrep(levels_show{lk},'_',' '), n_rows_show(lk));
+    y_k = NaN(n_yr,1);  lo_k = NaN(n_yr,1);  hi_k = NaN(n_yr,1);
+    for yi = 1:n_yr
+        v = double(T.(char(yr_names_s(yi)))(lv_mask));
+        v = v(~isnan(v));  nv = numel(v);
+        if nv == 0, continue; end
+        y_k(yi) = mean(v);
+        if nv >= 2
+            bm = sort(mean(v(randi(nv,nv,B_CI)),1));
+            lo_k(yi) = bm(max(1, round(0.025*B_CI)));
+            hi_k(yi) = bm(min(B_CI, round(0.975*B_CI)));
+        else
+            lo_k(yi) = v;  hi_k(yi) = v;
+        end
+    end
+    ok_ci = ~isnan(lo_k) & ~isnan(hi_k);
+    if sum(ok_ci) >= 2
+        t_ci = yr_sorted(ok_ci);
+        fill(ax, [t_ci; flipud(t_ci)], [hi_k(ok_ci); flipud(lo_k(ok_ci))], ...
+            colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+    end
+    plot(ax, yr_sorted, y_k, '-', 'Color', colors(lk,:), ...
+        'LineWidth', 1.2, 'DisplayName', disp_lbl);
 end
 
 hold(ax, 'off');
 xlabel(ax, 'Year', 'FontSize', 9);
 ylabel(ax, 'Mean value', 'FontSize', 8);
 legend(ax, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
-title(ax, se_src_prefix(prof.source_name, ...
-    sprintf('Trend by %s%s', catname, title_suf)), ...
+if has_other
+    title_suf = sprintf(' — top %d + Other (of %d total)', n_show, numel(levels_all));
+else
+    title_suf = '';
+end
+title(ax, se_src_prefix(prof.source_name, sprintf('Trend by %s%s', catname, title_suf)), ...
     'FontSize', 10, 'Interpreter', 'none');
 box(ax, 'off');
 end

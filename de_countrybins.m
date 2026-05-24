@@ -69,11 +69,12 @@ n_json = numel(raw);
 CODES = cell(n_json,1);  A3 = cell(n_json,1);  NMES = cell(n_json,1);
 ROWS  = zeros(n_json,1);  COLS = zeros(n_json,1);
 for i = 1:n_json
-    CODES{i} = upper(strtrim(raw(i).alpha_2));
-    A3{i}    = upper(strtrim(raw(i).alpha_3));
-    NMES{i}  = upper(strtrim(raw(i).name));
-    COLS(i)  = raw(i).coordinates(1) - 1;
-    ROWS(i)  = raw(i).coordinates(2) - 1;
+    ri       = raw{i};
+    CODES{i} = upper(strtrim(ri.alpha_2));
+    A3{i}    = upper(strtrim(ri.alpha_3));
+    NMES{i}  = upper(strtrim(ri.name));
+    COLS(i)  = ri.coordinates(1) - 1;
+    ROWS(i)  = ri.coordinates(2) - 1;
 end
 
 %% ── Build 4-tier normalizer ──────────────────────────────────────────────────

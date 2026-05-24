@@ -155,10 +155,14 @@ All three figure types can generate many figures quickly. Apply the interestingn
 **Choropleth refactored (2026-05-21→2026-05-24):** `se_plot_state_choropleth` calls `de_statebins` (no Mapping Toolbox required). Wide-format year columns (x1960..x2023) are detected and pivoted to long format so the TimeCol slider appears.
 
 **Tile-grid library (2026-05-24):** Three standalone files form a layered tile-grid system:
-- `de_tilegrid.m` — shared rendering engine (grid struct + pre-normalised codes → choropleth figure with optional slider).
-- `de_statebins.m` — US state choropleth by default; accepts a `Grid` argument (string preset, struct array, or path to `{code,row,col}` JSON) for any region (provinces, counties, etc.).  Built-in name→code normaliser for US states.  Custom grids: place JSON in `data/grids/<name>.json` and pass `Grid='<name>'`.
+- `de_tilegrid.m` — shared rendering engine (grid struct + pre-normalised codes → choropleth figure with optional slider). Colorbar label includes time range when sparklines active: `mean(col, yr1 – yrN)`. Legend key text box in top-left margin explains color = mean, spark = time range.
+- `de_statebins.m` — US state choropleth by default; accepts a `Grid` argument (string preset, struct array, or path to `{code,row,col}` JSON) for any region (provinces, counties, etc.).  Built-in name→code normaliser for US states.  Custom grids: place JSON in `data/grids/<name>.json` and pass `Grid='<name>'`.  Overflow row: unrecognised codes (e.g. EIA region codes X3, X5) get amber-bordered tiles below the main grid.
 - `de_countrybins.m` — world tile choropleth using `data/world_tile_grid.json` (Maarten Lambrechts / BBC standard, 195 countries). 4-tier normaliser (alpha-2 > alpha-3 > full name > historical alias). Overflow row for unrecognised codes. Update script: `python scripts/update_world_tile_grid.py`.
 - `de_usamap.m` — **teaching demo only**. Single `usamap('conus')` axes; AK and HI placed via affine transform in projected coordinates. Requires Mapping Toolbox. `AKScale`, `AKOffset`, `HIOffset` exposed so students can explore the transform.
+
+**"Other" + CI in grouped time series (2026-05-24):** `se_plot_grouped_timeseries_wide` shows top-(K-1) named levels + an "Other (N classes, n=M)" aggregate line (dashed gray). Bootstrap 95% CI shading (B=500) on all lines. Level labels include `(n=M)` row counts. `se_level_colors` detects Other bucket via `strncmp(…,'Other (',7)` and assigns neutral gray.
+
+**"Other" in bar charts (2026-05-24):** `plot_cat_diag` collapses levels beyond MAX_K=8 into "Other (N, n=M)" bar. Category tick labels show `(n=count)`. `cat_big` path in the main loop uses same "Other (N classes, n=M)" format.
 
 **Internal title prefix (2026-05-21):** `se_src_prefix(source_name, rest)` helper suppresses the "source —" prefix from axes titles when the source is "table input" (i.e., when T was passed directly rather than loaded from a file). Heatmap title format changed to "Time × CatName".
 

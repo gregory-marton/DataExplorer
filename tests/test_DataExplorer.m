@@ -364,12 +364,13 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'de_usamap with TimeCol having >1 unique value should create a slider');
         end
 
-        function test_dataexplorer_wide_year_state_choropleth_has_slider(testCase)
-            % DataExplorer should produce an animated choropleth (with slider) when
+        function test_dataexplorer_wide_year_state_choropleth_has_sparklines(testCase)
+            % DataExplorer should produce a choropleth with per-tile sparklines when
             % the input table has wide-format year columns (x####) and a state column.
+            % de_statebins/de_tilegrid replaced the interactive slider with static
+            % sparklines — no Mapping Toolbox required.
             % Regression: se_plot_state_choropleth did not pivot wide years to long,
-            % so it called de_usamap without TimeCol and no slider appeared.
-            testCase.assumeTrue(~isempty(ver('map')), 'Mapping Toolbox not available');
+            % so it called without TimeCol and no time-series rendering appeared.
 
             % 20 states × 3 MSN codes = 60 rows.  Each state appears 3 times so
             % the profiler does not flag it as an all-unique ID column.  20 unique
@@ -395,9 +396,95 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             new_figs    = setdiff(figs_after, figs_before);
             fig_cleanup = onCleanup(@() close(new_figs(isgraphics(new_figs))));
 
-            sliders = findobj(new_figs, 'Style', 'slider');
-            testCase.verifyNotEmpty(sliders, ...
-                'DataExplorer with wide-year state data should produce a choropleth with slider');
+            sparklines = findobj(new_figs, 'Type', 'line', 'Tag', 'sparkline');
+            testCase.verifyNotEmpty(sparklines, ...
+                'DataExplorer with wide-year state data should draw per-tile sparklines in choropleth');
+        end
+
+        function test_de_statebins_sparklines_with_timecol(testCase)
+            % de_statebins draws per-tile sparklines (Tag='sparkline') instead of a
+            % slider when TimeCol is present with more than one unique value.
+            states = categorical({'CA';'CA';'TX';'TX';'NY';'NY'});
+            years  = [2020;2021;2020;2021;2020;2021];
+            values = [100;110;200;210;150;160];
+            T = table(states, years, values, 'VariableNames', {'State','Year','Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            [fig, ax] = de_statebins(T, 'StateCol','State', 'ColorCol','Value', 'TimeCol','Year');
+            fig_cleanup = onCleanup(@() close(fig));
+
+            testCase.verifyTrue(isgraphics(fig) && isgraphics(ax), ...
+                'de_statebins should return valid handles');
+            sparklines = findobj(ax, 'Type', 'line', 'Tag', 'sparkline');
+            testCase.verifyNotEmpty(sparklines, ...
+                'de_statebins with TimeCol (>1 unique value) should draw sparklines, not a slider');
+            sliders = findobj(fig, 'Style', 'slider');
+            testCase.verifyEmpty(sliders, ...
+                'de_statebins should not create a slider — sparklines replaced it');
+
+            % Colorbar label should be mean(Value) when TimeCol is active
+            cb_h = findobj(fig, 'Type', 'colorbar');
+            testCase.assertNotEmpty(cb_h, 'should have a colorbar');
+            testCase.verifyTrue(contains(cb_h(1).Label.String, 'mean('), ...
+                'colorbar label should say mean(...) when TimeCol is active');
+
+            % Legend key text box should be present in the axes margin
+            key_h = findobj(ax, 'Type', 'text', 'Tag', 'legend_key');
+            testCase.verifyNotEmpty(key_h, ...
+                'should have a legend_key text object in the axes margin');
+        end
+
+        function test_de_countrybins_basic(testCase)
+            % de_countrybins draws one colored tile per recognized ISO alpha-2 code.
+            iso2 = categorical({'US';'GB';'DE';'FR';'JP';'CN';'BR'});
+            vals = (1:7)';
+            T = table(iso2, vals, 'VariableNames', {'Country','Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            [fig, ax] = de_countrybins(T, 'CountryCol','Country', 'ColorCol','Value');
+            fig_cleanup = onCleanup(@() close(fig));
+
+            testCase.verifyTrue(isgraphics(fig) && isgraphics(ax), ...
+                'de_countrybins should return valid figure and axes handles');
+            patches = findobj(ax, 'Type', 'patch');
+            testCase.verifyGreaterThanOrEqual(numel(patches), 5, ...
+                'de_countrybins should draw at least 5 tile patches for 7 country codes');
+        end
+
+        function test_se_looks_like_countries_wires_countrybins(testCase)
+            % DataExplorer should route a high-cardinality ISO alpha-2 column through
+            % de_countrybins, producing at least one figure with tile patches.
+            iso2_20 = {'US','GB','DE','FR','JP','CN','BR','IN','CA','AU', ...
+                       'MX','RU','ZA','KR','TR','AR','SA','EG','NG','PL'};
+            [co, grp] = ndgrid(iso2_20, {'A','B','C'});
+            vals = 100 + 50*randn(60,1);
+            T = table(categorical(co(:)), categorical(grp(:)), vals, ...
+                'VariableNames', {'Country','Group','Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after = findobj(0, 'Type', 'figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            fig_cleanup = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            testCase.verifyNotEmpty(new_figs, ...
+                'DataExplorer with country-code column should produce at least one figure');
+            % World tile grid has ~180 tiles; bar/scatter figures have far fewer patches.
+            % Require > 50 patches to confirm the world choropleth was drawn.
+            patches = findobj(new_figs, 'Type', 'patch');
+            testCase.verifyGreaterThan(numel(patches), 50, ...
+                'DataExplorer should produce a world choropleth (150+ tile patches) for ISO country codes');
         end
 
     end
@@ -489,6 +576,103 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             DataExplorer(T);
             testCase.verifyEqual(testCase.timeseries_mode(), 'overlaid lines', ...
                 'Independent prevalence series should use overlaid lines');
+        end
+
+        function test_statebins_overflow_for_unknown_codes(testCase)
+            % de_statebins should add overflow tiles (amber border, Tag via IS_OVERFLOW)
+            % for codes not in the US grid — e.g. EIA census-division codes X1..X9.
+            codes = categorical([{'CA';'TX';'NY';'X3';'X5'}; repmat({'CA'},5,1)]);
+            vals  = [10;20;30;40;50; 11;12;13;14;15];
+            T = table(codes, vals, 'VariableNames', {'StateCode','Value'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            [fig, ax] = de_statebins(T, 'StateCol','StateCode', 'ColorCol','Value');
+            fig_cleanup = onCleanup(@() close(fig));
+
+            testCase.verifyTrue(isgraphics(fig), 'de_statebins should return a valid figure');
+            % Overflow tiles have EdgeColor = amber (the OverflowEdgeColor default)
+            patches = findobj(ax, 'Type', 'patch');
+            amber = [0.75 0.40 0.05];
+            has_overflow = any(arrayfun(@(p) isequal(p.EdgeColor, amber), patches));
+            testCase.verifyTrue(has_overflow, ...
+                'de_statebins should draw at least one amber-bordered overflow tile for X3/X5');
+        end
+
+        function test_grouped_timeseries_wide_has_other_and_ci(testCase)
+            % Wide-format table with >TOP_K=8 category levels should produce a
+            % time series figure with an "Other (...)" legend entry and CI patches.
+            n_groups = 20;
+            grp_labels = strcat('G', string(1:n_groups))';
+            T = table(categorical(repelem(grp_labels, 4)), 'VariableNames', {'Group'});
+            for yr = 2020:2024
+                T.(['x' num2str(yr)]) = 100 + 10*randn(height(T), 1);
+            end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after  = findobj(0, 'Type', 'figure');
+            new_figs    = setdiff(figs_after, figs_before);
+            cleanup2    = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            ts_figs = new_figs(arrayfun(@(f) ...
+                contains(f.Name,'Group') & contains(f.Name,'over time'), new_figs));
+            testCase.assumeNotEmpty(ts_figs, 'should produce a "By Group over time" figure');
+
+            ax_h = findobj(ts_figs(1), 'Type', 'axes');
+            has_other = false;
+            for k = 1:numel(ax_h)
+                leg = ax_h(k).Legend;
+                if ~isempty(leg) && any(cellfun(@(s) strncmp(s,'Other (',7), leg.String))
+                    has_other = true;  break;
+                end
+            end
+            testCase.verifyTrue(has_other, ...
+                'grouped time series should show "Other (...)" legend entry when >8 groups');
+
+            % CI patches are created with HandleVisibility='off'; findall sees them
+            all_patches = findall(ts_figs(1), 'Type', 'patch');
+            ci_patches  = all_patches(arrayfun(@(p) ...
+                strcmp(p.HandleVisibility,'off'), all_patches));
+            testCase.verifyNotEmpty(ci_patches, ...
+                'grouped time series should have bootstrap CI shading patches');
+        end
+
+        function test_cat_diag_other_bar_when_many_cats(testCase)
+            % plot_cat_diag with >MAX_K=15 categories should show an "Other (...)"
+            % tick label instead of quantile-sampling.
+            cats = strcat('Cat', string(1:20))';
+            T = table(categorical(repelem(cats, 3)), randn(60,1), ...
+                      'VariableNames', {'Group','Val'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after = findobj(0, 'Type', 'figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            ax_all = findobj(new_figs, 'Type', 'axes');
+            has_other_lbl = false;
+            for k = 1:numel(ax_all)
+                lbls = ax_all(k).YTickLabel;
+                if ~isempty(lbls) && any(cellfun(@(s) strncmp(s,'Other (',7), cellstr(lbls)))
+                    has_other_lbl = true;  break;
+                end
+            end
+            testCase.verifyTrue(has_other_lbl, ...
+                'bar chart for >15-category column should have an "Other (...)" tick label');
         end
 
         function test_constant_categorical_is_skipped(testCase)
