@@ -1088,6 +1088,16 @@ if isempty(sel)
     return
 end
 
+% ── Panel detection: wide-format categorical × year datasets ─────────────────
+panel = se_detect_panel(T, prof);
+if panel.is_panel
+    fprintf(['  Panel dataset detected: %s\n' ...
+             '  Generating aggregate views; pairplot suppressed.\n'], panel.description);
+    se_plot_panel_totals(T, prof, panel);
+    se_plot_categorical_drilldown(T, prof, sel);
+    return
+end
+
 np = numel(sel);   % number of columns in the plot grid
 
 % ── Build figure ────────────────────────────────────────────────────────────
@@ -1995,18 +2005,31 @@ function plot_num_cat(ax, catdata, numdata, ~, ~, ~, ~)
         [~, sort_ord] = sort(med_vals(valid_med));
         valid_med = valid_med(sort_ord);   % indices into all_cats, sorted by median
 
+        not_sel = [];
         if numel(valid_med) <= MAX_DOTS
             sel = valid_med;
         else
             % Quantile-spaced picks across the sorted median list
             pick_pos = round(linspace(1, numel(valid_med), MAX_DOTS));
             pick_pos = unique(pick_pos);   % linspace rounding can duplicate endpoints
-            sel = valid_med(pick_pos);
+            sel     = valid_med(pick_pos);
+            not_sel = setdiff(valid_med, sel);
         end
 
         % Display bottom-to-top (lowest median at y=1)
         [~, disp_ord] = sort(med_vals(sel), 'ascend');
         sel = sel(disp_ord);
+
+        % Aggregate "Other" for groups not shown
+        other_med = NaN;  other_iqr = 0;
+        if ~isempty(not_sel)
+            other_vals = numdata(ismember(catdata, all_cats(not_sel)));
+            other_vals = other_vals(~isnan(other_vals));
+            if ~isempty(other_vals)
+                other_med = median(other_vals);
+                other_iqr = iqr(other_vals);
+            end
+        end
 
         hold(ax, 'on');
         for ki = 1:numel(sel)
@@ -2018,6 +2041,14 @@ function plot_num_cat(ax, catdata, numdata, ~, ~, ~, ~)
                 'Color', [0.6 0.7 0.8], 'LineWidth', 1.5);
             plot(ax, med, ki, 'o', 'MarkerSize', 5, ...
                 'MarkerFaceColor', [0.22 0.44 0.69], 'MarkerEdgeColor', 'none');
+        end
+        if ~isnan(other_med)
+            y_oth = numel(sel) + 1;
+            half_iqr = other_iqr / 2;
+            plot(ax, [other_med - half_iqr, other_med + half_iqr], [y_oth y_oth], '-', ...
+                'Color', [0.72 0.72 0.72], 'LineWidth', 1.5);
+            plot(ax, other_med, y_oth, 'o', 'MarkerSize', 5, ...
+                'MarkerFaceColor', [0.55 0.55 0.55], 'MarkerEdgeColor', 'none');
         end
         hold(ax, 'off');
     end
@@ -2632,6 +2663,104 @@ end
 end
 
 
+% ── se_detect_panel ──────────────────────────────────────────────────────────
+function panel = se_detect_panel(T, prof)
+%SE_DETECT_PANEL  Detect a wide-format panel dataset (categoricals × years × values).
+%   Returns struct with is_panel=true when wide-year columns are present and
+%   at least one categorical has >2 unique levels.  Only fires for the
+%   wide-year case; long-format (single time axis + value column) keeps the
+%   regular pairplot.
+
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+panel.is_panel      = false;
+panel.grouping_idxs = [];
+panel.geo_idx       = [];
+panel.non_geo_idxs  = [];
+panel.description   = '';
+panel.wide_yr_idxs  = wide_yr_idxs;
+panel.wide_yr_vals  = wide_yr_vals;
+
+if isempty(wide_yr_idxs), return; end
+
+cat_all = find(prof.type == "categorical" & ~prof.skip);
+if isempty(cat_all) || ~any(prof.nunique(cat_all) > 2), return; end
+
+panel.is_panel      = true;
+panel.grouping_idxs = cat_all;
+
+for k = 1:numel(cat_all)
+    if se_looks_like_states(prof, cat_all(k), T) || se_looks_like_countries(prof, cat_all(k), T)
+        panel.geo_idx = cat_all(k);
+        break
+    end
+end
+panel.non_geo_idxs = cat_all(~ismember(cat_all, panel.geo_idx));
+
+parts = {};
+for k = 1:numel(cat_all)
+    ci = cat_all(k);
+    parts{end+1} = sprintf('%s (%d levels)', prof.name{ci}, prof.nunique(ci)); %#ok<AGROW>
+end
+yr_min = min(wide_yr_vals);  yr_max = max(wide_yr_vals);
+parts{end+1} = sprintf('%d years (%g\x2013%g)', numel(wide_yr_vals), yr_min, yr_max);
+panel.description = strjoin(parts, ' \xd7 ');
+end
+
+
+% ── se_plot_panel_totals ──────────────────────────────────────────────────────
+function se_plot_panel_totals(T, prof, panel)
+%SE_PLOT_PANEL_TOTALS  "Totals over time" figure: mean over all rows per year.
+%   Also prints top-N category levels by time-variance to the console.
+
+wide_yr_idxs = panel.wide_yr_idxs;
+wide_yr_vals = panel.wide_yr_vals;
+n_yr = numel(wide_yr_vals);
+[yr_sorted, sort_ord] = sort(wide_yr_vals);
+
+yr_means = zeros(1, n_yr);
+for k = 1:n_yr
+    col = double(T.(prof.name{wide_yr_idxs(sort_ord(k))}));
+    yr_means(k) = mean(col, 'omitnan');
+end
+
+fig = figure('Name', se_fig_title('Totals over time', prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+ax = axes(fig);
+plot(ax, yr_sorted, yr_means, '-', 'Color', [0.2 0.4 0.8], 'LineWidth', 2);
+xlabel(ax, 'Year');
+ylabel(ax, 'Mean value (all rows)');
+title(ax, sprintf('Aggregate over time — %s', panel.description), ...
+    'Interpreter', 'none', 'FontSize', 10);
+grid(ax, 'on');
+se_stamp_source(fig, prof.source_name);
+
+% Print top-3 levels per non-geo categorical, ranked by time-variance
+for k = 1:numel(panel.non_geo_idxs)
+    ci = panel.non_geo_idxs(k);
+    catname = prof.name{ci};
+    cat_col = T.(catname);
+    if ~iscategorical(cat_col), continue; end
+    levels = cellstr(categories(cat_col));
+    n_lev  = numel(levels);
+    vars   = zeros(n_lev, 1);
+    for lk = 1:n_lev
+        mask = cat_col == levels{lk};
+        if ~any(mask), continue; end
+        lk_means = zeros(1, n_yr);
+        for jj = 1:n_yr
+            col_jj = double(T.(prof.name{wide_yr_idxs(sort_ord(jj))}));
+            lk_means(jj) = mean(col_jj(mask), 'omitnan');
+        end
+        vars(lk) = var(lk_means(~isnan(lk_means)));
+    end
+    [~, ord] = sort(vars, 'descend');
+    top3 = levels(ord(1:min(3, n_lev)));
+    fprintf('  Top %s by time-variance: %s\n', catname, strjoin(top3, ', '));
+    fprintf('    Tip: DataExplorer(T(T.%s == ''%s'', :))\n', catname, top3{1});
+end
+end
+
+
 % ── se_plot_categorical_drilldown ────────────────────────────────────────────
 function se_plot_categorical_drilldown(T, prof, sel)
 %SE_PLOT_CATEGORICAL_DRILLDOWN  Grouped time series + scatter matrices by category.
@@ -2765,6 +2894,9 @@ levels  = cellstr(categories(cat_col));
 [colors, plot_order] = se_level_colors(levels);
 tdata   = T.(prof.name{time_idx});
 
+% Row counts for legend labels
+lev_counts = arrayfun(@(lk) sum(cat_col == levels{lk}), 1:numel(levels));
+
 % Vertical layout: one row per numeric variable, legend on every subplot
 n_num  = numel(num_idxs);
 
@@ -2831,7 +2963,7 @@ for j = 1:n_num
             'Color',      colors(lk, :), ...
             'MarkerSize', 3, ...
             'LineWidth',  1.2, ...
-            'DisplayName', levels{lk});
+            'DisplayName', sprintf('%s (n=%d)', levels{lk}, lev_counts(lk)));
         hold(ax, 'on');
         try
             h.DataTipTemplate.DataTipRows(end+1) = ...
@@ -3512,7 +3644,7 @@ function se_plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
 %SE_PLOT_GROUPED_TIMESERIES_WIDE  Trend lines per category using wide-format year columns.
 %   Shows top-K levels by overall mean + aggregated "Other" for the rest.
 %   Bootstrap 95% CI shading on every line.
-TOP_K = 8;
+TOP_K = 20;
 B_CI  = 500;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);

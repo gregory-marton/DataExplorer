@@ -602,9 +602,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_grouped_timeseries_wide_has_other_and_ci(testCase)
-            % Wide-format table with >TOP_K=8 category levels should produce a
+            % Wide-format table with >TOP_K=20 category levels should produce a
             % time series figure with an "Other (...)" legend entry and CI patches.
-            n_groups = 20;
+            n_groups = 25;
             grp_labels = strcat('G', string(1:n_groups))';
             T = table(categorical(repelem(grp_labels, 4)), 'VariableNames', {'Group'});
             for yr = 2020:2024
@@ -635,7 +635,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 end
             end
             testCase.verifyTrue(has_other, ...
-                'grouped time series should show "Other (...)" legend entry when >8 groups');
+                'grouped time series should show "Other (...)" legend entry when >20 groups');
 
             % CI patches are created with HandleVisibility='off'; findall sees them
             all_patches = findall(ts_figs(1), 'Type', 'patch');
@@ -1093,6 +1093,70 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEqual(height(T), 50);
             testCase.verifyEqual(width(T), 4);
             testCase.assert_all_figures_nonempty();
+        end
+
+        function test_panel_wide_shows_totals_skips_pairplot(testCase)
+            % Wide-format panel dataset (categoricals + wide year columns) should
+            % produce a "Totals over time" figure and NOT produce a "Pairplot" figure.
+            n_states = 5;  n_codes = 4;
+            states = repmat(strcat('S', string(1:n_states))', n_codes, 1);
+            codes  = repelem(strcat('C', string(1:n_codes))', n_states, 1);
+            T = table(categorical(states), categorical(codes), ...
+                'VariableNames', {'StateCode','MSN'});
+            for yr = 2000:2005
+                T.(['x' num2str(yr)]) = randn(height(T), 1);
+            end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after = findobj(0, 'Type', 'figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            names = arrayfun(@(f) f.Name, new_figs, 'UniformOutput', false);
+            has_totals  = any(cellfun(@(n) contains(n, 'Totals over time'), names));
+            has_pairplot = any(cellfun(@(n) contains(n, 'Pairplot'), names));
+
+            testCase.verifyTrue(has_totals, ...
+                'panel dataset should produce a "Totals over time" figure');
+            testCase.verifyFalse(has_pairplot, ...
+                'panel dataset should NOT produce a "Pairplot" figure');
+        end
+
+        function test_panel_totals_has_line(testCase)
+            % The "Totals over time" figure should contain a line plot with one
+            % line per year point.  Use 3 rows per state so the State column
+            % is not flagged as all-unique (ID column) and thus not skipped.
+            n_states = 4;  n_per = 3;
+            states = repelem(strcat('S', string(1:n_states))', n_per);
+            T = table(categorical(states), 'VariableNames', {'State'});
+            for yr = 2010:2015
+                T.(['x' num2str(yr)]) = 10*randn(height(T), 1) + 100;
+            end
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            figs_before = findobj(0, 'Type', 'figure');
+
+            DataExplorer(T);
+
+            figs_after = findobj(0, 'Type', 'figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            names = arrayfun(@(f) f.Name, new_figs, 'UniformOutput', false);
+            totals_figs = new_figs(cellfun(@(n) contains(n, 'Totals over time'), names));
+            testCase.assumeNotEmpty(totals_figs, 'no Totals over time figure found');
+
+            lines_h = findobj(totals_figs(1), 'Type', 'line');
+            testCase.verifyNotEmpty(lines_h, ...
+                'Totals over time figure should contain at least one line');
         end
 
     end
