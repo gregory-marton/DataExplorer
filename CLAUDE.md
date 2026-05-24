@@ -146,6 +146,8 @@ Three new figure types, in priority order:
 
 3. **Choropleth maps** — when a categorical matches a known geographic key pattern (2-letter state codes → `de_statebins`; ISO country codes → `de_countrybins`), produce one map per numeric variable. No Mapping Toolbox required. For lat/lon point data, `se_plot_geo` continues to handle that path. `de_countrybins` is not yet wired into DataExplorer — needs a `se_looks_like_countries` detector analogous to `se_looks_like_states`.
 
+   **Statebin display mode (TODO):** The current state choropleth pops up as a separate interactive figure with a year slider. Preferred alternative: embed it as a static tile in the main overview page (alongside the pairplot, etc.), with each tile showing richer per-cell content — a 1D or 2D heatmap encoding, or a sparkline for the time dimension, or a small bar. Goals: more data density on one page, no separate window, works for non-year continuous dimensions as well as time. `de_tilegrid` is the right place to add a `TileContent` or `CellRenderer` option. The slider-based separate-window mode can remain as an explicit call option.
+
 All three figure types can generate many figures quickly. Apply the interestingness ranker from Task 8 to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
 
 **Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines. Compositional data now generates both a stacked area figure AND an overlaid-lines figure with a dashed Total line.
