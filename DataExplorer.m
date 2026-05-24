@@ -55,7 +55,7 @@ if isMATLABReleaseOlderThan('R2025b')
 end
 
 %% ── 1.  Load ──────────────────────────────────────────────────────────────
-if isempty(source)
+if isempty(source) && ~istable(source)
     [fname, fpath] = uigetfile( ...
         {'*.csv;*.tsv;*.txt;*.xlsx;*.xls;*.xlsm;*.zip;*.nc;*.nc4;*.netcdf', 'Data files'}, ...
         'Select a data file');
@@ -71,6 +71,10 @@ if ischar(source) || isstring(source)
     T = se_load(string(source), options);
 elseif istable(source)
     T = source;
+    if height(T) == 0
+        fprintf('  ℹ Empty table (0 rows) — nothing to explore.\n');
+        return
+    end
     fprintf('  Using existing table: %d × %d\n', height(T), width(T));
 else
     error('DataExplorer:badInput', ...
@@ -3716,8 +3720,12 @@ if has_other
         fill(ax, [t_ci; flipud(t_ci)], [hi_o(ok_ci); flipud(lo_o(ok_ci))], ...
             GRAY, 'FaceAlpha', 0.12, 'EdgeColor', 'none', 'HandleVisibility', 'off');
     end
-    plot(ax, yr_sorted, y_o, '--', 'Color', GRAY, 'LineWidth', 1.0, ...
+    h_o = plot(ax, yr_sorted, y_o, '--', 'Color', GRAY, 'LineWidth', 1.0, ...
         'DisplayName', other_label);
+    try
+        h_o.DataTipTemplate.DataTipRows(end+1) = ...
+            dataTipTextRow(catname, repmat({other_label}, numel(yr_sorted), 1));
+    catch, end
 end
 
 % Named top-K lines with CI
@@ -3744,8 +3752,12 @@ for lk = plot_order
         fill(ax, [t_ci; flipud(t_ci)], [hi_k(ok_ci); flipud(lo_k(ok_ci))], ...
             colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
     end
-    plot(ax, yr_sorted, y_k, '-', 'Color', colors(lk,:), ...
+    h_k = plot(ax, yr_sorted, y_k, '-', 'Color', colors(lk,:), ...
         'LineWidth', 1.2, 'DisplayName', disp_lbl);
+    try
+        h_k.DataTipTemplate.DataTipRows(end+1) = ...
+            dataTipTextRow(catname, repmat(levels_show(lk), numel(yr_sorted), 1));
+    catch, end
 end
 
 hold(ax, 'off');
