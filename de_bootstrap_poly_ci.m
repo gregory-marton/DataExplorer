@@ -28,8 +28,18 @@ if n < order + 2
     return;
 end
 
+% Badly-conditioned: zero x-range or fewer distinct x values than needed
+if max(x) == min(x) || numel(unique(x)) < order + 2
+    ci_lo = [];  ci_hi = [];  x_fit = x;  y_fit = [];
+    return;
+end
+
 x_fit = linspace(min(x), max(x), max(n, 50))';
 
+% Suppress polyfit conditioning warnings: the guard above handles the
+% deterministic cases; bootstrap resamples can still produce near-degenerate
+% draws by chance, which is acceptable variance rather than a caller error.
+prev_w = warning('off', 'MATLAB:polyfit:RepeatedPointsOrRescale');
 p     = polyfit(x, y, order);
 y_fit = polyval(p, x_fit);
 
@@ -39,6 +49,7 @@ for b = 1:nboot
     pb  = polyfit(x(idx), y(idx), order);
     boot_pv(:, b) = polyval(pb, x_fit);
 end
+warning(prev_w);
 
 lo_pct = 100 * (1 - alpha) / 2;
 ci_lo  = prctile(boot_pv, lo_pct,       2);

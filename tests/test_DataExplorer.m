@@ -1305,6 +1305,45 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Expected cat_scatter line objects in the figure');
         end
 
+        function test_bootstrap_poly_ci_constant_x_returns_empty(testCase)
+            % Constant x (zero range) must return empty without warnings.
+            x = ones(10, 1);
+            y = randn(10, 1);
+            lastwarn('');
+            [ci_lo, ci_hi, ~, y_fit] = de_bootstrap_poly_ci(x, y, 1, 0.95, 10);
+            [msg, ~] = lastwarn();
+            testCase.verifyEmpty(y_fit,  'Expected empty y_fit for constant x');
+            testCase.verifyEmpty(ci_lo,  'Expected empty ci_lo for constant x');
+            testCase.verifyEmpty(ci_hi,  'Expected empty ci_hi for constant x');
+            testCase.verifyEmpty(msg,    'Expected no polyfit warning for constant x');
+        end
+
+        function test_bootstrap_poly_ci_too_few_distinct_x_returns_empty(testCase)
+            % Fewer distinct x values than order+2 must return empty without warnings.
+            x = [1;1;1;2;2;2];
+            y = randn(6, 1);
+            lastwarn('');
+            [~, ~, ~, y_fit] = de_bootstrap_poly_ci(x, y, 5, 0.95, 10);
+            [msg, ~] = lastwarn();
+            testCase.verifyEmpty(y_fit, 'Expected empty y_fit when too few distinct x');
+            testCase.verifyEmpty(msg,   'Expected no warning when returning early');
+        end
+
+        function test_bootstrap_poly_ci_normal_case_no_warning(testCase)
+            % Well-conditioned input must return non-empty results without warnings.
+            rng(42);
+            x = (1:20)';
+            y = 2*x + randn(20,1);
+            lastwarn('');
+            [ci_lo, ci_hi, x_fit, y_fit] = de_bootstrap_poly_ci(x, y, 1, 0.95, 50);
+            [msg, ~] = lastwarn();
+            testCase.verifyNotEmpty(y_fit,  'Expected y_fit for well-conditioned input');
+            testCase.verifyEqual(numel(x_fit), numel(y_fit));
+            testCase.verifyEqual(numel(ci_lo),  numel(x_fit));
+            testCase.verifyEqual(numel(ci_hi),  numel(x_fit));
+            testCase.verifyEmpty(msg, 'Expected no warning for well-conditioned input');
+        end
+
     end
 
 end
