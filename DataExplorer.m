@@ -3524,19 +3524,17 @@ if ~isempty(yr_idxs)
     T_long  = se_pivot_wide_to_long(T, prof, yr_idxs, yr_vals);
     T_plot  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
     ydata_v = T_plot.Value(~isnan(T_plot.Value));
-    if isempty(ydata_v), return; end
-    sh_ylim   = [min(ydata_v), max(ydata_v)];
-    if sh_ylim(1) >= sh_ylim(2), return; end
+    if isempty(ydata_v) || min(ydata_v) >= max(ydata_v), return; end
     title_str = sprintf('%s x %s: Value over time', geo_name, cat_name);
     fprintf('  Geo x categorical sparklines: %s\n', title_str);
     if is_states
         de_statebins(T_plot, 'StateCol',geo_name, 'ColorCol','Value', ...
             'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
-            'TopK',K, 'SharedYLim',sh_ylim, 'Title',title_str);
+            'TopK',K, 'Title',title_str);
     else
         de_countrybins(T_plot, 'CountryCol',geo_name, 'ColorCol','Value', ...
             'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
-            'TopK',K, 'SharedYLim',sh_ylim, 'Title',title_str);
+            'TopK',K, 'Title',title_str);
     end
 
 

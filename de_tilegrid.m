@@ -121,6 +121,7 @@ end
 vmin = min(Heat(:), [], 'omitnan');
 vmax = max(Heat(:), [], 'omitnan');
 if isnan(vmin) || vmin == vmax, has_choro = false; end
+if is_sparkline_cat || is_scatter_cat, has_choro = false; end
 
 %% ── Multi-category sparkline data ────────────────────────────────────────────
 multi_heat = []; top_cat_levels = {}; cat_colors_mat = [];
