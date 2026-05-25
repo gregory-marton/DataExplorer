@@ -1185,9 +1185,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
-            lines_cat = findobj(fig, 'Type','line', 'Tag','cat_spark');
-            testCase.verifyGreaterThanOrEqual(numel(lines_cat), 2, ...
-                'Expected cat_spark lines for each non-empty tile');
+            heat_imgs = findobj(fig, 'Type','image', 'Tag','cat_heat');
+            testCase.verifyGreaterThanOrEqual(numel(heat_imgs), 2, ...
+                'Expected cat_heat image objects for each non-empty tile');
         end
 
         function test_statebins_sparkline_cat_passthrough(testCase)
@@ -1210,9 +1210,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assertNotEmpty(fig, 'Expected a figure handle from de_statebins');
             cl2 = onCleanup(@() close(fig));
 
-            lines_cat = findobj(fig, 'Type','line', 'Tag','cat_spark');
-            testCase.verifyGreaterThanOrEqual(numel(lines_cat), 2, ...
-                'de_statebins should forward CellRenderer and produce cat_spark lines');
+            heat_imgs = findobj(fig, 'Type','image', 'Tag','cat_heat');
+            testCase.verifyGreaterThanOrEqual(numel(heat_imgs), 2, ...
+                'de_statebins should forward CellRenderer and produce cat_heat images');
         end
 
         function test_geo_multicategorical_produces_figure(testCase)

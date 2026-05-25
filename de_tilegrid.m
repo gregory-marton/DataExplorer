@@ -204,12 +204,13 @@ BG = [0.97 0.97 0.97];
 max_col = max(COLS);
 max_row = max(ROWS);
 tile_px = 36;
-fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(has_choro)));
+needs_cbar = has_choro || is_sparkline_cat;
+fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(needs_cbar)));
 fig_h   = min(1000, max(380, round((max_row + 2) * tile_px)));
 fig = figure('Color', BG, 'NumberTitle', 'off', 'Position', [100 100 fig_w fig_h]);
 if options.Title ~= "", fig.Name = char(options.Title); end
 
-ax_right = 0.82 + 0.10 * double(~has_choro);
+ax_right = 0.82 + 0.10 * double(~needs_cbar);
 ax = axes(fig, 'Units', 'normalized', ...
     'Position', [0.02, 0.04, ax_right, 0.92], ...
     'Color', BG, 'XColor', 'none', 'YColor', 'none', 'Box', 'off');
@@ -235,6 +236,7 @@ end
 SPARK_FRAC = 0.28;
 lbl_y_frac = 0.50;
 if has_spark, lbl_y_frac = 0.28; end
+if is_sparkline_cat, lbl_y_frac = 0.10; end
 
 for ti = 1:n_tiles
     r  = ROWS(ti);  c = COLS(ti);
@@ -330,34 +332,40 @@ if has_spark && has_choro && ~is_sparkline_cat
         'Margin', 3, 'LineWidth', 0.5);
 end
 
-%% ── Category sparklines (CellRenderer='sparkline_cat') ──────────────────────
+%% ── Category heatmap (CellRenderer='sparkline_cat': x=time, y=category, color=value)
 if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
-    tile_h   = 1 - 2*GAP;
-    SPARK_MX = 0.10;
-    x_ticks  = linspace(0, 1, n_t);
+    heat_top = GAP + 0.20;
+    heat_bot = 1 - GAP;
     for ti = 1:n_tiles
         if all(isnan(multi_heat(ti,:,:)),'all'), continue; end
-        r = ROWS(ti); c = COLS(ti);
-        spark_y_top = r + GAP + (1 - SPARK_FRAC) * tile_h;
-        spark_y_bot = r + 1 - GAP - 0.01;
-        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
-        for ki = 1:K
-            hr = multi_heat(ti,:,ki);
-            if all(isnan(hr)), continue; end
-            y_norm  = (hr - sh_lo) / (sh_hi - sh_lo);
-            y_s     = spark_y_bot - y_norm * (spark_y_bot - spark_y_top);
-            y_s(isnan(hr)) = NaN;
-            line(ax, x_spark, y_s, 'Color', cat_colors_mat(ki,:), ...
-                'LineWidth', 1.0, 'Tag', 'cat_spark');
-        end
+        r = ROWS(ti);  c = COLS(ti);
+        hs      = reshape(multi_heat(ti,:,:), [n_t, K])';  % K × n_t
+        norm_hs = max(0, min(1, (hs - sh_lo) / (sh_hi - sh_lo)));
+        ci_idx  = max(1, min(size(cmap_ch,1), floor(norm_hs*size(cmap_ch,1))+1));
+        crgb    = reshape(cmap_ch(ci_idx(:),:), [K, n_t, 3]);
+        nan3    = repmat(isnan(hs), 1, 1, 3);
+        crgb    = crgb .* ~nan3 + 0.88 * nan3;
+        image(ax, [c+GAP, c+1-GAP], [r+heat_top, r+heat_bot], ...
+              uint8(round(crgb*255)), 'Tag', 'cat_heat');
     end
-    leg_h = gobjects(K, 1);
-    for ki = 1:K
-        leg_h(ki) = line(nan, nan, 'Parent', ax, ...
-            'Color', cat_colors_mat(ki,:), 'LineWidth', 1.5, ...
-            'DisplayName', top_cat_levels{ki});
+    colormap(ax, cmap_ch);
+    clim(ax, [sh_lo sh_hi]);
+    cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
+    val_lbl = strrep(char(options.ColorCol), '_', ' ');
+    if n_t > 1
+        cb.Label.String = sprintf('mean(%s, %s–%s)', val_lbl, ...
+            tg_yr_str(t_vals, 1, is_year_axis), ...
+            tg_yr_str(t_vals, numel(t_vals), is_year_axis));
+    else
+        cb.Label.String = val_lbl;
     end
-    legend(leg_h, 'Location','southeast', 'FontSize', 6, 'Interpreter','none');
+    cb.FontSize = 8;
+    cat_key = sprintf('rows↓: %s', strjoin(top_cat_levels(1:K), ', '));
+    text(ax, -MARGIN+0.05, double(max_row)+1+MARGIN-0.1, cat_key, ...
+        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
+        'FontSize', 5.5, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
+        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+        'Margin', 3, 'LineWidth', 0.5);
 end
 
 %% ── Category scatter (CellRenderer='scatter_cat') ────────────────────────────
