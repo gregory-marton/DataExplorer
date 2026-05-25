@@ -3526,6 +3526,7 @@ if ~isempty(yr_idxs)
     ydata_v = T_plot.Value(~isnan(T_plot.Value));
     if isempty(ydata_v), return; end
     sh_ylim   = [min(ydata_v), max(ydata_v)];
+    if sh_ylim(1) >= sh_ylim(2), return; end
     title_str = sprintf('%s x %s: Value over time', geo_name, cat_name);
     fprintf('  Geo x categorical sparklines: %s\n', title_str);
     if is_states
@@ -3540,7 +3541,7 @@ if ~isempty(yr_idxs)
 
 % Note: scatter_cat branch (when wide_yr_idxs is empty but num_idxs >= 2)
 % requires XCol/YCol/SharedXLim support in de_statebins/de_countrybins,
-% which is not yet implemented (Task 4). Skip silently until then.
+% not yet implemented (scatter_cat renderer, see plan: 2026-05-25-geo-multi-categorical-sparklines.md Task 4).
 end
 end
 
