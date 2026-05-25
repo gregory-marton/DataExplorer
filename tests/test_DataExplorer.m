@@ -1215,6 +1215,36 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'de_statebins should forward CellRenderer and produce cat_spark lines');
         end
 
+        function test_geo_multicategorical_produces_figure(testCase)
+            % Cross-indexed StateCode × MSN + wide year columns should produce
+            % a figure whose name contains both categorical column names.
+            % 3 states × 3 MSN codes = 9 rows, ratio = 9/(3×3) = 1.0 → fires.
+            states = repelem(["ME";"NY";"CA"], 3);
+            msns   = repmat(["A";"B";"C"], 3, 1);
+            T = table(categorical(states), categorical(msns), ...
+                'VariableNames', {'StateCode','MSN'});
+            for yr = 2000:2003
+                T.(['x' num2str(yr)]) = randn(9, 1);
+            end
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            figs_before = findobj(0,'Type','figure');
+
+            DataExplorer(T);
+
+            figs_after = findobj(0,'Type','figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cl2 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            names = arrayfun(@(f) string(f.Name), new_figs, 'UniformOutput', false);
+            names = [names{:}];
+            has_geo_cat = any(contains(names,'StateCode') & contains(names,'MSN'));
+            testCase.verifyTrue(has_geo_cat, ...
+                'Expected a figure with both StateCode and MSN in its name');
+        end
+
     end
 
 end

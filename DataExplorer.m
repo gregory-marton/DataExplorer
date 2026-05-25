@@ -2820,6 +2820,28 @@ if ~isempty(cat_useful)
     end
 end
 
+%% ── Cross-indexed geo × categorical: sparklines or scatter per tile ──────────
+all_cats_for_geo = [cat_useful(:)', cat_big(:)'];
+geo_cats   = all_cats_for_geo(arrayfun(@(ci) ...
+    se_looks_like_states(prof,ci,T) || se_looks_like_countries(prof,ci,T), all_cats_for_geo));
+other_cats = all_cats_for_geo(~ismember(all_cats_for_geo, geo_cats));
+for gi = 1:numel(geo_cats)
+    geo_ci = geo_cats(gi);
+    for oi = 1:numel(other_cats)
+        other_ci = other_cats(oi);
+        n_geo    = prof.nunique(geo_ci);
+        n_other  = prof.nunique(other_ci);
+        ratio    = height(T) / (n_geo * n_other);
+        if ratio >= 0.5 && ratio <= 1.5
+            num_plot = unique([ts_num(:)', sel_num(:)'], 'stable');
+            if ~isempty(wide_yr_idxs) || numel(num_plot) >= 2
+                se_plot_geo_multicategorical(T, prof, geo_ci, other_ci, ...
+                    wide_yr_idxs, wide_yr_vals, num_plot);
+            end
+        end
+    end
+end
+
 % High-cardinality categoricals: geo treatment OR top-K drill-down with Other
 TOP_K = 8;
 for k = 1:numel(cat_big)
@@ -3479,6 +3501,47 @@ T_long.Year  = repelem(yr_sorted(:), n_rows);
 value_col    = cell2mat(arrayfun(@(ti) double(T.(yr_names_s(ti))), ...
                    (1:n_t)', 'UniformOutput', false));
 T_long.Value = value_col;
+end
+
+
+% ── se_plot_geo_multicategorical ──────────────────────────────────────────────
+function se_plot_geo_multicategorical(T, prof, geo_idx, cat_idx, yr_idxs, yr_vals, num_idxs)
+%SE_PLOT_GEO_MULTICATEGORICAL  Tile-grid figure with per-tile category sparklines or scatter.
+%   Fires when a geo categorical and another categorical cross-index the dataset rows.
+geo_name  = prof.name{geo_idx};
+cat_name  = prof.name{cat_idx};
+is_states = se_looks_like_states(prof, geo_idx, T);
+
+% Top-K category levels by row frequency
+cat_col  = T.(cat_name);
+cat_levs = cellstr(categories(cat_col));
+cnt_levs = countcats(cat_col);
+[~, ord] = sort(cnt_levs,'descend');
+K        = min(5, numel(cat_levs));
+top_levs = cat_levs(ord(1:K));
+
+if ~isempty(yr_idxs)
+    T_long  = se_pivot_wide_to_long(T, prof, yr_idxs, yr_vals);
+    T_plot  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
+    ydata_v = T_plot.Value(~isnan(T_plot.Value));
+    if isempty(ydata_v), return; end
+    sh_ylim   = [min(ydata_v), max(ydata_v)];
+    title_str = sprintf('%s x %s: Value over time', geo_name, cat_name);
+    fprintf('  Geo x categorical sparklines: %s\n', title_str);
+    if is_states
+        de_statebins(T_plot, 'StateCol',geo_name, 'ColorCol','Value', ...
+            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+            'TopK',K, 'SharedYLim',sh_ylim, 'Title',title_str);
+    else
+        de_countrybins(T_plot, 'CountryCol',geo_name, 'ColorCol','Value', ...
+            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+            'TopK',K, 'SharedYLim',sh_ylim, 'Title',title_str);
+    end
+
+% Note: scatter_cat branch (when wide_yr_idxs is empty but num_idxs >= 2)
+% requires XCol/YCol/SharedXLim support in de_statebins/de_countrybins,
+% which is not yet implemented (Task 4). Skip silently until then.
+end
 end
 
 
