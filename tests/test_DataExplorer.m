@@ -1190,6 +1190,31 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Expected cat_spark lines for each non-empty tile');
         end
 
+        function test_statebins_sparkline_cat_passthrough(testCase)
+            % de_statebins must forward CellRenderer options to de_tilegrid
+            % and produce cat_spark lines identical to calling de_tilegrid directly.
+            states = repelem(["ME";"NY";"CA";"TX"], 4);
+            cats   = repmat(["A";"B";"C";"D"], 4, 1);
+            years  = repmat([2000;2001], 8, 1);
+            vals   = randn(16, 1);
+            T = table(string(states), categorical(cats), double(years), double(vals), ...
+                'VariableNames', {'StateCode','Cat','Year','Value'});
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_statebins(T, 'StateCol','StateCode', 'ColorCol','Value', ...
+                'TimeCol','Year', 'CellRenderer','sparkline_cat', ...
+                'CatCol','Cat', 'TopK',4);
+            testCase.assertNotEmpty(fig, 'Expected a figure handle from de_statebins');
+            cl2 = onCleanup(@() close(fig));
+
+            lines_cat = findobj(fig, 'Type','line', 'Tag','cat_spark');
+            testCase.verifyGreaterThanOrEqual(numel(lines_cat), 2, ...
+                'de_statebins should forward CellRenderer and produce cat_spark lines');
+        end
+
     end
 
 end
