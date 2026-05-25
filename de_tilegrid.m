@@ -125,7 +125,7 @@ if isnan(vmin) || vmin == vmax, has_choro = false; end
 if is_sparkline_cat || is_scatter_cat, has_choro = false; end
 
 %% ── Multi-category sparkline data ────────────────────────────────────────────
-multi_heat = []; top_cat_levels = {}; cat_colors_mat = [];
+multi_heat = []; top_cat_levels = {};
 sh_lo = NaN; sh_hi = NaN; K = 0;
 if is_sparkline_cat
     ydata_sc   = double(T.(char(options.ColorCol)));
@@ -152,11 +152,6 @@ if is_sparkline_cat
         end
     end
 
-    if ~isempty(options.CatColors) && size(options.CatColors,1) >= K
-        cat_colors_mat = options.CatColors(1:K,:);
-    else
-        cat_colors_mat = lines(K);
-    end
     if all(isnan(options.SharedYLim))
         non_ov_mh = multi_heat(~IS_OVERFLOW,:,:);
         sh_lo = min(non_ov_mh(:), [], 'omitnan');
@@ -234,8 +229,6 @@ if has_spark
 else
     Heat_bg = Heat(:, 1);
 end
-% Sparklines occupy the lower 28% of each tile; label sits in the upper portion.
-SPARK_FRAC = 0.28;
 lbl_y_frac = 0.50;
 if has_spark, lbl_y_frac = 0.28; end
 if is_sparkline_cat, lbl_y_frac = 0.10; end
@@ -294,80 +287,57 @@ title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', 11, 'Interpreter', 'none');
 
-%% ── Sparklines ───────────────────────────────────────────────────────────────
-if has_spark && has_choro && ~is_sparkline_cat
-    tile_h   = 1 - 2*GAP;
-    SPARK_MX = 0.10;
-    x_ticks  = linspace(0, 1, n_t);
-    for ti = 1:n_tiles
-        if all(isnan(Heat(ti,:))), continue; end
-        r = ROWS(ti);  c = COLS(ti);
-        spark_y_top = r + GAP + (1 - SPARK_FRAC) * tile_h;
-        spark_y_bot = r + 1 - GAP - 0.01;
-
-        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
-        heat_row = Heat(ti, :);
-        if vmax > vmin
-            norm_h = (heat_row - vmin) / (vmax - vmin);
-        else
-            norm_h = 0.5 * ones(1, n_t);
-        end
-        % High value → top of spark area → smaller y (axes YDir=reverse)
-        y_spark = spark_y_bot - norm_h * (spark_y_bot - spark_y_top);
-        y_spark(isnan(heat_row)) = NaN;
-
-        fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
-        tc = tg_text_color(fc);
-        line(ax, x_spark, y_spark, 'Color', tc, 'LineWidth', 0.8, 'Tag', 'sparkline');
-    end
-end
-
-%% ── Legend key ───────────────────────────────────────────────────────────────
-if has_spark && has_choro && ~is_sparkline_cat
-    t1s = tg_yr_str(t_vals, 1, is_year_axis);
-    tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
-    key_str = ['color: mean  |  spark: ' t1s ' → ' tns];
-    text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
-        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontSize', 6.5, 'Interpreter', 'none', 'Tag', 'legend_key', ...
-        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
-        'Margin', 3, 'LineWidth', 0.5);
-end
+%% ── Sparklines suppressed: choropleth color already encodes temporal mean ─────
 
 %% ── Category heatmap (CellRenderer='sparkline_cat': x=time, y=category, color=value)
 if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
     heat_top = GAP + 0.20;
     heat_bot = 1 - GAP;
+    cell_h   = (heat_bot - heat_top) / K;
+    cell_w   = (1 - 2*GAP) / n_t;
+    % Pre-allocate patch arrays (upper bound = all cells)
+    Xp = NaN(4, numel(multi_heat));
+    Yp = NaN(4, numel(multi_heat));
+    Cp = NaN(1, numel(multi_heat));
+    idx = 0;
     for ti = 1:n_tiles
-        if all(isnan(multi_heat(ti,:,:)),'all'), continue; end
+        if all(isnan(multi_heat(ti,:,:)), 'all'), continue; end
         r = ROWS(ti);  c = COLS(ti);
-        hs      = reshape(multi_heat(ti,:,:), [n_t, K])';  % K × n_t
-        norm_hs = max(0, min(1, (hs - sh_lo) / (sh_hi - sh_lo)));
-        ci_idx  = max(1, min(size(cmap_ch,1), floor(norm_hs*size(cmap_ch,1))+1));
-        crgb    = reshape(cmap_ch(ci_idx(:),:), [K, n_t, 3]);
-        nan3    = repmat(isnan(hs), 1, 1, 3);
-        crgb    = crgb .* ~nan3 + 0.88 * nan3;
-        image(ax, [c+GAP, c+1-GAP], [r+heat_top, r+heat_bot], ...
-              uint8(round(crgb*255)), 'Tag', 'cat_heat');
+        for ki = 1:K
+            for tt = 1:n_t
+                v = multi_heat(ti, tt, ki);
+                if isnan(v), continue; end
+                idx = idx + 1;
+                x0 = c + GAP + (tt-1)*cell_w;
+                y0 = r + heat_top + (ki-1)*cell_h;
+                Xp(:, idx) = [x0; x0+cell_w; x0+cell_w; x0];
+                Yp(:, idx) = [y0; y0;         y0+cell_h; y0+cell_h];
+                Cp(idx)    = v;
+            end
+        end
     end
-    colormap(ax, cmap_ch);
-    clim(ax, [sh_lo sh_hi]);
-    cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
-    val_lbl = strrep(char(options.ColorCol), '_', ' ');
-    if n_t > 1
-        cb.Label.String = sprintf('mean(%s, %s–%s)', val_lbl, ...
-            tg_yr_str(t_vals, 1, is_year_axis), ...
-            tg_yr_str(t_vals, numel(t_vals), is_year_axis));
-    else
-        cb.Label.String = val_lbl;
+    if idx > 0
+        patch(ax, Xp(:,1:idx), Yp(:,1:idx), Cp(1:idx), ...
+            'EdgeColor','none', 'FaceColor','flat', 'Tag','cat_heat');
+        colormap(ax, cmap_ch);
+        clim(ax, [sh_lo sh_hi]);
+        cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
+        val_lbl = strrep(char(options.ColorCol), '_', ' ');
+        if n_t > 1
+            cb.Label.String = sprintf('mean(%s, %s%s%s)', val_lbl, ...
+                tg_yr_str(t_vals, 1, is_year_axis), char(8211), ...
+                tg_yr_str(t_vals, numel(t_vals), is_year_axis));
+        else
+            cb.Label.String = val_lbl;
+        end
+        cb.FontSize = 8;
+        cat_key = sprintf('rows (top-bot): %s', strjoin(top_cat_levels(1:K), ', '));
+        text(ax, -MARGIN+0.05, double(max_row)+1+MARGIN-0.1, cat_key, ...
+            'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
+            'FontSize', 5.5, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
+            'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+            'Margin', 3, 'LineWidth', 0.5);
     end
-    cb.FontSize = 8;
-    cat_key = sprintf('rows↓: %s', strjoin(top_cat_levels(1:K), ', '));
-    text(ax, -MARGIN+0.05, double(max_row)+1+MARGIN-0.1, cat_key, ...
-        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontSize', 5.5, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
-        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
-        'Margin', 3, 'LineWidth', 0.5);
 end
 
 %% ── Category scatter (CellRenderer='scatter_cat') ────────────────────────────

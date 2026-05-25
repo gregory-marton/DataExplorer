@@ -1161,8 +1161,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
         function test_tilegrid_sparkline_cat_draws_lines(testCase)
             % Long-format table: 2 states × 2 cat levels × 3 years = 12 rows.
-            % de_tilegrid with CellRenderer='sparkline_cat' must draw at least
-            % one 'cat_spark' line per non-empty tile.
+            % de_tilegrid with CellRenderer='sparkline_cat' must produce a
+            % vectorised cat_heat patch object covering all non-empty tiles.
             states = repelem(["ME";"NY"], 6);
             cats   = repmat(repelem(["A";"B"], 3), 2, 1);
             years  = repmat([2000;2001;2002], 4, 1);
@@ -1185,14 +1185,14 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
-            heat_imgs = findobj(fig, 'Type','image', 'Tag','cat_heat');
-            testCase.verifyGreaterThanOrEqual(numel(heat_imgs), 2, ...
-                'Expected cat_heat image objects for each non-empty tile');
+            heat_patches = findobj(fig, 'Type','patch', 'Tag','cat_heat');
+            testCase.verifyNotEmpty(heat_patches, ...
+                'Expected cat_heat patch object in figure');
         end
 
         function test_statebins_sparkline_cat_passthrough(testCase)
             % de_statebins must forward CellRenderer options to de_tilegrid
-            % and produce cat_spark lines identical to calling de_tilegrid directly.
+            % and produce a cat_heat patch object.
             states = repelem(["ME";"NY";"CA";"TX"], 4);
             cats   = repmat(["A";"B";"C";"D"], 4, 1);
             years  = repmat([2000;2001], 8, 1);
@@ -1210,9 +1210,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assertNotEmpty(fig, 'Expected a figure handle from de_statebins');
             cl2 = onCleanup(@() close(fig));
 
-            heat_imgs = findobj(fig, 'Type','image', 'Tag','cat_heat');
-            testCase.verifyGreaterThanOrEqual(numel(heat_imgs), 2, ...
-                'de_statebins should forward CellRenderer and produce cat_heat images');
+            heat_patches = findobj(fig, 'Type','patch', 'Tag','cat_heat');
+            testCase.verifyNotEmpty(heat_patches, ...
+                'de_statebins should forward CellRenderer and produce cat_heat patch');
         end
 
         function test_geo_multicategorical_produces_figure(testCase)

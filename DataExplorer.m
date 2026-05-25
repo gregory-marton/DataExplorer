@@ -2706,8 +2706,8 @@ for k = 1:numel(cat_all)
     parts{end+1} = sprintf('%s (%d levels)', prof.name{ci}, prof.nunique(ci)); %#ok<AGROW>
 end
 yr_min = min(wide_yr_vals);  yr_max = max(wide_yr_vals);
-parts{end+1} = sprintf('%d years (%g\x2013%g)', numel(wide_yr_vals), yr_min, yr_max);
-panel.description = strjoin(parts, ' \xd7 ');
+parts{end+1} = sprintf('%d years (%g%s%g)', numel(wide_yr_vals), yr_min, char(8211), yr_max);
+panel.description = strjoin(parts, [' ' char(215) ' ']);
 end
 
 
