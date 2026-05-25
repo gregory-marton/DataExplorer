@@ -3296,7 +3296,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 
 [wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
-    fig_title = se_fig_title(sprintf('World choropleth: %s over time', catname), prof.source_name);
+    fig_title = se_fig_title(sprintf('World choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_countrybins(T_long, 'CountryCol', catname, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title);
@@ -3485,7 +3485,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 % choropleth with a year slider rather than one static figure per year column.
 [wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
-    fig_title = se_fig_title(sprintf('Choropleth: %s over time', catname), prof.source_name);
+    fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_statebins(T_long, 'StateCol', catname, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title);
