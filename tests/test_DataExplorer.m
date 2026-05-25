@@ -1159,6 +1159,37 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Totals over time figure should contain at least one line');
         end
 
+        function test_tilegrid_sparkline_cat_draws_lines(testCase)
+            % Long-format table: 2 states × 2 cat levels × 3 years = 12 rows.
+            % de_tilegrid with CellRenderer='sparkline_cat' must draw at least
+            % one 'cat_spark' line per non-empty tile.
+            states = repelem(["ME";"NY"], 6);
+            cats   = repmat(repelem(["A";"B"], 3), 2, 1);
+            years  = repmat([2000;2001;2002], 4, 1);
+            vals   = (1:12)';
+            T = table(string(states), categorical(cats), double(years), double(vals), ...
+                'VariableNames', {'State','Cat','Year','Value'});
+            g.codes       = {'ME','NY'};
+            g.rows        = [0, 1];
+            g.cols        = [0, 0];
+            g.is_overflow = [false; false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, ...
+                'ColorCol','Value', 'TimeCol','Year', ...
+                'CellRenderer','sparkline_cat', 'CatCol','Cat', 'TopK',5);
+            testCase.assertNotEmpty(fig, 'Expected a figure handle');
+            cl2 = onCleanup(@() close(fig));
+
+            lines_cat = findobj(fig, 'Type','line', 'Tag','cat_spark');
+            testCase.verifyGreaterThanOrEqual(numel(lines_cat), 2, ...
+                'Expected cat_spark lines for each non-empty tile');
+        end
+
     end
 
 end

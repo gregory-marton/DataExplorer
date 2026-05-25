@@ -39,6 +39,11 @@ arguments
     options.OverflowEdgeColor (1,3) double  = [0.75 0.40 0.05]
     options.MapLabel          (1,1) string  = "Map"
     options.FontSize          (1,1) double  = 7
+    options.CellRenderer      (1,1) string  = "color"
+    options.CatCol            (1,1) string  = ""
+    options.TopK              (1,1) double  = 5
+    options.SharedYLim        (1,2) double  = [NaN NaN]
+    options.CatColors                       = []
 end
 
 fig = []; ax = [];
@@ -56,6 +61,10 @@ varnames  = string(T.Properties.VariableNames);
 has_color = options.ColorCol ~= "" && ismember(options.ColorCol, varnames);
 has_time  = options.TimeCol  ~= "" && ismember(options.TimeCol,  varnames);
 has_choro = has_color && numel(normed) == height(T) && height(T) > 0;
+is_sparkline_cat = options.CellRenderer == "sparkline_cat" && ...
+    options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
+    options.ColorCol ~= "" && ismember(options.ColorCol, varnames) && ...
+    has_time && numel(normed) == height(T) && height(T) > 0;
 
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
@@ -104,6 +113,48 @@ end
 vmin = min(Heat(:), [], 'omitnan');
 vmax = max(Heat(:), [], 'omitnan');
 if isnan(vmin) || vmin == vmax, has_choro = false; end
+
+%% ── Multi-category sparkline data ────────────────────────────────────────────
+multi_heat = []; top_cat_levels = {}; cat_colors_mat = [];
+sh_lo = NaN; sh_hi = NaN; K = 0;
+if is_sparkline_cat
+    ydata_sc   = double(T.(char(options.ColorCol)));
+    tdata_sc   = T.(char(options.TimeCol));
+    if ~isa(tdata_sc,'datetime'), tdata_sc = double(tdata_sc); end
+    cat_col_sc = categorical(string(T.(char(options.CatCol))));
+    all_lv     = cellstr(categories(cat_col_sc));
+    cnt_lv     = countcats(cat_col_sc);
+    [~, ord_lv] = sort(cnt_lv,'descend');
+    K           = min(options.TopK, numel(all_lv));
+    top_cat_levels = all_lv(ord_lv(1:K));
+
+    multi_heat = NaN(n_tiles, n_t, K);
+    for ti = 1:n_tiles
+        s_mask = normed == CODES{ti};
+        if ~any(s_mask), continue; end
+        for ki = 1:K
+            k_mask = cat_col_sc == top_cat_levels{ki};
+            for tt = 1:n_t
+                v_ki = ydata_sc(s_mask & k_mask & (tdata_sc == t_vals(tt)));
+                v_ki = v_ki(~isnan(v_ki));
+                if ~isempty(v_ki), multi_heat(ti,tt,ki) = mean(v_ki); end
+            end
+        end
+    end
+
+    if ~isempty(options.CatColors) && size(options.CatColors,1) >= K
+        cat_colors_mat = options.CatColors(1:K,:);
+    else
+        cat_colors_mat = lines(K);
+    end
+    if all(isnan(options.SharedYLim))
+        sh_lo = min(multi_heat(:),[],'omitnan');
+        sh_hi = max(multi_heat(:),[],'omitnan');
+    else
+        sh_lo = options.SharedYLim(1);
+        sh_hi = options.SharedYLim(2);
+    end
+end
 
 %% ── Figure and axes ──────────────────────────────────────────────────────────
 has_spark = has_time && n_t > 1;
@@ -199,7 +250,7 @@ title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     'FontSize', 11, 'Interpreter', 'none');
 
 %% ── Sparklines ───────────────────────────────────────────────────────────────
-if has_spark && has_choro
+if has_spark && has_choro && ~is_sparkline_cat
     tile_h   = 1 - 2*GAP;
     SPARK_MX = 0.10;
     x_ticks  = linspace(0, 1, n_t);
@@ -227,7 +278,7 @@ if has_spark && has_choro
 end
 
 %% ── Legend key ───────────────────────────────────────────────────────────────
-if has_spark && has_choro
+if has_spark && has_choro && ~is_sparkline_cat
     t1s = tg_yr_str(t_vals, 1, is_year_axis);
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     key_str = ['color: mean  |  spark: ' t1s ' → ' tns];
@@ -236,6 +287,36 @@ if has_spark && has_choro
         'FontSize', 6.5, 'Interpreter', 'none', 'Tag', 'legend_key', ...
         'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
         'Margin', 3, 'LineWidth', 0.5);
+end
+
+%% ── Category sparklines (CellRenderer='sparkline_cat') ──────────────────────
+if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
+    tile_h   = 1 - 2*GAP;
+    SPARK_MX = 0.10;
+    x_ticks  = linspace(0, 1, n_t);
+    for ti = 1:n_tiles
+        if all(isnan(multi_heat(ti,:,:)),'all'), continue; end
+        r = ROWS(ti); c = COLS(ti);
+        spark_y_top = r + GAP + (1 - SPARK_FRAC) * tile_h;
+        spark_y_bot = r + 1 - GAP - 0.01;
+        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
+        for ki = 1:K
+            hr = multi_heat(ti,:,ki);
+            if all(isnan(hr)), continue; end
+            y_norm  = (hr - sh_lo) / (sh_hi - sh_lo);
+            y_s     = spark_y_bot - y_norm * (spark_y_bot - spark_y_top);
+            y_s(isnan(hr)) = NaN;
+            line(ax, x_spark, y_s, 'Color', cat_colors_mat(ki,:), ...
+                'LineWidth', 1.0, 'Tag', 'cat_spark');
+        end
+    end
+    leg_h = gobjects(K, 1);
+    for ki = 1:K
+        leg_h(ki) = line(nan, nan, 'Parent', ax, ...
+            'Color', cat_colors_mat(ki,:), 'LineWidth', 1.5, ...
+            'DisplayName', top_cat_levels{ki});
+    end
+    legend(leg_h, 'Location','southeast', 'FontSize', 6, 'Interpreter','none');
 end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────
