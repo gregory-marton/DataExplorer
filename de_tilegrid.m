@@ -129,8 +129,10 @@ multi_heat = []; top_cat_levels = {};
 sh_lo = NaN; sh_hi = NaN; K = 0;
 if is_sparkline_cat
     ydata_sc   = double(T.(char(options.ColorCol)));
-    tdata_sc   = T.(char(options.TimeCol));
-    if ~isa(tdata_sc,'datetime'), tdata_sc = double(tdata_sc); end
+    if has_time
+        tdata_sc = T.(char(options.TimeCol));
+        if ~isa(tdata_sc,'datetime'), tdata_sc = double(tdata_sc); end
+    end
     cat_col_sc = categorical(string(T.(char(options.CatCol))));
     all_lv     = cellstr(categories(cat_col_sc));
     cnt_lv     = countcats(cat_col_sc);
@@ -145,7 +147,11 @@ if is_sparkline_cat
         for ki = 1:K
             k_mask = cat_col_sc == top_cat_levels{ki};
             for tt = 1:n_t
-                v_ki = ydata_sc(s_mask & k_mask & (tdata_sc == t_vals(tt)));
+                if has_time
+                    v_ki = ydata_sc(s_mask & k_mask & (tdata_sc == t_vals(tt)));
+                else
+                    v_ki = ydata_sc(s_mask & k_mask);
+                end
                 v_ki = v_ki(~isnan(v_ki));
                 if ~isempty(v_ki), multi_heat(ti,tt,ki) = mean(v_ki); end
             end
@@ -334,8 +340,10 @@ if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
             cb.Label.String = val_lbl;
         end
         cb.FontSize = 8;
-        cat_key = sprintf('rows (top-bot): %s', strjoin(top_cat_levels(1:K), ', '));
-        text(ax, -MARGIN+0.05, double(max_row)+1+MARGIN-0.1, cat_key, ...
+        key_lines = [{'rows:'}, arrayfun(@(k) sprintf('%d  %s', k, top_cat_levels{k}), ...
+            (1:K)', 'UniformOutput', false)'];
+        cat_key = strjoin(key_lines, newline);
+        text(ax, -MARGIN+0.05, -MARGIN+0.1, cat_key, ...
             'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
             'FontSize', 5.5, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
             'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...

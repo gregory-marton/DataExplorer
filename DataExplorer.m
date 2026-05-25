@@ -2721,9 +2721,22 @@ wide_yr_vals = panel.wide_yr_vals;
 n_yr = numel(wide_yr_vals);
 [yr_sorted, sort_ord] = sort(wide_yr_vals);
 
+% Exclude rows where any categorical column has a total-like value
+T_notot = T;
+for vn = string(T.Properties.VariableNames)
+    col_v = T_notot.(char(vn));
+    if ~iscategorical(col_v) && ~isstring(col_v) && ~iscellstr(col_v), continue; end
+    levs_v = unique(string(col_v));
+    levs_v = levs_v(~ismissing(levs_v));
+    tot_v  = levs_v(arrayfun(@(l) se_is_total_level(char(l)), levs_v));
+    if ~isempty(tot_v)
+        T_notot = T_notot(~ismember(string(col_v), tot_v), :);
+    end
+end
+
 yr_means = zeros(1, n_yr);
 for k = 1:n_yr
-    col = double(T.(prof.name{wide_yr_idxs(sort_ord(k))}));
+    col = double(T_notot.(prof.name{wide_yr_idxs(sort_ord(k))}));
     yr_means(k) = mean(col, 'omitnan');
 end
 
@@ -2744,8 +2757,12 @@ for k = 1:numel(panel.non_geo_idxs)
     catname = prof.name{ci};
     cat_col = T.(catname);
     if ~iscategorical(cat_col), continue; end
+    TOTAL_WORDS_PT = {'total', 'totals', 'grand total', 'all totals'};
     levels = cellstr(categories(cat_col));
+    is_tot_lev = cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS_PT)), levels);
+    levels = levels(~is_tot_lev);
     n_lev  = numel(levels);
+    if n_lev == 0, continue; end
     vars   = zeros(n_lev, 1);
     for lk = 1:n_lev
         mask = cat_col == levels{lk};
@@ -2858,6 +2875,10 @@ for k = 1:numel(cat_big)
         cat_col_k  = T.(catname_k);
         all_levels = cellstr(categories(cat_col_k));  % N×1 column
         cnt        = countcats(cat_col_k);            % N×1 column, same order
+        keep_k     = ~se_total_mask(all_levels);
+        all_levels = all_levels(keep_k);
+        cnt        = cnt(keep_k);
+        if isempty(all_levels), continue; end
         [~, ord]   = sort(cnt, 'descend');
         n_show     = min(TOP_K, numel(all_levels));
         top_levels = all_levels(ord(1:n_show));
@@ -2917,6 +2938,8 @@ function se_plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_yea
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
+levels  = levels(~se_total_mask(levels));
+if isempty(levels), return; end
 [colors, plot_order] = se_level_colors(levels);
 tdata   = T.(prof.name{time_idx});
 
@@ -3512,28 +3535,39 @@ geo_name  = prof.name{geo_idx};
 cat_name  = prof.name{cat_idx};
 is_states = se_looks_like_states(prof, geo_idx, T);
 
-% Top-K category levels by row frequency
+% Top-K category levels by row frequency, excluding total-like labels
+TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
 cat_col  = T.(cat_name);
 cat_levs = cellstr(categories(cat_col));
 cnt_levs = countcats(cat_col);
+is_tot   = cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), cat_levs);
+cat_levs = cat_levs(~is_tot);
+cnt_levs = cnt_levs(~is_tot);
+if isempty(cat_levs), return; end
 [~, ord] = sort(cnt_levs,'descend');
 K        = min(5, numel(cat_levs));
 top_levs = cat_levs(ord(1:K));
 
 if ~isempty(yr_idxs)
     T_long  = se_pivot_wide_to_long(T, prof, yr_idxs, yr_vals);
-    T_plot  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
+    T_filt  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
+    % Aggregate over years — time trend is already covered by the StateCode x year figure
+    geo_s   = string(T_filt.(geo_name));
+    cat_s   = string(T_filt.(cat_name));
+    [G, geo_u, cat_u] = findgroups(geo_s, cat_s);
+    val_u   = splitapply(@(v) mean(v, 'omitnan'), T_filt.Value, G);
+    T_plot  = table(geo_u, cat_u, val_u, 'VariableNames', {char(geo_name), char(cat_name), 'Value'});
     ydata_v = T_plot.Value(~isnan(T_plot.Value));
     if isempty(ydata_v) || min(ydata_v) >= max(ydata_v), return; end
-    title_str = sprintf('%s x %s: Value over time', geo_name, cat_name);
-    fprintf('  Geo x categorical sparklines: %s\n', title_str);
+    title_str = sprintf('%s x %s: mean Value by category', geo_name, cat_name);
+    fprintf('  Geo x categorical tile: %s\n', title_str);
     if is_states
         de_statebins(T_plot, 'StateCol',geo_name, 'ColorCol','Value', ...
-            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+            'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
             'TopK',K, 'Title',title_str);
     else
         de_countrybins(T_plot, 'CountryCol',geo_name, 'ColorCol','Value', ...
-            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+            'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
             'TopK',K, 'Title',title_str);
     end
 
@@ -3734,17 +3768,14 @@ B_CI  = 500;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 
-TOTAL_CODES = {'US','ALL','TOTAL','GRAND TOTAL'};
 levels_all = cellstr(categories(cat_col));
-levels_all = levels_all(~ismember(upper(levels_all), TOTAL_CODES));
-if isempty(levels_all), return; end
 
 [yr_sorted, sort_ord] = sort(yr_vals);
 yr_sorted  = yr_sorted(:);          % ensure column for fill polygon math
 yr_names_s = string(prof.name(yr_idxs(sort_ord)));
 n_yr = numel(yr_sorted);
 
-% Per-level row count and overall mean (for top-K selection)
+% Per-level row count and overall mean (for top-K selection and total detection)
 n_rows_all   = zeros(numel(levels_all), 1);
 overall_mean = NaN(numel(levels_all), 1);
 for li = 1:numel(levels_all)
@@ -3758,6 +3789,13 @@ for li = 1:numel(levels_all)
     end
     overall_mean(li) = mean(yr_means, 'omitnan');
 end
+
+% Exclude total/aggregate levels (string pattern + sum-of-others heuristic)
+keep = ~se_total_mask(levels_all, overall_mean);
+levels_all   = levels_all(keep);
+n_rows_all   = n_rows_all(keep);
+overall_mean = overall_mean(keep);
+if isempty(levels_all), return; end
 
 [~, ord]  = sort(overall_mean, 'descend', 'MissingPlacement', 'last');
 n_show    = min(TOP_K, numel(levels_all));
@@ -3853,5 +3891,40 @@ end
 title(ax, se_src_prefix(prof.source_name, sprintf('Trend by %s%s', catname, title_suf)), ...
     'FontSize', 10, 'Interpreter', 'none');
 box(ax, 'off');
+end
+
+
+% ── se_is_total_level ────────────────────────────────────────────────────────
+function tf = se_is_total_level(lv)
+% Case-insensitive word-boundary match for "total" in a level name.
+% Catches: 'Total', 'TOTAL', 'US Total', 'Grand Total', etc.
+tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b'));
+end
+
+
+% ── se_total_mask ────────────────────────────────────────────────────────────
+function mask = se_total_mask(levels, means)
+% Returns logical mask (true = aggregate/total, should be excluded).
+% Two-stage: (1) word-boundary 'total' pattern; (2) sum-of-others heuristic.
+% 'means' is optional; when omitted only the string check is applied.
+n = numel(levels);
+mask = false(n, 1);
+for li = 1:n
+    if se_is_total_level(levels{li}), mask(li) = true; end
+end
+if nargin < 2 || isempty(means), return; end
+% Sum-of-others: a level whose mean ≈ sum of all other levels' means is
+% likely a full aggregate (e.g. 'US' = sum of all states).
+% Require at least 4 other valid (non-NaN, positive) levels to be confident.
+valid = ~isnan(means) & means > 0 & ~mask;
+if sum(valid) < 4, return; end
+for li = 1:n
+    if mask(li) || isnan(means(li)) || means(li) <= 0, continue; end
+    others = valid;  others(li) = false;
+    sum_oth = sum(means(others));
+    if sum_oth > 0 && abs(means(li)/sum_oth - 1) < 0.30
+        mask(li) = true;
+    end
+end
 end
 % in the same directory as DataExplorer.m — callable from any script on the path.
