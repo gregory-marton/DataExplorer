@@ -118,8 +118,9 @@ if has_choro
     end
 end
 
-vmin = min(Heat(:), [], 'omitnan');
-vmax = max(Heat(:), [], 'omitnan');
+non_ov_heat = Heat(~IS_OVERFLOW, :);
+vmin = min(non_ov_heat(:), [], 'omitnan');
+vmax = max(non_ov_heat(:), [], 'omitnan');
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 if is_sparkline_cat || is_scatter_cat, has_choro = false; end
 
@@ -157,8 +158,9 @@ if is_sparkline_cat
         cat_colors_mat = lines(K);
     end
     if all(isnan(options.SharedYLim))
-        sh_lo = min(multi_heat(:),[],'omitnan');
-        sh_hi = max(multi_heat(:),[],'omitnan');
+        non_ov_mh = multi_heat(~IS_OVERFLOW,:,:);
+        sh_lo = min(non_ov_mh(:), [], 'omitnan');
+        sh_hi = max(non_ov_mh(:), [], 'omitnan');
     else
         sh_lo = options.SharedYLim(1);
         sh_hi = options.SharedYLim(2);
