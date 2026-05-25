@@ -1190,6 +1190,35 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Expected cat_heat patch object in figure');
         end
 
+        function test_tilegrid_sparkline_cat_no_timecol(testCase)
+            % sparkline_cat must draw cat_heat patches even without TimeCol.
+            % Pre-aggregated table: one row per state×category (no year column).
+            states = ["ME";"ME";"NY";"NY"];
+            cats   = ["A";"B";"A";"B"];
+            vals   = [1; 3; 2; 5];
+            T = table(string(states), categorical(cats), double(vals), ...
+                'VariableNames', {'State','Cat','Value'});
+            g.codes       = {'ME','NY'};
+            g.rows        = [0, 1];
+            g.cols        = [0, 0];
+            g.is_overflow = [false; false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, ...
+                'ColorCol','Value', ...
+                'CellRenderer','sparkline_cat', 'CatCol','Cat', 'TopK',5);
+            testCase.assertNotEmpty(fig, 'Expected a figure handle');
+            cl2 = onCleanup(@() close(fig));
+
+            heat_patches = findobj(fig, 'Type','patch', 'Tag','cat_heat');
+            testCase.verifyNotEmpty(heat_patches, ...
+                'sparkline_cat without TimeCol should still draw cat_heat patches');
+        end
+
         function test_statebins_sparkline_cat_passthrough(testCase)
             % de_statebins must forward CellRenderer options to de_tilegrid
             % and produce a cat_heat patch object.
