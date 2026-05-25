@@ -3551,23 +3551,17 @@ top_levs = cat_levs(ord(1:K));
 if ~isempty(yr_idxs)
     T_long  = se_pivot_wide_to_long(T, prof, yr_idxs, yr_vals);
     T_filt  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
-    % Aggregate over years — time trend is already covered by the StateCode x year figure
-    geo_s   = string(T_filt.(geo_name));
-    cat_s   = string(T_filt.(cat_name));
-    [G, geo_u, cat_u] = findgroups(geo_s, cat_s);
-    val_u   = splitapply(@(v) mean(v, 'omitnan'), T_filt.Value, G);
-    T_plot  = table(geo_u, cat_u, val_u, 'VariableNames', {char(geo_name), char(cat_name), 'Value'});
-    ydata_v = T_plot.Value(~isnan(T_plot.Value));
+    ydata_v = T_filt.Value(~isnan(T_filt.Value));
     if isempty(ydata_v) || min(ydata_v) >= max(ydata_v), return; end
-    title_str = sprintf('%s x %s: mean Value by category', geo_name, cat_name);
+    title_str = sprintf('%s x %s: Value by category over time', geo_name, cat_name);
     fprintf('  Geo x categorical tile: %s\n', title_str);
     if is_states
-        de_statebins(T_plot, 'StateCol',geo_name, 'ColorCol','Value', ...
-            'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+        de_statebins(T_filt, 'StateCol',geo_name, 'ColorCol','Value', ...
+            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
             'TopK',K, 'Title',title_str);
     else
-        de_countrybins(T_plot, 'CountryCol',geo_name, 'ColorCol','Value', ...
-            'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
+        de_countrybins(T_filt, 'CountryCol',geo_name, 'ColorCol','Value', ...
+            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
             'TopK',K, 'Title',title_str);
     end
 
