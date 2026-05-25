@@ -68,7 +68,7 @@ is_sparkline_cat = options.CellRenderer == "sparkline_cat" && ...
 
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
-if has_time && has_choro
+if has_time && (has_choro || is_sparkline_cat)
     tdata = T.(char(options.TimeCol));
     if isa(tdata, 'datetime')
         t_vals = unique(tdata(~isnat(tdata)));
