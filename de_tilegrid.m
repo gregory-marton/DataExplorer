@@ -361,6 +361,10 @@ if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
 end
 
 %% ── Category scatter (CellRenderer='scatter_cat') ────────────────────────────
+if is_scatter_cat && (K2 == 0 || isnan(sh_lo2) || sh_lo2 >= sh_hi2 || ...
+        isnan(sh_xlim(1)) || sh_xlim(1) >= sh_xlim(2))
+    fprintf('  ℹ de_tilegrid scatter_cat: skipped (constant or empty x/y range).\n');
+end
 if is_scatter_cat && K2 > 0 && ~isnan(sh_lo2) && sh_lo2 < sh_hi2 && ...
         ~isnan(sh_xlim(1)) && sh_xlim(1) < sh_xlim(2)
     tile_w = 1 - 2*GAP;
