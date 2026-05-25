@@ -204,7 +204,10 @@ tile_px = 36;
 needs_cbar = has_choro || is_sparkline_cat;
 fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(needs_cbar)));
 fig_h   = min(1000, max(380, round((max_row + 2) * tile_px)));
-fig = figure('Color', BG, 'NumberTitle', 'off', 'Position', [100 100 fig_w fig_h]);
+fig = figure('Color', BG, 'NumberTitle', 'off');
+if ~strcmp(fig.WindowStyle, 'docked')
+    fig.Position(3:4) = [fig_w, fig_h];
+end
 if options.Title ~= "", fig.Name = char(options.Title); end
 
 ax_right = 0.82 + 0.10 * double(~needs_cbar);
