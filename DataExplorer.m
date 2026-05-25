@@ -3539,9 +3539,28 @@ if ~isempty(yr_idxs)
             'TopK',K, 'SharedYLim',sh_ylim, 'Title',title_str);
     end
 
-% Note: scatter_cat branch (when wide_yr_idxs is empty but num_idxs >= 2)
-% requires XCol/YCol/SharedXLim support in de_statebins/de_countrybins,
-% not yet implemented (scatter_cat renderer, see plan: 2026-05-25-geo-multi-categorical-sparklines.md Task 4).
+
+elseif numel(num_idxs) >= 2
+    num1_name = prof.name{num_idxs(1)};
+    num2_name = prof.name{num_idxs(2)};
+    T_plot    = T(ismember(string(T.(cat_name)), string(top_levs)), :);
+    xd = T_plot.(num1_name);  xd = xd(~isnan(xd));
+    yd = T_plot.(num2_name);  yd = yd(~isnan(yd));
+    if isempty(xd) || isempty(yd), return; end
+    sh_xlim   = [min(xd), max(xd)];
+    sh_ylim2  = [min(yd), max(yd)];
+    if sh_xlim(1) >= sh_xlim(2) || sh_ylim2(1) >= sh_ylim2(2), return; end
+    title_str = sprintf('%s x %s: %s vs %s', geo_name, cat_name, num1_name, num2_name);
+    fprintf('  Geo x categorical scatter: %s\n', title_str);
+    if is_states
+        de_statebins(T_plot, 'StateCol',geo_name, 'CellRenderer','scatter_cat', ...
+            'CatCol',cat_name, 'XCol',num1_name, 'YCol',num2_name, ...
+            'SharedXLim',sh_xlim, 'SharedYLim',sh_ylim2, 'Title',title_str);
+    else
+        de_countrybins(T_plot, 'CountryCol',geo_name, 'CellRenderer','scatter_cat', ...
+            'CatCol',cat_name, 'XCol',num1_name, 'YCol',num2_name, ...
+            'SharedXLim',sh_xlim, 'SharedYLim',sh_ylim2, 'Title',title_str);
+    end
 end
 end
 

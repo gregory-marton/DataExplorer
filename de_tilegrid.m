@@ -44,6 +44,9 @@ arguments
     options.TopK              (1,1) double  = 5
     options.SharedYLim        (1,2) double  = [NaN NaN]
     options.CatColors                       = []
+    options.XCol              (1,1) string  = ""
+    options.YCol              (1,1) string  = ""
+    options.SharedXLim        (1,2) double  = [NaN NaN]
 end
 
 fig = []; ax = [];
@@ -65,6 +68,11 @@ is_sparkline_cat = options.CellRenderer == "sparkline_cat" && ...
     options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
     options.ColorCol ~= "" && ismember(options.ColorCol, varnames) && ...
     has_time && numel(normed) == height(T) && height(T) > 0;
+is_scatter_cat = options.CellRenderer == "scatter_cat" && ...
+    options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
+    options.XCol ~= "" && ismember(options.XCol, varnames) && ...
+    options.YCol ~= "" && ismember(options.YCol, varnames) && ...
+    numel(normed) == height(T) && height(T) > 0;
 
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
@@ -153,6 +161,38 @@ if is_sparkline_cat
     else
         sh_lo = options.SharedYLim(1);
         sh_hi = options.SharedYLim(2);
+    end
+end
+
+%% ── Scatter cat data ─────────────────────────────────────────────────────────
+xdata_sc2 = []; ydata_sc2 = []; cat_col_sc2 = categorical([]);
+sh_xlim = [NaN NaN]; K2 = 0; top_cat_levels2 = {}; cat_colors_mat2 = [];
+sh_lo2 = NaN; sh_hi2 = NaN;
+if is_scatter_cat
+    xdata_sc2   = double(T.(char(options.XCol)));
+    ydata_sc2   = double(T.(char(options.YCol)));
+    cat_col_sc2 = categorical(string(T.(char(options.CatCol))));
+    all_lv2     = cellstr(categories(cat_col_sc2));
+    cnt_lv2     = countcats(cat_col_sc2);
+    [~, ord2]   = sort(cnt_lv2,'descend');
+    K2          = min(options.TopK, numel(all_lv2));
+    top_cat_levels2 = all_lv2(ord2(1:K2));
+    if ~isempty(options.CatColors) && size(options.CatColors,1) >= K2
+        cat_colors_mat2 = options.CatColors(1:K2,:);
+    else
+        cat_colors_mat2 = lines(K2);
+    end
+    if all(isnan(options.SharedXLim))
+        sh_xlim = [min(xdata_sc2,[],'omitnan'), max(xdata_sc2,[],'omitnan')];
+    else
+        sh_xlim = options.SharedXLim;
+    end
+    if all(isnan(options.SharedYLim))
+        sh_lo2 = min(ydata_sc2,[],'omitnan');
+        sh_hi2 = max(ydata_sc2,[],'omitnan');
+    else
+        sh_lo2 = options.SharedYLim(1);
+        sh_hi2 = options.SharedYLim(2);
     end
 end
 
@@ -317,6 +357,37 @@ if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
             'DisplayName', top_cat_levels{ki});
     end
     legend(leg_h, 'Location','southeast', 'FontSize', 6, 'Interpreter','none');
+end
+
+%% ── Category scatter (CellRenderer='scatter_cat') ────────────────────────────
+if is_scatter_cat && K2 > 0 && ~isnan(sh_lo2) && sh_lo2 < sh_hi2 && ...
+        ~isnan(sh_xlim(1)) && sh_xlim(1) < sh_xlim(2)
+    tile_w = 1 - 2*GAP;
+    for ti = 1:n_tiles
+        s_mask = normed == CODES{ti};
+        if ~any(s_mask), continue; end
+        r = ROWS(ti);  c = COLS(ti);
+        for ki = 1:K2
+            k_mask = cat_col_sc2 == top_cat_levels2{ki};
+            pts = s_mask & k_mask & ~isnan(xdata_sc2) & ~isnan(ydata_sc2);
+            if ~any(pts), continue; end
+            xn = (xdata_sc2(pts) - sh_xlim(1)) / (sh_xlim(2) - sh_xlim(1));
+            yn = (ydata_sc2(pts) - sh_lo2)      / (sh_hi2 - sh_lo2);
+            x_plot = c + GAP + xn * tile_w;
+            y_plot = r + GAP + (1 - yn) * tile_w;
+            line(ax, x_plot, y_plot, 'Color', cat_colors_mat2(ki,:), ...
+                'LineStyle','none', 'Marker','.', 'MarkerSize', 4, ...
+                'Tag', 'cat_scatter');
+        end
+    end
+    leg_h2 = gobjects(K2,1);
+    for ki = 1:K2
+        leg_h2(ki) = line(nan, nan, 'Parent', ax, ...
+            'Color', cat_colors_mat2(ki,:), 'LineWidth', 1.5, ...
+            'DisplayName', top_cat_levels2{ki}, ...
+            'LineStyle','none', 'Marker','.');
+    end
+    legend(leg_h2, 'Location','southeast', 'FontSize',6, 'Interpreter','none');
 end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────

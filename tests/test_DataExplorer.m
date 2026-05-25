@@ -1245,6 +1245,37 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Expected a figure with both StateCode and MSN in its name');
         end
 
+        function test_tilegrid_scatter_cat_draws_points(testCase)
+            % de_tilegrid with CellRenderer='scatter_cat' draws scatter points
+            % (line objects with Tag='cat_scatter') for each non-empty tile.
+            n = 16;
+            states = repelem(["ME";"NY"], 8);
+            cats   = repmat(repelem(["A";"B"], 4), 2, 1);
+            xv = (1:16)';  yv = randn(16,1);
+            T = table(string(states), categorical(cats), xv, yv, ...
+                'VariableNames', {'State','Cat','X','Y'});
+            g.codes       = {'ME','NY'};
+            g.rows        = [0, 1];
+            g.cols        = [0, 0];
+            g.is_overflow = [false; false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, ...
+                'CellRenderer','scatter_cat', 'CatCol','Cat', ...
+                'XCol','X', 'YCol','Y', 'TopK',5, ...
+                'SharedXLim',[1,16], 'SharedYLim',[-3,3]);
+            testCase.assertNotEmpty(fig, 'Expected a figure handle');
+            cl2 = onCleanup(@() close(fig));
+
+            pts = findobj(fig, 'Type','line', 'Tag','cat_scatter');
+            testCase.verifyGreaterThanOrEqual(numel(pts), 1, ...
+                'Expected cat_scatter line objects in the figure');
+        end
+
     end
 
 end

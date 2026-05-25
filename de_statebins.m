@@ -65,14 +65,18 @@ arguments
     options.TopK              (1,1) double  = 5
     options.SharedYLim        (1,2) double  = [NaN NaN]
     options.CatColors                       = []
+    options.XCol              (1,1) string  = ""
+    options.YCol              (1,1) string  = ""
+    options.SharedXLim        (1,2) double  = [NaN NaN]
 end
 
 fig = []; ax = [];
 
 %% ── Validate ─────────────────────────────────────────────────────────────────
 varnames  = string(T.Properties.VariableNames);
+needs_color = options.CellRenderer == "color" || options.CellRenderer == "sparkline_cat";
 if options.StateCol == "" || ~ismember(options.StateCol, varnames) || ...
-   options.ColorCol == ""
+   (needs_color && options.ColorCol == "")
     fprintf('  ℹ de_statebins: need StateCol + ColorCol — nothing to plot.\n');
     return
 end
@@ -164,7 +168,10 @@ g.is_overflow = IS_OVERFLOW;
     'CatCol',        options.CatCol, ...
     'TopK',          options.TopK, ...
     'SharedYLim',    options.SharedYLim, ...
-    'CatColors',     options.CatColors);
+    'CatColors',     options.CatColors, ...
+    'XCol',          options.XCol, ...
+    'YCol',          options.YCol, ...
+    'SharedXLim',    options.SharedXLim);
 
 end % de_statebins
 
