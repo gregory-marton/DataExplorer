@@ -296,7 +296,42 @@ title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', 11, 'Interpreter', 'none');
 
-%% ── Sparklines suppressed: choropleth color already encodes temporal mean ─────
+%% ── Sparklines (per-tile time series) ───────────────────────────────────────
+if has_spark && has_choro && ~is_sparkline_cat
+    tile_h   = 1 - 2*GAP;
+    SPARK_MX = 0.10;
+    x_ticks  = linspace(0, 1, n_t);
+    for ti = 1:n_tiles
+        if all(isnan(Heat(ti,:))), continue; end
+        r = ROWS(ti);  c = COLS(ti);
+        spark_y_top = r + GAP + (1 - 0.28) * tile_h;
+        spark_y_bot = r + 1 - GAP - 0.01;
+        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
+        heat_row = Heat(ti, :);
+        if vmax > vmin
+            norm_h = (heat_row - vmin) / (vmax - vmin);
+        else
+            norm_h = 0.5 * ones(1, n_t);
+        end
+        y_spark = spark_y_bot - norm_h * (spark_y_bot - spark_y_top);
+        y_spark(isnan(heat_row)) = NaN;
+        fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
+        tc = tg_text_color(fc);
+        line(ax, x_spark, y_spark, 'Color', tc, 'LineWidth', 0.8, 'Tag', 'sparkline');
+    end
+end
+
+%% ── Legend key ───────────────────────────────────────────────────────────────
+if has_spark && has_choro && ~is_sparkline_cat
+    t1s = tg_yr_str(t_vals, 1, is_year_axis);
+    tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
+    key_str = ['color: mean  |  spark: ' t1s char(8594) tns];
+    text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
+        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
+        'FontSize', 6.5, 'Interpreter', 'none', 'Tag', 'legend_key', ...
+        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+        'Margin', 3, 'LineWidth', 0.5);
+end
 
 %% ── Category heatmap (CellRenderer='sparkline_cat': x=time, y=category, color=value)
 if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi

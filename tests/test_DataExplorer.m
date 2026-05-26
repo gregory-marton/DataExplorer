@@ -1686,6 +1686,11 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
         function test_netcdf_spatial_recipe_contains_geoscatter(testCase)
             % Recipe for a spatial grid NetCDF must call StrideSample and de_geoscatter.
+            % Clean up any stale recipe files before running so the "newest" check is reliable.
+            stale = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            for si = 1:numel(stale)
+                delete(fullfile(stale(si).folder, stale(si).name));
+            end
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 8; nlat = 6; ntime = 3;
