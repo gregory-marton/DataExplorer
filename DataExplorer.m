@@ -2584,6 +2584,60 @@ end
 end
 
 
+% ── cg_state_choropleth_code ────────────────────────────────────────────────
+function code = cg_state_choropleth_code(T, prof)
+%CG_STATE_CHOROPLETH_CODE  Return recipe code for state choropleth figures.
+code = '';
+cat_all = find(prof.type == "categorical" & ~prof.skip);
+geo_idx = [];
+for ci = cat_all(:)'
+    if se_looks_like_states(prof, ci, T)
+        geo_idx = ci; break;
+    end
+end
+if isempty(geo_idx), return; end
+
+catname = prof.name{geo_idx};
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+[time_idx, ~] = se_find_time_axis(prof);
+num_idxs = find(prof.type == "numeric" & ~prof.skip);
+L = {};
+
+if ~isempty(wide_yr_idxs)
+    [yr_sorted, yr_ord] = sort(wide_yr_vals);
+    yr_names_s = prof.name(wide_yr_idxs(yr_ord));
+    yr_cell = strjoin(cellfun(@(s) sprintf('''%s''', s), yr_names_s, 'UniformOutput', false), ', ');
+    yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput', false), ', ');
+
+    L{end+1} = sprintf('%% Choropleth: %s (wide years → long)', catname);
+    L{end+1} = sprintf('yr_ch = {%s};', yr_cell);
+    L{end+1} = sprintf('yr_v_ch = [%s];', yr_vec);
+    L{end+1} = 'n_yr_ch = numel(yr_v_ch); n_r_ch = height(T);';
+    L{end+1} = 'kp_ch = setdiff(T.Properties.VariableNames, yr_ch);';
+    L{end+1} = 'T_long_ch = repmat(T(:,kp_ch), n_yr_ch, 1);';
+    L{end+1} = 'T_long_ch.Year = repelem(yr_v_ch(:), n_r_ch);';
+    L{end+1} = 'T_long_ch.Value = reshape(cell2mat(arrayfun(@(c) double(T.(c{1})), yr_ch, ''UniformOutput'', false).''), [], 1);';
+    L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
+    L{end+1} = '';
+else
+    num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    for j = 1:numel(num_plot)
+        ncn = prof.name{num_plot(j)};
+        if isempty(time_idx)
+            L{end+1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, ncn); %#ok<AGROW>
+        else
+            tcn = prof.name{time_idx};
+            L{end+1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, tcn, ncn); %#ok<AGROW>
+        end
+        L{end+1} = ''; %#ok<AGROW>
+    end
+end
+
+if isempty(L), return; end
+code = strjoin(L, newline);
+end
+
+
 % ── se_assemble_recipe ───────────────────────────────────────────────────────
 function recipe_path = se_assemble_recipe(filepath, T, prof, panel, options)
 %SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
@@ -2613,9 +2667,10 @@ else
     sel = se_select_columns(T, prof, options.MaxVars);
 end
 
-load_code  = cg_load_code(filepath, T);
-clean_code = cg_clean_code();
-plots_code = cg_best_plots_code(T, prof, sel, prof.source_name);
+load_code   = cg_load_code(filepath, T);
+clean_code  = cg_clean_code();
+plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
+choro_code  = cg_state_choropleth_code(T, prof);
 
 header = sprintf([...
     '%% DataExplorer recipe — %s\n' ...
@@ -2631,6 +2686,11 @@ sections = { ...
     '%% === Clean ===', clean_code, '', ...
     '%% === Best-of Plots ===', plots_code ...
 };
+if ~isempty(choro_code)
+    sections{end+1} = '';
+    sections{end+1} = '%% === State Choropleth ===';
+    sections{end+1} = choro_code;
+end
 
 script_text = strjoin(sections, newline);
 

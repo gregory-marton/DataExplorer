@@ -1366,6 +1366,33 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyNotEmpty(hits, 'Expected a recipe file in tempdir');
         end
 
+        function test_cg_state_choropleth_code_wide_years(testCase)
+            % cg_state_choropleth_code for a wide-year panel must emit a de_statebins call
+            % with TimeCol='Year'. We test via the recipe file written by DataExplorer.
+            % 3 states × 3 reps each → 9 rows so states are not all-unique (ID check).
+            % 3 year columns so se_detect_wide_years returns non-empty (requires >= 3).
+            states = categorical(repelem(["ME";"NY";"CA"], 3));
+            T = table(states, repmat([1;2;3],3,1), repmat([4;5;6],3,1), repmat([7;8;9],3,1), ...
+                'VariableNames', {'StateCode','x2020','x2021','x2022'});
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'Expected a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
+                'Recipe must contain de_statebins call');
+            testCase.verifyTrue(contains(recipe_text, 'TimeCol'), ...
+                'Recipe must pass TimeCol for wide-year dataset');
+        end
+
     end
 
 end
