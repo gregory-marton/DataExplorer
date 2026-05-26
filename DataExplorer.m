@@ -80,26 +80,56 @@ if ischar(source) || isstring(source)
                 numel(data_vars_), n_plot_);
             T = table();
             for nc_vi_ = 1:n_plot_
-                opts_vi_            = options;
-                opts_vi_.NCVariable = string(data_vars_{nc_vi_});
-                try
-                    T_vi_ = se_load(string(source), opts_vi_);
-                catch ME_
-                    fprintf('  ⚠ Skipping "%s": %s\n', data_vars_{nc_vi_}, ME_.message);
-                    continue
+                vname_vi_  = data_vars_{nc_vi_};
+                T_vi_      = table();   %#ok<NASGU>
+                recipe_vi_ = '';       %#ok<NASGU>
+                if nc_is_spatial_grid(nc_info_, vname_vi_)
+                    % ── Spatial grid: stride sample + geo scatter ─────────────
+                    fprintf('  [%d/%d] Spatial grid "%s" — stride sampling…\n', ...
+                        nc_vi_, n_plot_, vname_vi_);
+                    try
+                        T_vi_ = SampleNetCDF(string(source), ...
+                            Variable=string(vname_vi_), ...
+                            MaxRows=options.MaxRows, Verbose=false);
+                    catch ME_
+                        if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
+                        fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
+                        continue
+                    end
+                    [~, fn_, fe_] = fileparts(string(source));
+                    vname_safe_   = matlab.lang.makeValidName(vname_vi_);
+                    time_col_     = 'time';
+                    if ~ismember(time_col_, T_vi_.Properties.VariableNames)
+                        time_col_ = T_vi_.Properties.VariableNames{3};
+                    end
+                    de_geoscatter(T_vi_.longitude, T_vi_.latitude, ...
+                        double(T_vi_.(time_col_)), T_vi_.(vname_safe_), ...
+                        ColorLabel="time", SizeLabel=string(vname_vi_), ...
+                        Title=string(sprintf('%s%s — %s', fn_, fe_, vname_vi_)));
+                    recipe_vi_ = cg_netcdf_spatial_recipe(string(source), vname_vi_);
+                else
+                    % ── Tabular path: existing pipeline ───────────────────────
+                    opts_vi_            = options;
+                    opts_vi_.NCVariable = string(vname_vi_);
+                    try
+                        T_vi_ = se_load(string(source), opts_vi_);
+                    catch ME_
+                        if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
+                        fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
+                        continue
+                    end
+                    [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
+                    [~, fn_, fe_]     = fileparts(string(source));
+                    prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, vname_vi_);
+                    se_echo_load_code(string(source), T_vi_);
+                    se_report(T_vi_, prof_vi_);
+                    panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
+                    se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
+                    recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, ...
+                        panel_vi_, opts_vi_);
                 end
-                [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
-                [~, fn_, fe_]     = fileparts(string(source));
-                prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, data_vars_{nc_vi_});
-                se_echo_load_code(string(source), T_vi_);
-                se_report(T_vi_, prof_vi_);
-                panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
-                se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
-                recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, panel_vi_, opts_vi_);
                 if ~isempty(recipe_vi_)
-                    T_ret_ = T_vi_;
-                    run(recipe_vi_);
-                    T_vi_  = T_ret_;
+                    T_ret_ = T_vi_; run(recipe_vi_); T_vi_ = T_ret_;
                 end
                 T = T_vi_;
             end
@@ -699,6 +729,8 @@ function T = load_netcdf(filepath, options)
         fprintf('    [2]  Single index along a dimension\n');
         fprintf('    [3]  Flatten everything to long-format table\n');
 
+        auto_ival = 1;   % middle slice index, set by NCVariable heuristic below
+
         % Resolve reduction choice non-interactively when requested
         nc_red = lower(char(options.NCReduction));
         if ismember(nc_red, {'flatten','mean','slice'})
@@ -721,9 +753,10 @@ function T = load_netcdf(filepath, options)
                         dim_choice = k; break;
                     end
                 end
-                raw = '1';
-                fprintf('  Auto: mean over "%s" (%d elements > MaxRows×10)\n', ...
-                    dim_names{dim_choice}, total_elems);
+                raw = '2';
+                auto_ival = ceil(sz(dim_choice) / 2);
+                fprintf('  Auto: middle slice of "%s" (index %d/%d, %d elements > MaxRows×10)\n', ...
+                    dim_names{dim_choice}, auto_ival, sz(dim_choice), total_elems);
             end
         else
             while true
@@ -784,6 +817,10 @@ function T = load_netcdf(filepath, options)
                         ival = options.NCSliceIndex;
                         fprintf('  Using NCSliceIndex=%d\n', ival);
                         break;
+                    elseif strlength(options.NCVariable) > 0
+                        ival = auto_ival;
+                        fprintf('  Auto slice: index %d of %d\n', ival, sz(dim_choice));
+                        break;
                     end
                     raw2 = input('  Which index? ', 's');
                     ival = str2double(raw2);
@@ -838,6 +875,47 @@ for k = 1:numel(info.Variables)
         data_vars{end+1} = v.Name; %#ok<AGROW>
     end
 end
+end
+
+function tf = nc_is_spatial_grid(info, varname)
+%NC_IS_SPATIAL_GRID  True when varname is a 3D variable with lat-like and lon-like dims.
+    var_idx = find(strcmp({info.Variables.Name}, varname), 1);
+    if isempty(var_idx), tf = false; return; end
+    v = info.Variables(var_idx);
+    if isempty(v.Dimensions) || numel(v.Dimensions) ~= 3
+        tf = false; return;
+    end
+    dim_names = {v.Dimensions.Name};
+    has_lat = any(~cellfun('isempty', regexpi(dim_names, 'lat|latitude|^y$', 'once')));
+    has_lon = any(~cellfun('isempty', regexpi(dim_names, 'lon|longitude|^x$', 'once')));
+    tf = has_lat && has_lon;
+end
+
+function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
+%CG_NETCDF_SPATIAL_RECIPE  Write a recipe for a spatial NetCDF grid variable.
+%   Recipe calls SampleNetCDF + de_geoscatter — both are public library
+%   functions the student can re-use with different arguments.
+    vname_safe = matlab.lang.makeValidName(varname);
+    L = {};
+    L{end+1} = sprintf('%% DataExplorer recipe — %s [%s]', filepath, varname);
+    L{end+1} = '';
+    L{end+1} = 'addpath(fileparts(which(''DataExplorer'')));';
+    L{end+1} = '';
+    L{end+1} = '% Load with stride sampling (never reads the full array)';
+    L{end+1} = sprintf('T = SampleNetCDF(''%s'', Variable=''%s'');', filepath, varname);
+    L{end+1} = '';
+    L{end+1} = '% Geo scatter: color = time, size = value';
+    L{end+1} = sprintf('de_geoscatter(T.longitude, T.latitude, double(T.time), T.%s, ...', ...
+        vname_safe);
+    L{end+1} = sprintf('    ColorLabel="time", SizeLabel="%s");', varname);
+    code = strjoin(L, newline);
+
+    [~, basename] = fileparts(filepath);
+    recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s_%s.m', ...
+        matlab.lang.makeValidName(basename), vname_safe));
+    fid = fopen(recipe_path, 'w');
+    fprintf(fid, '%s\n', code);
+    fclose(fid);
 end
 
 function rc = filter_coords(coord_vars, dim_names)

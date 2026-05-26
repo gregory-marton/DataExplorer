@@ -1565,6 +1565,186 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must produce a Choropleth figure via de_statebins');
         end
 
+        function test_de_geoscatter_produces_figure_with_colorbar_and_scatter(testCase)
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            rng(42);
+            n     = 60;
+            lon_v = linspace(-120,-70,n)';
+            lat_v = linspace(25,50,n)';
+            t_v   = sort(randi(12,n,1));
+            val_v = randn(n,1);   % signed values — size mapping must handle negatives
+
+            [fig, ax] = de_geoscatter(lon_v, lat_v, double(t_v), val_v, ...
+                ColorLabel="Month", SizeLabel="Anomaly");
+
+            cl2 = onCleanup(@() close(fig));
+            testCase.verifyTrue(isgraphics(fig, 'figure'), 'Expected a figure');
+            testCase.verifyTrue(isgraphics(ax,  'axes'),   'Expected main axes');
+            cb = findobj(fig, 'Type', 'colorbar');
+            testCase.verifyNotEmpty(cb, 'Expected a colorbar');
+            sc = findobj(fig, 'Type', 'scatter');
+            testCase.verifyNotEmpty(sc, 'Expected at least one scatter object');
+            testCase.verifyEqual(string(cb(1).Label.String), "Month");
+        end
+
+        function test_samplenetcdf_returns_table_within_maxrows(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 30; nlat = 20; ntime = 5;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(25,55,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            T = SampleNetCDF(tmp, Variable='prcp', MaxRows=100, Verbose=false);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyLessThanOrEqual(height(T), 120, ...
+                'SampleNetCDF should not exceed MaxRows significantly');
+            expected_cols = {'longitude','latitude','time','prcp'};
+            for k = 1:numel(expected_cols)
+                testCase.verifyTrue(ismember(expected_cols{k}, T.Properties.VariableNames), ...
+                    sprintf('Expected column "%s"', expected_cols{k}));
+            end
+        end
+
+        function test_samplenetcdf_latrange_filters_rows(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 10; nlat = 10; ntime = 3;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(0,90,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            T = SampleNetCDF(tmp, Variable='prcp', LatRange=[30 60], Verbose=false);
+            testCase.verifyTrue(all(T.latitude >= 30 & T.latitude <= 60), ...
+                'All returned rows must satisfy LatRange');
+            testCase.verifyGreaterThan(height(T), 0, 'Expected some rows in LatRange [30,60]');
+        end
+
+        function test_samplenetcdf_auto_selects_first_data_variable(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nccreate(tmp,'longitude','Dimensions',{'longitude',4},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', 3},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     2},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',4,'latitude',3,'time',2},'Format','classic');
+            ncwrite(tmp,'longitude', [-120;-110;-100;-90]);
+            ncwrite(tmp,'latitude',  [30;40;50]);
+            ncwrite(tmp,'time',      [1;2]);
+            ncwrite(tmp,'prcp',      rand(4,3,2));
+
+            T = SampleNetCDF(tmp, Verbose=false);
+            testCase.verifyTrue(ismember('prcp', T.Properties.VariableNames), ...
+                'Expected data variable "prcp" in output table');
+        end
+
+        function test_netcdf_spatial_grid_produces_geoscatter_figure(testCase)
+            % DataExplorer on a lon×lat×time NetCDF must produce a "Geo Scatter" figure.
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 8; nlat = 6; ntime = 3;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(25,55,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            figs_before = findobj(0,'Type','figure');
+
+            DataExplorer(tmp);
+
+            figs_after = findobj(0,'Type','figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cl3 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            fig_names = arrayfun(@(f) get(f,'Name'), new_figs, 'UniformOutput', false);
+            has_geo   = any(cellfun(@(n) contains(lower(n),'geo scatter'), fig_names));
+            testCase.verifyTrue(has_geo, ...
+                'Expected a "Geo Scatter" figure for a spatial grid NetCDF variable');
+        end
+
+        function test_netcdf_spatial_recipe_contains_geoscatter(testCase)
+            % Recipe for a spatial grid NetCDF must call SampleNetCDF and de_geoscatter.
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 8; nlat = 6; ntime = 3;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(25,55,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'Expected a recipe file in tempdir');
+            [~, newest] = max([hits.datenum]);
+            recipe_path = fullfile(hits(newest).folder, hits(newest).name);
+            recipe_text = fileread(recipe_path);
+
+            testCase.verifyTrue(contains(recipe_text, 'SampleNetCDF'), ...
+                'Recipe must call SampleNetCDF');
+            testCase.verifyTrue(contains(recipe_text, 'de_geoscatter'), ...
+                'Recipe must call de_geoscatter');
+
+            info = checkcode(recipe_path, '-string');
+            n    = numel(regexp(info, 'L \d+', 'match'));
+            testCase.verifyEqual(n, 0, ...
+                sprintf('Recipe has %d checkcode issue(s):\n%s', n, info));
+        end
+
+        function test_load_netcdf_large_3d_uses_slice_not_mean(testCase)
+            % A 3D variable larger than MaxRows×10 must load without hanging.
+            % raw='1' (mean over full array) hangs; raw='2' (middle slice) reads dim_a×dim_b only.
+            % Neutral dim names (dim_a, dim_b, dim_c) avoid geo/timeseries plot detectors.
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            na = 50; nb = 40; nc_dim = 8;   % 16000 elements, MaxRows=100 → 16000 >> 1000
+            nccreate(tmp,'dim_a','Dimensions',{'dim_a',na},'Format','classic');
+            nccreate(tmp,'dim_b','Dimensions',{'dim_b',nb},'Format','classic');
+            nccreate(tmp,'dim_c','Dimensions',{'dim_c',nc_dim},'Format','classic');
+            nccreate(tmp,'value','Dimensions',{'dim_a',na,'dim_b',nb,'dim_c',nc_dim},'Format','classic');
+            ncwrite(tmp,'dim_a', (1:na)');
+            ncwrite(tmp,'dim_b', (1:nb)');
+            ncwrite(tmp,'dim_c', (1:nc_dim)');
+            ncwrite(tmp,'value', rand(na,nb,nc_dim));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            % NCVariable bypasses fast-path, goes through load_netcdf heuristic.
+            % MaxRows=100 forces total_elems (16000) >> MaxRows*10 (1000) → raw='2' heuristic fires.
+            T = DataExplorer(tmp, NCVariable='value', MaxRows=100);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyGreaterThan(height(T), 0);
+        end
+
     end
 
 end
