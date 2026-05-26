@@ -10,8 +10,10 @@ function de_histogram(varargin)
 %
 %   Optional name-value arguments (append after positional args)
 %   ─────────────────────────────────────────────────────────────
-%   XLim   [lo, hi]   Fix x-axis limits.  Useful for comparing
-%                     distributions of the same variable across subsets.
+%   XLim      [lo, hi]  Fix x-axis limits.  Useful for comparing
+%                       distributions of the same variable across subsets.
+%   FontSize  scalar    Base font size (pt) for axes labels, ticks, and title.
+%                       NaN (default) keeps MATLAB's default.
 %
 %   Requires no toolboxes.
 
@@ -30,9 +32,11 @@ else
 end
 
 p = inputParser;
-addParameter(p, 'XLim', [NaN NaN]);
+addParameter(p, 'XLim',     [NaN NaN]);
+addParameter(p, 'FontSize', NaN);
 parse(p, nv_args{:});
-xlim_opt = p.Results.XLim;
+xlim_opt     = p.Results.XLim;
+fontsize_opt = p.Results.FontSize;
 
 if new_fig
     fig = figure('Color', [1 1 1], 'NumberTitle', 'off', ...
@@ -58,6 +62,9 @@ else
 end
 if ~any(isnan(xlim_opt))
     xlim(ax, xlim_opt);
+end
+if ~isnan(fontsize_opt)
+    ax.FontSize = fontsize_opt;
 end
 box(ax, 'off');
 end

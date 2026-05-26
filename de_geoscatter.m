@@ -31,6 +31,10 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %   SizeLim     ([NaN NaN])     Fix the data range used for size normalization [lo, hi].
 %                               Values outside the range are clamped to MinSize/MaxSize.
 %                               Useful for comparing std or range across variables.
+%   Colormap    ('parula')      Colormap name or Nx3 matrix.  Use a diverging map
+%                               (e.g. 'rdbu') for anomaly or centered data.
+%   FontSize    (NaN)           Base font size (pt) for axes labels, ticks, and title.
+%                               NaN keeps MATLAB's default.
 %   Parent      ([ ])           Axes handle to draw into.  When supplied, no new figure
 %                               is created and the size legend is omitted (use a shared
 %                               legend or colorbar at the layout level instead).
@@ -48,6 +52,8 @@ arguments
     options.MaxSize    (1,1) double  = 200
     options.ColorLim   (1,2) double  = [NaN NaN]
     options.SizeLim    (1,2) double  = [NaN NaN]
+    options.Colormap                 = 'parula'
+    options.FontSize   (1,1) double  = NaN
     options.Parent                   = []
 end
 
@@ -84,12 +90,16 @@ end
 
 %% ── Main scatter ──────────────────────────────────────────────────────────────
 scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
-colormap(ax, parula(256));
+colormap(ax, options.Colormap);
 if ~any(isnan(options.ColorLim))
     clim(ax, options.ColorLim);
 end
 cb              = colorbar(ax);
 cb.Label.String = char(options.ColorLabel);
+if ~isnan(options.FontSize)
+    ax.FontSize        = options.FontSize;
+    cb.Label.FontSize  = options.FontSize;
+end
 xlabel(ax, 'Longitude');
 ylabel(ax, 'Latitude');
 if strlength(options.Title) > 0
