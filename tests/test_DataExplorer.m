@@ -1745,6 +1745,121 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyGreaterThan(height(T), 0);
         end
 
+        function test_stridesample_tabular_returns_within_maxrows(testCase)
+            % StrideSample on a CSV with 500 rows and MaxRows=50 must return ≤ 60 rows.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'idx,val\n');
+            for i = 1:500
+                fprintf(fid, '%d,%d\n', i, i*2);
+            end
+            fclose(fid);
+
+            T = StrideSample(string(tmp), MaxRows=50, Verbose=false);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyLessThanOrEqual(height(T), 60, ...
+                'StrideSample tabular should not exceed MaxRows significantly');
+            testCase.verifyGreaterThan(height(T), 0, 'Expected non-empty output');
+        end
+
+        function test_stridesample_tabular_spans_full_range(testCase)
+            % Stride sampling should produce rows from across the file (not just the top).
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'idx,val\n');
+            for i = 1:1000
+                fprintf(fid, '%d,%d\n', i, i*2);
+            end
+            fclose(fid);
+
+            T = StrideSample(string(tmp), MaxRows=100, Verbose=false);
+            idx_col = double(T.idx);
+            testCase.verifyLessThan(min(idx_col), 50, ...
+                'Stride sample should include rows near the beginning');
+            testCase.verifyGreaterThan(max(idx_col), 900, ...
+                'Stride sample should include rows near the end');
+        end
+
+        function test_stridesample_netcdf_returns_table_within_maxrows(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 30; nlat = 20; ntime = 5;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(25,55,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            T = StrideSample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyLessThanOrEqual(height(T), 120, ...
+                'StrideSample should not exceed MaxRows significantly');
+            expected_cols = {'longitude','latitude','time','prcp'};
+            for k = 1:numel(expected_cols)
+                testCase.verifyTrue(ismember(expected_cols{k}, T.Properties.VariableNames), ...
+                    sprintf('Expected column "%s"', expected_cols{k}));
+            end
+        end
+
+        function test_stridesample_netcdf_latrange_filters_rows(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 10; nlat = 10; ntime = 3;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(0,90,nlat)');
+            ncwrite(tmp,'time',      (1:ntime)');
+            ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
+
+            T = StrideSample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
+            testCase.verifyTrue(all(T.latitude >= 30 & T.latitude <= 60), ...
+                'All returned rows must satisfy LatRange');
+            testCase.verifyGreaterThan(height(T), 0, 'Expected some rows in LatRange [30,60]');
+        end
+
+        function test_stridesample_netcdf_auto_selects_first_data_variable(testCase)
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nccreate(tmp,'longitude','Dimensions',{'longitude',4},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', 3},'Format','classic');
+            nccreate(tmp,'time',     'Dimensions',{'time',     2},'Format','classic');
+            nccreate(tmp,'prcp','Dimensions',{'longitude',4,'latitude',3,'time',2},'Format','classic');
+            ncwrite(tmp,'longitude', [-120;-110;-100;-90]);
+            ncwrite(tmp,'latitude',  [30;40;50]);
+            ncwrite(tmp,'time',      [1;2]);
+            ncwrite(tmp,'prcp',      rand(4,3,2));
+
+            T = StrideSample(string(tmp), Verbose=false);
+            testCase.verifyTrue(ismember('prcp', T.Properties.VariableNames), ...
+                'Expected data variable "prcp" in output table');
+        end
+
+        function test_reservoir_sample_returns_within_nrows(testCase)
+            % ReservoirSample on a CSV with 500 rows and nrows=50 must return ≤ 50 rows.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'idx,val\n');
+            for i = 1:500
+                fprintf(fid, '%d,%d\n', i, i*2);
+            end
+            fclose(fid);
+
+            T = ReservoirSample(string(tmp), 50, Verbose=false);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyLessThanOrEqual(height(T), 50, ...
+                'ReservoirSample must not exceed requested row count');
+            testCase.verifyGreaterThan(height(T), 0, 'Expected non-empty output');
+        end
+
     end
 
 end
