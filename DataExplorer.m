@@ -918,8 +918,8 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
     L{end+1} = '';
     L{end+1} = '% Geo scatter: color = temporal mean, size = temporal std';
     L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vname_safe, vname_safe);
-    L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=1, MaxSize=150, ...', vname_sq, vname_sq);
-    L{end+1} = sprintf('    Title=''%s  [%s]'');', fpath_sq, vname_sq);
+    L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vname_sq, vname_sq);
+    L{end+1} = sprintf('    Title=''%s'');', vname_sq);
     code = strjoin(L, newline);
 
     [~, basename] = fileparts(filepath);
@@ -3867,8 +3867,14 @@ end
 
 
 % ── se_fig_title ─────────────────────────────────────────────────────────────
-function s = se_fig_title(label, ~)
-s = label;
+function s = se_fig_title(label, source_name)
+% If source_name ends with [varname] (NetCDF variable), append ": varname".
+m = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
+if ~isempty(m)
+    s = sprintf('%s: %s', label, strtrim(m{1}));
+else
+    s = label;
+end
 end
 
 

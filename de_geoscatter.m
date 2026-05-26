@@ -19,7 +19,7 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %   ColorLabel  ("Color")   Colorbar label.
 %   SizeLabel   ("Size")    Size-legend title.
 %   Title       ("")        Figure/axes title string.
-%   MinSize     (20)        Minimum marker area (pt²).
+%   MinSize     (5)         Minimum marker area (pt²).
 %   MaxSize     (200)       Maximum marker area (pt²).
 
 arguments
@@ -30,7 +30,7 @@ arguments
     options.ColorLabel (1,1) string = "Color"
     options.SizeLabel  (1,1) string = "Size"
     options.Title      (1,1) string = ""
-    options.MinSize    (1,1) double = 1
+    options.MinSize    (1,1) double = 5
     options.MaxSize    (1,1) double = 200
 end
 
@@ -46,9 +46,9 @@ sz_pts = options.MinSize + sz_norm .* (options.MaxSize - options.MinSize);
 
 %% ── Main scatter ──────────────────────────────────────────────────────────────
 if strlength(options.Title) > 0
-    fig_name = sprintf('Geo Scatter — %s', char(options.Title));
+    fig_name = sprintf('Geo Scatter: %s', char(options.Title));
 else
-    fig_name = sprintf('Geo Scatter — %s', char(options.ColorLabel));
+    fig_name = sprintf('Geo Scatter: %s', char(options.ColorLabel));
 end
 fig = figure('Color', 'w', 'Name', fig_name, 'NumberTitle', 'off');
 ax  = axes(fig, 'Position', [0.08 0.08 0.70 0.85]);
