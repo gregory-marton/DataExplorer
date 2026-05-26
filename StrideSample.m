@@ -15,7 +15,8 @@ function T = StrideSample(filepath, options)
 %
 %   For tabular files the stride is estimated from file size + a 64 KB probe.
 %   For NetCDF files the variable must have exactly 3 dimensions; stride is
-%   uniform across all three so the sample stays within MaxRows.
+%   the same for every dimension so each contributes an equal fraction of
+%   samples; total stays within MaxRows.
 %
 %   Optional arguments
 %   ──────────────────
@@ -218,22 +219,26 @@ for k = 1:ndim
     end
 end
 
-%% ── Compute uniform stride ───────────────────────────────────────────────────
+%% ── Compute uniform stride across all dimensions ─────────────────────────────
 total_elems = prod(sz);
+
 if total_elems <= options.MaxRows
     strides = ones(1, ndim);
 else
-    s = max(1, floor((total_elems / options.MaxRows) ^ (1/ndim)));
-    while prod(ceil(sz / s)) > options.MaxRows
-        s = s + 1;
-    end
+    % Apply the same fractional reduction to every dimension independently.
+    % stride = ceil( (total/MaxRows)^(1/ndim) ), then bump until budget met.
+    s = max(1, ceil((total_elems / options.MaxRows)^(1/ndim)));
     strides = repmat(s, 1, ndim);
+    while prod(ceil(sz ./ strides)) > options.MaxRows
+        s = s + 1;
+        strides = repmat(s, 1, ndim);
+    end
 end
 
 n_sampled = prod(ceil(sz ./ strides));
 if options.Verbose
-    fprintf('  Strides: [%s]  →  %d rows\n', ...
-        strjoin(arrayfun(@num2str, strides, 'UniformOutput', false), ', '), n_sampled);
+    stride_str = arrayfun(@(k) sprintf('%d', strides(k)), 1:ndim, 'UniformOutput', false);
+    fprintf('  Strides: [%s]  →  %d rows\n', strjoin(stride_str, ', '), n_sampled);
 end
 
 %% ── Read with stride ─────────────────────────────────────────────────────────

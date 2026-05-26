@@ -79,53 +79,78 @@ if ischar(source) || isstring(source)
             fprintf('  NetCDF: %d data variable(s) found; plotting %d.\n', ...
                 numel(data_vars_), n_plot_);
             T = table();
-            for nc_vi_ = 1:n_plot_
-                vname_vi_  = data_vars_{nc_vi_};
-                T_vi_      = table();   %#ok<NASGU>
-                recipe_vi_ = '';       %#ok<NASGU>
-                if nc_is_spatial_grid(nc_info_, vname_vi_)
-                    % ── Spatial grid: stride sample → full pipeline ───────────
-                    fprintf('  [%d/%d] Spatial grid "%s" — stride sampling…\n', ...
-                        nc_vi_, n_plot_, vname_vi_);
-                    try
-                        T_vi_ = StrideSample(string(source), ...
-                            Variable=string(vname_vi_), ...
-                            MaxRows=options.MaxRows, Verbose=false);
-                    catch ME_
-                        if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
-                        fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
-                        continue
+            [~, fn_, fe_] = fileparts(string(source));
+
+            % ── Pass 1: load all spatial-grid variables into one table ────────
+            sp_vars_ = data_vars_(cellfun(@(v) nc_is_spatial_grid(nc_info_, v), ...
+                data_vars_(1:n_plot_)));
+            T_sp_ = table();
+            if ~isempty(sp_vars_)
+                fprintf('  Loading %d spatial grid variable(s): %s\n', ...
+                    numel(sp_vars_), strjoin(sp_vars_, ', '));
+                try
+                    T_sp_ = StrideSample(string(source), ...
+                        Variable=string(sp_vars_{1}), ...
+                        MaxRows=options.MaxRows, Verbose=true);
+                    for sp_k_ = 2:numel(sp_vars_)
+                        try
+                            T_extra_ = StrideSample(string(source), ...
+                                Variable=string(sp_vars_{sp_k_}), ...
+                                MaxRows=options.MaxRows, Verbose=false);
+                            vn_ = matlab.lang.makeValidName(sp_vars_{sp_k_});
+                            if height(T_extra_) == height(T_sp_)
+                                T_sp_.(vn_) = T_extra_.(vn_);
+                            end
+                        catch ME_
+                            if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
+                            fprintf('  ⚠ Skipping "%s": %s\n', sp_vars_{sp_k_}, ME_.message);
+                        end
                     end
-                    [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
-                    [~, fn_, fe_]     = fileparts(string(source));
-                    prof_vi_.source_name = sprintf('%s%s  [%s]', fn_, fe_, vname_vi_);
-                    se_report(T_vi_, prof_vi_);
-                    opts_vi_            = options;
-                    opts_vi_.NCVariable = string(vname_vi_);
-                    panel_vi_           = se_detect_panel(T_vi_, prof_vi_);
-                    se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
-                    recipe_vi_ = cg_netcdf_spatial_recipe(string(source), vname_vi_);
-                else
-                    % ── Tabular path: existing pipeline ───────────────────────
-                    opts_vi_            = options;
-                    opts_vi_.NCVariable = string(vname_vi_);
-                    try
-                        T_vi_ = se_load(string(source), opts_vi_);
-                    catch ME_
-                        if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
-                        fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
-                        continue
-                    end
-                    [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
-                    [~, fn_, fe_]     = fileparts(string(source));
-                    prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, vname_vi_);
-                    se_echo_load_code(string(source), T_vi_);
-                    se_report(T_vi_, prof_vi_);
-                    panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
-                    se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
-                    recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, ...
-                        panel_vi_, opts_vi_);
+                catch ME_
+                    if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
+                    fprintf('  ⚠ Could not load spatial grid: %s\n', ME_.message);
+                    T_sp_ = table();
                 end
+            end
+            if height(T_sp_) > 0
+                [T_sp_, prof_sp_] = se_profile(T_sp_, options.MissingStrings);
+                prof_sp_.source_name = sprintf('%s%s  [%s]', fn_, fe_, ...
+                    strjoin(sp_vars_, ', '));
+                se_report(T_sp_, prof_sp_);
+                se_plot(T_sp_, prof_sp_, options, se_detect_panel(T_sp_, prof_sp_));
+                % Individual recipe + geo scatter per variable
+                for sp_k_ = 1:numel(sp_vars_)
+                    recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_{sp_k_});
+                    T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
+                    fprintf('\n  ══════════════════════════════════════════════════════════\n');
+                    fprintf('  Recipe script: %s\n', recipe_sp_);
+                    fprintf('  To keep it:    save_recipe(''%s_%s_recipe.m'')\n', fn_, sp_vars_{sp_k_});
+                    fprintf('  ══════════════════════════════════════════════════════════\n\n');
+                end
+                T = T_sp_;
+            end
+
+            % ── Pass 2: non-spatial-grid variables, one at a time ────────────
+            for nc_vi_ = 1:n_plot_
+                vname_vi_ = data_vars_{nc_vi_};
+                if nc_is_spatial_grid(nc_info_, vname_vi_), continue; end
+                opts_vi_            = options;
+                opts_vi_.NCVariable = string(vname_vi_);
+                try
+                    T_vi_ = se_load(string(source), opts_vi_);
+                catch ME_
+                    if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
+                    fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
+                    continue
+                end
+                [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
+                prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, vname_vi_);
+                se_echo_load_code(string(source), T_vi_);
+                se_report(T_vi_, prof_vi_);
+                panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
+                se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
+                recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, ...
+                    panel_vi_, opts_vi_);
                 if ~isempty(recipe_vi_)
                     T_ret_ = T_vi_; run(recipe_vi_); T_vi_ = T_ret_;
                     fprintf('\n  ══════════════════════════════════════════════════════════\n');
@@ -1499,6 +1524,14 @@ if isscalar(dt_cols)
 elseif isscalar(num_cols)
     encoding = 'size';
     enc_col  = num_cols;
+elseif ~isempty(num_cols)
+    % Multiple numeric data columns: color by the first non-time-named one.
+    time_like = arrayfun(@(i) ~isempty(regexpi(prof.name{i}, ...
+        'time|^t$|year|month|day', 'once')), num_cols);
+    preferred = num_cols(~time_like);
+    if isempty(preferred), preferred = num_cols; end
+    encoding = 'color_num';
+    enc_col  = preferred(1);
 elseif isscalar(cat_cols)
     encoding = 'color_cat';
     enc_col  = cat_cols;
@@ -1539,6 +1572,13 @@ if has_mapping
                 'MarkerFaceAlpha', 0.5);
             title(ax, sprintf('size → %s', prof.name{enc_col}), ...
                 'FontSize', 9, 'Interpreter', 'none');
+
+        case 'color_num'
+            cdata = T.(prof.name{enc_col});
+            cdata = cdata(valid);
+            geoscatter(ax, lat, lon, BASE_SZ, cdata, 'filled', 'MarkerFaceAlpha', 0.6);
+            colormap(ax, parula(256));
+            cb = colorbar(ax); cb.Label.String = prof.name{enc_col};
 
         case 'color_cat'
             cdata = T.(prof.name{enc_col});
@@ -1586,6 +1626,12 @@ else
             sz(isnan(sz)) = BASE_SZ;
             scatter(ax, lon, lat, sz, [0.22 0.44 0.69], 'filled', ...
                 'MarkerFaceAlpha', 0.5);
+        case 'color_num'
+            cdata = T.(prof.name{enc_col});
+            cdata = cdata(valid);
+            scatter(ax, lon, lat, BASE_SZ, cdata, 'filled', 'MarkerFaceAlpha', 0.6);
+            colormap(ax, parula(256));
+            cb = colorbar(ax); cb.Label.String = prof.name{enc_col};
         case 'color_cat'
             cdata = T.(prof.name{enc_col});
             cdata = cdata(valid);
