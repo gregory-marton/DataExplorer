@@ -44,6 +44,8 @@ function [fig, ax] = de_statebins(T, options)
 %   Grid             Grid specification (see above, default 'us-states')
 %   ShowTerritories  Include territory tiles (default false)
 %   Aliases          Nx2 cell {from,to} or containers.Map for normalization
+%   CLim             Fix color axis [lo, hi].  Useful for comparing maps
+%                    of the same variable on a common scale.
 %
 %   Returns
 %   ───────
@@ -68,6 +70,7 @@ arguments
     options.XCol              (1,1) string  = ""
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double  = [NaN NaN]
+    options.CLim              (1,2) double  = [NaN NaN]
 end
 
 fig = []; ax = [];
@@ -170,7 +173,8 @@ g.is_overflow = IS_OVERFLOW;
     'CatColors',     options.CatColors, ...
     'XCol',          options.XCol, ...
     'YCol',          options.YCol, ...
-    'SharedXLim',    options.SharedXLim);
+    'SharedXLim',    options.SharedXLim, ...
+    'CLim',          options.CLim);
 
 end % de_statebins
 

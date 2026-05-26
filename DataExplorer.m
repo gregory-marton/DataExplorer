@@ -1467,7 +1467,7 @@ for pg = 1:n_pages
     title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
     if isfield(prof, 'sampling_note') && strlength(prof.sampling_note) > 0
         subtitle(tl, char(prof.sampling_note), 'FontSize', 8, ...
-            'Color', [0.5 0.5 0.5], 'Interpreter', 'none');
+            'FontWeight', 'bold', 'Color', 'k', 'Interpreter', 'none');
     end
 
     for k = 1:n_this

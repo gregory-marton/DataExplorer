@@ -16,31 +16,43 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %
 %   Optional arguments
 %   ──────────────────
-%   ColorLabel  ("Color")   Colorbar label.
-%   SizeLabel   ("Size")    Size-legend title.
-%   Title       ("")        Variable name — used in window title and axes title.
-%   Source      ("")        Dataset name — appended to axes title only (not window title).
-%   MinSize     (5)         Minimum marker area (pt²).
-%   MaxSize     (200)       Maximum marker area (pt²).
+%   ColorLabel  ("Color")       Colorbar label.
+%   SizeLabel   ("Size")        Size-legend title.
+%   Title       ("")            Variable name — used in window title and axes title.
+%   Source      ("")            Dataset name — appended to axes title only (not window title).
+%   MinSize     (5)             Minimum marker area (pt²).
+%   MaxSize     (200)           Maximum marker area (pt²).
+%   ColorLim    ([NaN NaN])     Fix colorbar limits [lo, hi].  Useful for comparing
+%                               multiple plots of the same variable on a common scale.
+%   SizeLim     ([NaN NaN])     Fix the data range used for size normalization [lo, hi].
+%                               Values outside the range are clamped to MinSize/MaxSize.
+%                               Useful for comparing std or range across variables.
 
 arguments
     lon        (:,1) double
     lat        (:,1) double
     color_data (:,1) double
     size_data  (:,1) double
-    options.ColorLabel (1,1) string = "Color"
-    options.SizeLabel  (1,1) string = "Size"
-    options.Title      (1,1) string = ""
-    options.Source     (1,1) string = ""
-    options.MinSize    (1,1) double = 5
-    options.MaxSize    (1,1) double = 200
+    options.ColorLabel (1,1) string  = "Color"
+    options.SizeLabel  (1,1) string  = "Size"
+    options.Title      (1,1) string  = ""
+    options.Source     (1,1) string  = ""
+    options.MinSize    (1,1) double  = 5
+    options.MaxSize    (1,1) double  = 200
+    options.ColorLim   (1,2) double  = [NaN NaN]
+    options.SizeLim    (1,2) double  = [NaN NaN]
 end
 
 %% ── Normalise size_data to [MinSize, MaxSize] ─────────────────────────────────
 s_lo = min(size_data, [], 'omitnan');
 s_hi = max(size_data, [], 'omitnan');
+if ~any(isnan(options.SizeLim))
+    s_lo = options.SizeLim(1);
+    s_hi = options.SizeLim(2);
+end
 if s_hi > s_lo
     sz_norm = (size_data - s_lo) ./ (s_hi - s_lo);
+    sz_norm = max(0, min(1, sz_norm));
 else
     sz_norm = repmat(0.5, size(size_data));
 end
@@ -57,6 +69,9 @@ ax  = axes(fig, 'Position', [0.08 0.08 0.70 0.85]);
 
 scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
 colormap(ax, parula(256));
+if ~any(isnan(options.ColorLim))
+    clim(ax, options.ColorLim);
+end
 cb              = colorbar(ax);
 cb.Label.String = char(options.ColorLabel);
 xlabel(ax, 'Longitude');

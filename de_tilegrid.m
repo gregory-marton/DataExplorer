@@ -27,6 +27,8 @@ function [fig, ax] = de_tilegrid(T, grid, normed, options)
 %   OverflowEdgeColor RGB for orphan tile border (default amber)
 %   MapLabel          axes title when no color data (default 'Map')
 %   FontSize          tile label font size (default 7)
+%   CLim              Fix color axis [lo, hi].  Useful for comparing maps
+%                     of the same variable on a common scale.
 
 arguments
     T      (:,:) table
@@ -47,6 +49,7 @@ arguments
     options.XCol              (1,1) string  = ""
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double  = [NaN NaN]
+    options.CLim              (1,2) double  = [NaN NaN]
 end
 
 fig = []; ax = []; %#ok<NASGU>
@@ -121,6 +124,10 @@ end
 non_ov_heat = Heat(~IS_OVERFLOW, :);
 vmin = min(non_ov_heat(:), [], 'omitnan');
 vmax = max(non_ov_heat(:), [], 'omitnan');
+if ~any(isnan(options.CLim))
+    vmin = options.CLim(1);
+    vmax = options.CLim(2);
+end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 if is_sparkline_cat || is_scatter_cat, has_choro = false; end
 

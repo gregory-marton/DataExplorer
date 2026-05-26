@@ -25,6 +25,8 @@ function [fig, ax] = de_countrybins(T, options)
 %   Title        Figure title / window name
 %   Colormap     Name or Nx3 matrix (default 'parula')
 %   GridFile     Path to alternate JSON grid (default: data/world_tile_grid.json)
+%   CLim         Fix color axis [lo, hi].  Useful for comparing maps
+%                of the same variable on a common scale.
 %
 %   Returns
 %   ───────
@@ -47,6 +49,7 @@ arguments
     options.XCol              (1,1) string  = ""
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double  = [NaN NaN]
+    options.CLim              (1,2) double  = [NaN NaN]
 end
 
 fig = []; ax = [];
@@ -188,6 +191,7 @@ g.is_overflow = IS_OVERFLOW;
     'CatColors',     options.CatColors, ...
     'XCol',          options.XCol, ...
     'YCol',          options.YCol, ...
-    'SharedXLim',    options.SharedXLim);
+    'SharedXLim',    options.SharedXLim, ...
+    'CLim',          options.CLim);
 
 end % de_countrybins
