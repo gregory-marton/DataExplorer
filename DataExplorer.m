@@ -2507,13 +2507,16 @@ elseif ismember(ext, [".xlsx", ".xls", ".xlsm"])
     L{end+1} = 'opts.MissingRule = ''fill'';';
     L{end+1} = sprintf('T = readtable(''%s'', opts, ''Sheet'', ''%s'');', filepath, sheet);
 elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
-    nc_var = 'varname';
+    nc_var = '';
     if isstruct(ud) && isfield(ud, 'nc_varname') && ~isempty(ud.nc_varname)
         nc_var = char(ud.nc_varname);
     end
-    L{end+1} = sprintf('%% NetCDF — adjust variable/start/count as needed:');
-    L{end+1} = sprintf('data = ncread(''%s'', ''%s'');', filepath, nc_var);
-    L{end+1} = sprintf('%% See ncinfo(''%s'') for available variables.', filepath);
+    if ~isempty(nc_var)
+        L{end+1} = sprintf('T = DataExplorer(''%s'', NCVariable=''%s'');', filepath, nc_var);
+    else
+        L{end+1} = sprintf('T = DataExplorer(''%s'');', filepath);
+    end
+    L{end+1} = sprintf('%% Available variables: see ncinfo(''%s'').Variables', filepath);
 else
     sampled_n = 0;
     if isstruct(ud) && isfield(ud, 'sampled')

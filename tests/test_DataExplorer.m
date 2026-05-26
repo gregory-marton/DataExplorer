@@ -1461,6 +1461,33 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'sparkline_cat must be in recipe');
         end
 
+        function test_netcdf_recipe_load_code_uses_dataexplorer(testCase)
+            % Recipe load code for NetCDF must say DataExplorer(...), not ncread.
+            tmp = [tempname '.nc'];
+            cl = onCleanup(@() delete(tmp));
+            nccreate(tmp, 'lon',  'Dimensions', {'lon', 4}, 'Format', 'classic');
+            nccreate(tmp, 'lat',  'Dimensions', {'lat', 3}, 'Format', 'classic');
+            nccreate(tmp, 'temp', 'Dimensions', {'lon', 4, 'lat', 3}, 'Format', 'classic');
+            ncwrite(tmp, 'lon',  [100;110;120;130]);
+            ncwrite(tmp, 'lat',  [10;20;30]);
+            ncwrite(tmp, 'temp', rand(4,3));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            DataExplorer(tmp, NCVariable='temp');
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'Expected a recipe file in tempdir');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'DataExplorer'), ...
+                'Recipe load code must use DataExplorer(), not ncread()');
+            testCase.verifyFalse(contains(recipe_text, 'ncread'), ...
+                'Recipe load code must not contain ncread');
+        end
+
         function test_netcdf_multi_var_produces_multiple_figures(testCase)
             % DataExplorer on a 2-data-variable NetCDF must produce at least 2 figures.
             tmp = [tempname '.nc'];
