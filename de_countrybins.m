@@ -161,12 +161,11 @@ if n_ov > 0
         n_ov, strjoin(orphans, ', '));
     ov_cols = double(max(COLS)) + 1;
     ov_base = double(max(ROWS)) + 2;
-    for k = 1:n_ov
-        CODES{end+1}       = orphans{k}; %#ok<AGROW>
-        ROWS(end+1)        = ov_base + floor((k-1)/ov_cols);
-        COLS(end+1)        = mod(k-1, ov_cols);
-        IS_OVERFLOW(end+1) = true;
-    end
+    k_vec   = (0:n_ov-1);
+    CODES(end+1:end+n_ov)       = orphans;
+    ROWS(end+1:end+n_ov)        = ov_base + floor(k_vec / ov_cols);
+    COLS(end+1:end+n_ov)        = mod(k_vec, ov_cols);
+    IS_OVERFLOW(end+1:end+n_ov) = true(1, n_ov);
 end
 
 %% ── Assemble grid struct and delegate ────────────────────────────────────────

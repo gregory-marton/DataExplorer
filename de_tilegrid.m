@@ -49,7 +49,7 @@ arguments
     options.SharedXLim        (1,2) double  = [NaN NaN]
 end
 
-fig = []; ax = [];
+fig = []; ax = []; %#ok<NASGU>
 
 CODES       = grid.codes(:);
 ROWS        = double(grid.rows(:));

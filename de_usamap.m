@@ -200,7 +200,7 @@ for i = 1:numel(states)
     si = code_to_idx(scode);
     fc = um_val2color(Heat(si,1), vmin, vmax, cmap_ch, has_choro);
 
-    [x, y] = mfwdtran(mstruct, states(i).Lat, states(i).Lon);
+    [x, y] = projfwd(mstruct, states(i).Lat, states(i).Lon);
 
     if strcmp(scode,'AK')
         % Affine: scale around centroid, shift to inset position.
@@ -235,7 +235,7 @@ title(ax, um_title_str(options.ColorCol, t_vals, 1, is_year_axis, has_choro, has
     'FontSize', 11, 'Interpreter','none');
 
 %% ── Slider ───────────────────────────────────────────────────────────────────
-sld = []; lbl_ctrl = [];
+sld = []; lbl_ctrl = []; %#ok<NASGU>
 if has_slider
     sld = uicontrol(fig,'Style','slider','Units','normalized', ...
         'Position',[0.08 0.01 0.76 0.04], ...
