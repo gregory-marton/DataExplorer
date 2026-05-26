@@ -1785,7 +1785,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             fclose(fid);
 
             T = StrideSample(string(tmp), MaxRows=100, Verbose=false);
-            idx_col = double(T.idx);
+            idx_col = str2double(T.idx);
             testCase.verifyLessThan(min(idx_col), 50, ...
                 'Stride sample should include rows near the beginning');
             testCase.verifyGreaterThan(max(idx_col), 900, ...

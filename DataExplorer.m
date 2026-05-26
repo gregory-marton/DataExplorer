@@ -116,6 +116,7 @@ if ischar(source) || isstring(source)
                 [T_sp_, prof_sp_] = se_profile(T_sp_, options.MissingStrings);
                 prof_sp_.source_name = sprintf('%s%s  [%s]', fn_, fe_, ...
                     strjoin(sp_vars_, ', '));
+                prof_sp_.nc_spatial_grid = true;
                 se_report(T_sp_, prof_sp_);
                 se_plot(T_sp_, prof_sp_, options, se_detect_panel(T_sp_, prof_sp_));
                 % Individual recipe + geo scatter per variable
@@ -152,7 +153,7 @@ if ischar(source) || isstring(source)
                 recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, ...
                     panel_vi_, opts_vi_);
                 if ~isempty(recipe_vi_)
-                    T_ret_ = T_vi_; run(recipe_vi_); T_vi_ = T_ret_;
+                    % NetCDF recipes call DataExplorer() — skip auto-run to avoid recursion.
                     fprintf('\n  ══════════════════════════════════════════════════════════\n');
                     fprintf('  Recipe script: %s\n', recipe_vi_);
                     fprintf('  To keep it:    save_recipe(''%s_%s_recipe.m'')\n', fn_, vname_vi_);
@@ -217,11 +218,15 @@ se_plot(T, prof, options, panel);
 if ischar(source) || isstring(source)
     recipe_path = se_assemble_recipe(string(source), T, prof, panel, options);
     if ~isempty(recipe_path)
-        fprintf('  Running recipe to produce best-of plots…\n');
-        T_return = T;   % run() shares our workspace; save T so recipe can't overwrite it
-        run(recipe_path);
-        T = T_return;
-        [~, bname, ~] = fileparts(source);
+        [~, bname, src_ext_] = fileparts(string(source));
+        is_nc_ = ismember(lower(string(src_ext_)), [".nc", ".nc4", ".netcdf"]);
+        if ~is_nc_
+            % NetCDF recipes call DataExplorer() which would recurse; skip auto-run.
+            fprintf('  Running recipe to produce best-of plots…\n');
+            T_return = T;   % run() shares our workspace; save T so recipe can't overwrite it
+            run(recipe_path);
+            T = T_return;
+        end
         fprintf('\n  ══════════════════════════════════════════════════════════\n');
         fprintf('  Recipe script: %s\n', recipe_path);
         fprintf('  To keep it:    save_recipe(''%s_recipe.m'')\n', bname);
@@ -1483,6 +1488,9 @@ function se_plot_geo(T, prof)
 %     1 numeric col    → size proportional to value
 %     1 categorical col → color by category
 %     otherwise        → plain scatter
+
+% Spatial-grid tables have a dedicated de_geoscatter via the recipe; skip here.
+if isfield(prof, 'nc_spatial_grid') && prof.nc_spatial_grid, return; end
 
 LAT_NAMES = ["lat","latitude","lat_","latitude_dd","decimallatitude"];
 LON_NAMES = ["lon","long","longitude","lon_","longitude_dd","decimallongitude"];
