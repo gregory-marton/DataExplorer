@@ -740,6 +740,9 @@ function T = load_netcdf(filepath, options)
                     (strlength(options.NCReduction) > 0 || options.AutoSelect)
                 dim_choice = options.NCDimension;
                 fprintf('  Using NCDimension=%d ("%s")\n', dim_choice, dim_names{dim_choice});
+            elseif strlength(options.NCVariable) > 0
+                % dim_choice already set by heuristic above — no prompt needed
+                fprintf('  Auto dim: %d ("%s")\n', dim_choice, dim_names{dim_choice});
             else
                 while true
                     raw_dim = input(sprintf('  Which dimension? (1–%d, Enter = 1 = %s): ', ...

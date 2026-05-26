@@ -31,7 +31,7 @@ The function executes a linear pipeline:
 
 1. **Load** (`se_load` + format dispatchers)
    - `load_from_zip`: interactive file selection from ZIP archives
-   - `load_netcdf`: interactive variable/dimension selection for `.nc` files
+   - `load_netcdf`: auto-iterates all data variables (skipping coordinates); heuristic for >2D reduction (flatten if small, mean over time dim otherwise); interactive only when neither `NCVariable` nor `AutoSelect` is set
    - `load_excel`: multi-sheet detection with size-based selection prompt
    - `load_text`: delimiter auto-detection, header sniffing, UTF-8/ASCII fallback
 
@@ -84,7 +84,7 @@ The function executes a linear pipeline:
 
 `examples/` contains 13 datasets covering the full format range used for manual testing and (eventually) regression testing: Excel (multi-sheet), ZIP (CSV inside), NetCDF, ASC. Notable:
 - `Prod_dataset.xlsx` — US State Energy Data System (EIA/SEDS). 4 sheets; the **Data** sheet is `A1:BO1780` with `(Data_Status, StateCode, MSN, 1960, 1961, …, 2023)` — year columns across the top, ~50 states × ~35 MSN energy-type codes per row. Drives tasks 3, 4, and 5.
-- `ncdd-202501-grd-scaled.nc` — NetCDF; triggers interactive variable/dimension selector.
+- `ncdd-202501-grd-scaled.nc` — NetCDF gridded climate data; auto-iterates data variables, averaging over the time dimension (too large to flatten).
 - `LLCP2024.ASC` and `LLCP2024ASC.zip` — same dataset in raw and zipped form; pick one.
 - ZIP files containing multiple files trigger the interactive file picker.
 
