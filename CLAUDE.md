@@ -156,6 +156,11 @@ Also: fix and test the existing `se_echo_load_code` — it gets subsumed into th
 amendment — Decide library vs. vanilla code in recipes
 Recipe output is currently vanilla MATLAB (portable, no dependency). The alternative: expose DataExplorer internals as a named library (`de_profile`, `de_histogram`, etc.) and use those in recipe code. This produces cleaner, more readable output and gives students reusable vocabulary, but adds a dependency. Decide this question before finalizing Task 7 recipe format — the baseline session (Task 1) is the right moment to look at actual recipe output and judge readability. Candidate library functions to brainstorm: `se_select_columns`/interestingness ranker, `se_profile`, best-plot generators, outlier/sentinel detection.
 
+**Recipe abstraction audit (2026-05-26):** Typical recipe length for a Prod_dataset-style file is ~80–90 lines — just under the 100-line threshold. Two clear abstraction candidates:
+1. **Wide-year pivot** (highest priority): the 7-line `repmat`/`repelem`/`reshape+cell2mat` block appears in all three geo `cg_*` generators (`cg_state_choropleth_code`, `cg_country_choropleth_code`, `cg_geo_multicategorical_code`). Each uses a different variable suffix (`_ch`, `_co`, `_gm`) to avoid collisions. A `de_pivot_wide_years(T, yr_cols)` library function returning `T_long` would reduce each to one line and save ~14 lines per recipe.
+2. **Time-series block** (lower priority): the overlaid+stacked block in `cg_best_plots_code` (~30 lines for compositional datasets) could become `de_timeseries(T, time_col, value_cols)` but that function doesn't yet exist.
+The NetCDF spatial recipe is already short (9 lines) thanks to `StrideSample` + `de_geoscatter`.
+
 ### Task 6 — Improve se_select_columns interestingness ranker
 Current ranker (line 1832): numeric score = `std/range`; categorical score = Shannon entropy.
 
