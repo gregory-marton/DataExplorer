@@ -460,33 +460,27 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_se_looks_like_countries_wires_countrybins(testCase)
-            % DataExplorer should route a high-cardinality ISO alpha-2 column through
-            % de_countrybins, producing at least one figure with tile patches.
-            iso2_20 = {'US','GB','DE','FR','JP','CN','BR','IN','CA','AU', ...
-                       'MX','RU','ZA','KR','TR','AR','SA','EG','NG','PL'};
-            [co, grp] = ndgrid(iso2_20, {'A','B','C'});
-            vals = 100 + 50*randn(60,1);
-            T = table(categorical(co(:)), categorical(grp(:)), vals, ...
-                'VariableNames', {'Country','Group','Value'});
-
+            % DataExplorer should emit de_countrybins in the recipe when an
+            % ISO alpha-2 country-code column is present.  Direct render is
+            % gone (Task 6 full inversion); recipe is the check point.
+            % 12 rows, 10 unique ISO-2 codes → not flagged as all-unique (ID).
+            countries = categorical(["US";"GB";"DE";"FR";"JP";"AU";"CA";"MX";"BR";"CN";"US";"GB"]);
+            T = table(countries, (1:12)', 'VariableNames', {'Country','Value'});
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
             old_vis = get(0, 'DefaultFigureVisible');
             set(0, 'DefaultFigureVisible', 'off');
-            vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
-            figs_before = findobj(0, 'Type', 'figure');
+            cl2 = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            DataExplorer(T);
+            DataExplorer(tmp);
 
-            figs_after = findobj(0, 'Type', 'figure');
-            new_figs   = setdiff(figs_after, figs_before);
-            fig_cleanup = onCleanup(@() close(new_figs(isgraphics(new_figs))));
-
-            testCase.verifyNotEmpty(new_figs, ...
-                'DataExplorer with country-code column should produce at least one figure');
-            % World tile grid has ~180 tiles; bar/scatter figures have far fewer patches.
-            % Require > 50 patches to confirm the world choropleth was drawn.
-            patches = findobj(new_figs, 'Type', 'patch');
-            testCase.verifyGreaterThan(numel(patches), 50, ...
-                'DataExplorer should produce a world choropleth (150+ tile patches) for ISO country codes');
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'DataExplorer must write a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_countrybins'), ...
+                'Recipe must contain de_countrybins for ISO-2 country codes');
         end
 
     end
