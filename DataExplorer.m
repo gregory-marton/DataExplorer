@@ -2613,10 +2613,10 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = sprintf('yr_ch = {%s};', yr_cell);
     L{end+1} = sprintf('yr_v_ch = [%s];', yr_vec);
     L{end+1} = 'n_yr_ch = numel(yr_v_ch); n_r_ch = height(T);';
-    L{end+1} = 'kp_ch = setdiff(T.Properties.VariableNames, yr_ch);';
+    L{end+1} = 'kp_ch = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_ch));';
     L{end+1} = 'T_long_ch = repmat(T(:,kp_ch), n_yr_ch, 1);';
     L{end+1} = 'T_long_ch.Year = repelem(yr_v_ch(:), n_r_ch);';
-    L{end+1} = 'T_long_ch.Value = reshape(cell2mat(arrayfun(@(c) double(T.(c{1})), yr_ch, ''UniformOutput'', false).''), [], 1);';
+    L{end+1} = 'T_long_ch.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_ch, ''UniformOutput'', false).''), [], 1);';
     L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
