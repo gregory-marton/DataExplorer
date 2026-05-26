@@ -2692,6 +2692,88 @@ code = strjoin(L, newline);
 end
 
 
+% ── cg_geo_multicategorical_code ────────────────────────────────────────────
+function code = cg_geo_multicategorical_code(T, prof)
+%CG_GEO_MULTICATEGORICAL_CODE  Recipe code for geo x cat sparkline_cat figures.
+code = '';
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+if isempty(wide_yr_idxs), return; end
+
+cat_all = find(prof.type == "categorical" & ~prof.skip);
+if numel(cat_all) < 2, return; end
+
+geo_cats   = cat_all(arrayfun(@(ci) se_looks_like_states(prof,ci,T) || se_looks_like_countries(prof,ci,T), cat_all));
+other_cats = cat_all(~ismember(cat_all, geo_cats));
+if isempty(geo_cats) || isempty(other_cats), return; end
+
+TOTAL_WORDS = {'total','totals','grand total','all totals'};
+[yr_sorted, yr_ord] = sort(wide_yr_vals);
+yr_names_s = prof.name(wide_yr_idxs(yr_ord));
+yr_cell = strjoin(cellfun(@(s) sprintf('''%s''',s), yr_names_s, 'UniformOutput',false), ', ');
+yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput',false), ', ');
+
+L = {};
+% Pivot header (shared across all geo x cat pairs in this dataset)
+L{end+1} = '%% Geo x categorical sparkline_cat';
+L{end+1} = sprintf('yr_gm = {%s};', yr_cell);
+L{end+1} = sprintf('yr_v_gm = [%s];', yr_vec);
+L{end+1} = 'n_yr_gm = numel(yr_v_gm); n_r_gm = height(T);';
+L{end+1} = 'kp_gm = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_gm));';
+L{end+1} = 'T_long_gm = repmat(T(:,kp_gm), n_yr_gm, 1);';
+L{end+1} = 'T_long_gm.Year = repelem(yr_v_gm(:), n_r_gm);';
+L{end+1} = 'T_long_gm.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_gm, ''UniformOutput'', false).''), [], 1);';
+L{end+1} = '';
+
+n_pairs = 0;
+for gi = 1:numel(geo_cats)
+    geo_idx  = geo_cats(gi);
+    geo_name = prof.name{geo_idx};
+    is_states_geo = se_looks_like_states(prof, geo_idx, T);
+
+    for oi = 1:numel(other_cats)
+        cat_idx  = other_cats(oi);
+        cat_name = prof.name{cat_idx};
+        n_geo    = prof.nunique(geo_idx);
+        n_other  = prof.nunique(cat_idx);
+        ratio    = height(T) / (n_geo * n_other);
+        if ratio < 0.5 || ratio > 1.5, continue; end
+
+        % Top-K non-total levels
+        cat_col = T.(cat_name);
+        cat_levs = cellstr(categories(cat_col));
+        cnt_levs = countcats(cat_col);
+        is_tot   = cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), cat_levs);
+        cat_levs = cat_levs(~is_tot);
+        cnt_levs = cnt_levs(~is_tot);
+        if isempty(cat_levs), continue; end
+        [~, ord] = sort(cnt_levs,'descend');
+        K = min(5, numel(cat_levs));
+        top_levs = cat_levs(ord(1:K));
+
+        levs_cell = strjoin(cellfun(@(s) sprintf('''%s''',strrep(s,'''','''''')), top_levs, 'UniformOutput',false), ', ');
+        title_str = strrep(sprintf('%s x %s: Value by category over time', geo_name, cat_name), '''', '''''');
+
+        L{end+1} = sprintf('top_gm = {%s};', levs_cell); %#ok<AGROW>
+        L{end+1} = sprintf('T_filt_gm = T_long_gm(ismember(string(T_long_gm.%s), string(top_gm)), :);', cat_name); %#ok<AGROW>
+        if is_states_geo
+            L{end+1} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''sparkline_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, cat_name, K, title_str); %#ok<AGROW>
+        else
+            L{end+1} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''sparkline_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, cat_name, K, title_str); %#ok<AGROW>
+        end
+        L{end+1} = ''; %#ok<AGROW>
+        n_pairs = n_pairs + 1;
+    end
+end
+
+if n_pairs == 0
+    code = ''; return;
+end
+code = strjoin(L, newline);
+end
+
+
 % ── se_assemble_recipe ───────────────────────────────────────────────────────
 function recipe_path = se_assemble_recipe(filepath, T, prof, panel, options)
 %SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
@@ -2726,6 +2808,7 @@ clean_code  = cg_clean_code();
 plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
 choro_code         = cg_state_choropleth_code(T, prof);
 country_code       = cg_country_choropleth_code(T, prof);
+geo_multi_code     = cg_geo_multicategorical_code(T, prof);
 
 header = sprintf([...
     '%% DataExplorer recipe — %s\n' ...
@@ -2750,6 +2833,11 @@ if ~isempty(country_code)
     sections{end+1} = '';
     sections{end+1} = '%% === World Choropleth ===';
     sections{end+1} = country_code;
+end
+if ~isempty(geo_multi_code)
+    sections{end+1} = '';
+    sections{end+1} = '%% === Geo x Categorical ===';
+    sections{end+1} = geo_multi_code;
 end
 
 script_text = strjoin(sections, newline);
