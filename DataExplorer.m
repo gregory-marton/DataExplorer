@@ -84,7 +84,7 @@ if ischar(source) || isstring(source)
                 T_vi_      = table();   %#ok<NASGU>
                 recipe_vi_ = '';       %#ok<NASGU>
                 if nc_is_spatial_grid(nc_info_, vname_vi_)
-                    % ── Spatial grid: stride sample + geo scatter ─────────────
+                    % ── Spatial grid: stride sample → full pipeline ───────────
                     fprintf('  [%d/%d] Spatial grid "%s" — stride sampling…\n', ...
                         nc_vi_, n_plot_, vname_vi_);
                     try
@@ -96,16 +96,14 @@ if ischar(source) || isstring(source)
                         fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
                         continue
                     end
-                    [~, fn_, fe_] = fileparts(string(source));
-                    vname_safe_   = matlab.lang.makeValidName(vname_vi_);
-                    time_col_     = 'time';
-                    if ~ismember(time_col_, T_vi_.Properties.VariableNames)
-                        time_col_ = T_vi_.Properties.VariableNames{3};
-                    end
-                    de_geoscatter(T_vi_.longitude, T_vi_.latitude, ...
-                        double(T_vi_.(time_col_)), T_vi_.(vname_safe_), ...
-                        ColorLabel="time", SizeLabel=string(vname_vi_), ...
-                        Title=string(sprintf('%s%s — %s', fn_, fe_, vname_vi_)));
+                    [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
+                    [~, fn_, fe_]     = fileparts(string(source));
+                    prof_vi_.source_name = sprintf('%s%s  [%s]', fn_, fe_, vname_vi_);
+                    se_report(T_vi_, prof_vi_);
+                    opts_vi_            = options;
+                    opts_vi_.NCVariable = string(vname_vi_);
+                    panel_vi_           = se_detect_panel(T_vi_, prof_vi_);
+                    se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
                     recipe_vi_ = cg_netcdf_spatial_recipe(string(source), vname_vi_);
                 else
                     % ── Tabular path: existing pipeline ───────────────────────
@@ -905,18 +903,23 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
         filepath = fullfile(d(1).folder, d(1).name);
     end
     vname_safe = matlab.lang.makeValidName(varname);
+    fpath_sq   = strrep(char(filepath), '''', '''''');
+    vname_sq   = strrep(varname, '''', '''''');
     L = {};
-    L{end+1} = sprintf('%% DataExplorer recipe — %s [%s]', filepath, varname);
+    L{end+1} = sprintf('%% DataExplorer recipe — %s  [%s]', filepath, varname);
     L{end+1} = '';
     L{end+1} = 'addpath(fileparts(which(''DataExplorer'')));';
     L{end+1} = '';
-    L{end+1} = '% Load with stride sampling (never reads the full array)';
-    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'');', filepath, varname);
+    L{end+1} = '% Stride-sample the variable (never reads the full array)';
+    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'');', fpath_sq, vname_sq);
     L{end+1} = '';
-    L{end+1} = '% Geo scatter: color = time, size = value';
-    L{end+1} = sprintf('de_geoscatter(T.longitude, T.latitude, double(T.time), T.%s, ...', ...
-        vname_safe);
-    L{end+1} = sprintf('    ColorLabel="time", SizeLabel="%s");', varname);
+    L{end+1} = '% Aggregate by grid cell: one point per (lon, lat) across all time steps';
+    L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, ''%s'');', vname_safe);
+    L{end+1} = '';
+    L{end+1} = '% Geo scatter: color = temporal mean, size = temporal std';
+    L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vname_safe, vname_safe);
+    L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=1, MaxSize=150, ...', vname_sq, vname_sq);
+    L{end+1} = sprintf('    Title=''%s  [%s]'');', fpath_sq, vname_sq);
     code = strjoin(L, newline);
 
     [~, basename] = fileparts(filepath);

@@ -30,7 +30,7 @@ arguments
     options.ColorLabel (1,1) string = "Color"
     options.SizeLabel  (1,1) string = "Size"
     options.Title      (1,1) string = ""
-    options.MinSize    (1,1) double = 20
+    options.MinSize    (1,1) double = 1
     options.MaxSize    (1,1) double = 200
 end
 
@@ -45,7 +45,12 @@ end
 sz_pts = options.MinSize + sz_norm .* (options.MaxSize - options.MinSize);
 
 %% ── Main scatter ──────────────────────────────────────────────────────────────
-fig = figure('Color', 'w', 'Name', 'Geo Scatter');
+if strlength(options.Title) > 0
+    fig_name = sprintf('Geo Scatter — %s', char(options.Title));
+else
+    fig_name = sprintf('Geo Scatter — %s', char(options.ColorLabel));
+end
+fig = figure('Color', 'w', 'Name', fig_name, 'NumberTitle', 'off');
 ax  = axes(fig, 'Position', [0.08 0.08 0.70 0.85]);
 
 scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
