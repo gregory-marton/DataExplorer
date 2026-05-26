@@ -2638,6 +2638,60 @@ code = strjoin(L, newline);
 end
 
 
+% ── cg_country_choropleth_code ───────────────────────────────────────────────
+function code = cg_country_choropleth_code(T, prof)
+%CG_COUNTRY_CHOROPLETH_CODE  Return recipe code for world choropleth figures.
+code = '';
+cat_all = find(prof.type == "categorical" & ~prof.skip);
+geo_idx = [];
+for ci = cat_all(:)'
+    if se_looks_like_countries(prof, ci, T)
+        geo_idx = ci; break;
+    end
+end
+if isempty(geo_idx), return; end
+
+catname = prof.name{geo_idx};
+[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+[time_idx, ~] = se_find_time_axis(prof);
+num_idxs = find(prof.type == "numeric" & ~prof.skip);
+L = {};
+
+if ~isempty(wide_yr_idxs)
+    [yr_sorted, yr_ord] = sort(wide_yr_vals);
+    yr_names_s = prof.name(wide_yr_idxs(yr_ord));
+    yr_cell = strjoin(cellfun(@(s) sprintf('''%s''', s), yr_names_s, 'UniformOutput', false), ', ');
+    yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput', false), ', ');
+
+    L{end+1} = sprintf('%% World choropleth: %s (wide years → long)', catname);
+    L{end+1} = sprintf('yr_co = {%s};', yr_cell);
+    L{end+1} = sprintf('yr_v_co = [%s];', yr_vec);
+    L{end+1} = 'n_yr_co = numel(yr_v_co); n_r_co = height(T);';
+    L{end+1} = 'kp_co = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_co));';
+    L{end+1} = 'T_long_co = repmat(T(:,kp_co), n_yr_co, 1);';
+    L{end+1} = 'T_long_co.Year = repelem(yr_v_co(:), n_r_co);';
+    L{end+1} = 'T_long_co.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_co, ''UniformOutput'', false).''), [], 1);';
+    L{end+1} = sprintf('de_countrybins(T_long_co, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''World choropleth: %s'');', catname, catname);
+    L{end+1} = '';
+else
+    num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    for j = 1:numel(num_plot)
+        ncn = prof.name{num_plot(j)};
+        if isempty(time_idx)
+            L{end+1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, ncn); %#ok<AGROW>
+        else
+            tcn = prof.name{time_idx};
+            L{end+1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, tcn, ncn); %#ok<AGROW>
+        end
+        L{end+1} = ''; %#ok<AGROW>
+    end
+end
+
+if isempty(L), return; end
+code = strjoin(L, newline);
+end
+
+
 % ── se_assemble_recipe ───────────────────────────────────────────────────────
 function recipe_path = se_assemble_recipe(filepath, T, prof, panel, options)
 %SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
@@ -2670,7 +2724,8 @@ end
 load_code   = cg_load_code(filepath, T);
 clean_code  = cg_clean_code();
 plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
-choro_code  = cg_state_choropleth_code(T, prof);
+choro_code         = cg_state_choropleth_code(T, prof);
+country_code       = cg_country_choropleth_code(T, prof);
 
 header = sprintf([...
     '%% DataExplorer recipe — %s\n' ...
@@ -2690,6 +2745,11 @@ if ~isempty(choro_code)
     sections{end+1} = '';
     sections{end+1} = '%% === State Choropleth ===';
     sections{end+1} = choro_code;
+end
+if ~isempty(country_code)
+    sections{end+1} = '';
+    sections{end+1} = '%% === World Choropleth ===';
+    sections{end+1} = country_code;
 end
 
 script_text = strjoin(sections, newline);

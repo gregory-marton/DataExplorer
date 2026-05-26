@@ -1393,6 +1393,28 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must pass TimeCol for wide-year dataset');
         end
 
+        function test_cg_country_choropleth_code_emits_countrybins(testCase)
+            % Dataset with ISO-2 country codes + a value column must put de_countrybins
+            % in recipe. 12 rows, 10 unique ISO-2 codes → not all-unique (ID check).
+            countries = categorical(["US";"GB";"DE";"FR";"JP";"AU";"CA";"MX";"BR";"CN";"US";"GB"]);
+            T = table(countries, (1:12)', 'VariableNames', {'ISO2','GDP'});
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits);
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_countrybins'), ...
+                'Recipe must contain de_countrybins for ISO-2 country codes');
+        end
+
     end
 
 end
