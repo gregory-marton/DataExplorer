@@ -899,6 +899,11 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
 %CG_NETCDF_SPATIAL_RECIPE  Write a recipe for a spatial NetCDF grid variable.
 %   Recipe calls StrideSample + de_geoscatter — both are public library
 %   functions the student can re-use with different arguments.
+    % Resolve to absolute path so the recipe works regardless of working directory.
+    d = dir(filepath);
+    if ~isempty(d)
+        filepath = fullfile(d(1).folder, d(1).name);
+    end
     vname_safe = matlab.lang.makeValidName(varname);
     L = {};
     L{end+1} = sprintf('%% DataExplorer recipe — %s [%s]', filepath, varname);
