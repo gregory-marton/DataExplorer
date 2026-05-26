@@ -1344,6 +1344,28 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEmpty(msg, 'Expected no warning for well-conditioned input');
         end
 
+        function test_recipe_runs_without_error(testCase)
+            % DataExplorer on a simple table must write a recipe without error.
+            T = table(categorical(["ME";"ME";"NY";"NY"]), [1;2;3;4], ...
+                'VariableNames', {'StateCode','Value'});
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl2 = onCleanup(@() delete(tmp));
+
+            figs_before = findobj(0,'Type','figure');
+            DataExplorer(tmp);
+            figs_after = findobj(0,'Type','figure');
+            new_figs = setdiff(figs_after, figs_before);
+            cl3 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.verifyNotEmpty(hits, 'Expected a recipe file in tempdir');
+        end
+
     end
 
 end

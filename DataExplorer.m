@@ -111,11 +111,12 @@ end
 se_report(T, prof);
 
 %% ── 4.  Plot ──────────────────────────────────────────────────────────────
-se_plot(T, prof, options);
+panel = se_detect_panel(T, prof);
+se_plot(T, prof, options, panel);
 
 %% ── 5.  Recipe ────────────────────────────────────────────────────────────
 if ischar(source) || isstring(source)
-    recipe_path = se_assemble_recipe(string(source), T, prof, options);
+    recipe_path = se_assemble_recipe(string(source), T, prof, panel, options);
     if ~isempty(recipe_path)
         fprintf('  Running recipe to produce best-of plots…\n');
         T_return = T;   % run() shares our workspace; save T so recipe can't overwrite it
@@ -1023,7 +1024,7 @@ end
 
 
 % ── se_plot ──────────────────────────────────────────────────────────────────
-function se_plot(T, prof, options)
+function se_plot(T, prof, options, panel)
 %SE_PLOT  Produces: (1) variable overview, (2) time series if datetime detected,
 %         (3) pairwise scatter matrix for selected columns.
 
@@ -1093,7 +1094,6 @@ if isempty(sel)
 end
 
 % ── Panel detection: wide-format categorical × year datasets ─────────────────
-panel = se_detect_panel(T, prof);
 if panel.is_panel
     fprintf(['  Panel dataset detected: %s\n' ...
              '  Generating aggregate views; pairplot suppressed.\n'], panel.description);
@@ -2585,11 +2585,16 @@ end
 
 
 % ── se_assemble_recipe ───────────────────────────────────────────────────────
-function recipe_path = se_assemble_recipe(filepath, T, prof, options)
+function recipe_path = se_assemble_recipe(filepath, T, prof, panel, options)
 %SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
 %
 %   The script is self-contained: load + clean + 1-2 best-of plots.
 %   It runs without DataExplorer installed.
+%
+%   panel  — struct from se_detect_panel; reserved for panel-aware recipe
+%            generation (Task 5). Stored here so future edits have it in scope.
+
+assert(isstruct(panel), 'panel must be a struct'); % reserved for Task 5
 
 [~, bname, ~] = fileparts(filepath);
 bname_safe = regexprep(bname, '[^A-Za-z0-9_]', '_');
