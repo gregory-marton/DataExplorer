@@ -47,8 +47,18 @@ The 5 git-ignored files and their sources:
 | `examples/LLCP2024ASC.zip` | https://www.cdc.gov/brfss/annual_data/2024/files/LLCP2024ASC.zip |
 | `examples/LLCP2024.ASC` | Extracted from `LLCP2024ASC.zip` (same archive) |
 | `examples/ncdd-202501-grd-scaled.nc` | https://www.ncei.noaa.gov/pub/data/daily-grids/v1-0-0/2025/01/ncdd-202501-grd-scaled.nc |
-| `examples/FIADB_URBAN_ENTIRE_CSV.zip` | Navigate to https://research.fs.usda.gov/products/dataandtools/urban-datamart and locate the "FIADB Urban — Entire CSV" download link. Record the direct URL in `DOWNLOADS` before implementing. |
-| `examples/xr_latest_dwca.zip` | The project owner knows the source. Ask them to provide the direct download URL and add it to `DOWNLOADS` before implementing. |
+| `examples/FIADB_URBAN_ENTIRE_CSV.zip` | ⚠️ **URL unknown — stop here before implementing.** Navigate to https://research.fs.usda.gov/products/dataandtools/urban-datamart. If the direct download URL is not obvious, ask the project owner whether to replace this file with an alternative (see note below). |
+| `examples/xr_latest_dwca.zip` | ⚠️ **URL unknown — stop here before implementing.** Ask the project owner for the direct download URL. If unavailable, replace with the suggested alternative (see note below). |
+
+> **⚠️ Reviewer note for these two files:** Before writing the download script for `FIADB_URBAN_ENTIRE_CSV.zip` and `xr_latest_dwca.zip`, check with the project owner — the URLs were not findable at plan-writing time and may require login or a non-stable link.
+>
+> **Suggested replacements if the original sources are unavailable:**
+>
+> - `xr_latest_dwca.zip` — The repo already contains `ebd-datafile-SAMPLE.zip` (eBird Basic Dataset sample), which exercises the same figure types: lat/lon scatter via `se_plot_geo`, species categories, date axis. Consider replacing `xr_latest_dwca.zip` with a larger eBird download if more rows are needed, or simply reuse the existing sample. Direct eBird data requires a free account at https://ebird.org/data/download — no stable anonymous URL.
+>
+> - `FIADB_URBAN_ENTIRE_CSV.zip` — Core characteristics needed: a categorical column with tree species (high cardinality), a geographic column (city or state), and numeric measurements (diameter, height). Good public alternatives with stable direct URLs:
+>   - **USDA NASS Crops** (state + crop type + year + harvested acres): `https://www.nass.usda.gov/Statistics_by_State/index.php` — panel format similar to `Prod_dataset.xlsx`; may be redundant.
+>   - **SF Street Trees** (species + lat/lon + numeric): `https://data.sfgov.org/api/views/tkzw-k3nq/rows.csv?accessType=DOWNLOAD` (~5 MB, git-committable, has `Species`, `DBH`, lat/lon) — **recommended** if the FIADB source is inaccessible.
 
 - [ ] **Step 1: Verify the two uncertain download URLs**
 
