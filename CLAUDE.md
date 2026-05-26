@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`DataExplorer` is a standalone MATLAB utility for interactive, forgiving exploration of mixed-type tabular datasets. It is a demo/tool project — no build system, CI/CD, or test suite. The main deliverable is `DataExplorer.m` (2,023 lines) plus `SampleData.m` (168 lines).
+`DataExplorer` is a standalone MATLAB utility for interactive, forgiving exploration of mixed-type tabular datasets. It is a demo/tool project — no build system, CI/CD, or test suite. The main deliverable is `DataExplorer.m` plus two sampling helpers: `ReservoirSample.m` (random, tabular) and `StrideSample.m` (deterministic, tabular + 3-D NetCDF).
 
 ## Usage
 
@@ -21,8 +21,12 @@ T = DataExplorer(T_in)
 % Key optional arguments
 T = DataExplorer('bigfile.csv', MaxRows=10000, MaxVars=8, Columns={'col1','col2'})
 
-% Efficient uniform random sampling for large files (reservoir sampling)
-T = SampleData('bigfile.csv', 50000)
+% Random reservoir sample for large files (equal probability, any order)
+T = ReservoirSample('bigfile.csv', 50000)
+
+% Deterministic stride sample for large files or 3-D NetCDF grids
+T = StrideSample('bigfile.csv', MaxRows=50000)
+T = StrideSample('climate.nc', Variable='prcp', MaxRows=10000)
 ```
 
 ## Architecture: Five Phases in DataExplorer.m
@@ -72,7 +76,7 @@ The function executes a linear pipeline:
 - **Statistics and Machine Learning Toolbox:** Checked at runtime via `ver('stats')`. Enables violin plots and advanced distribution features. Code must degrade gracefully when absent.
 - **Mapping Toolbox:** Used for geo figure rendering.
 
-`SampleData.m` uses only base MATLAB (implements Algorithm R reservoir sampling directly).
+`ReservoirSample.m` and `StrideSample.m` use only base MATLAB.
 
 ## Working Conventions
 

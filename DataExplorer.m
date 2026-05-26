@@ -88,7 +88,7 @@ if ischar(source) || isstring(source)
                     fprintf('  [%d/%d] Spatial grid "%s" — stride sampling…\n', ...
                         nc_vi_, n_plot_, vname_vi_);
                     try
-                        T_vi_ = SampleNetCDF(string(source), ...
+                        T_vi_ = StrideSample(string(source), ...
                             Variable=string(vname_vi_), ...
                             MaxRows=options.MaxRows, Verbose=false);
                     catch ME_
@@ -588,7 +588,7 @@ function T = load_text(filepath, options)
         fprintf('  ℹ Large file (%.0f MB) — using reservoir sampling to read %d rows.\n', ...
             file_mb, options.MaxRows);
         fprintf('    This avoids loading the full file into memory.\n');
-        T = SampleData(filepath, options.MaxRows, 'Verbose', true);
+        T = ReservoirSample(filepath, options.MaxRows, Verbose=true);
         T = se_record_sampled(T, height(T));
     else
         opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
@@ -893,7 +893,7 @@ end
 
 function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
 %CG_NETCDF_SPATIAL_RECIPE  Write a recipe for a spatial NetCDF grid variable.
-%   Recipe calls SampleNetCDF + de_geoscatter — both are public library
+%   Recipe calls StrideSample + de_geoscatter — both are public library
 %   functions the student can re-use with different arguments.
     vname_safe = matlab.lang.makeValidName(varname);
     L = {};
@@ -902,7 +902,7 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
     L{end+1} = 'addpath(fileparts(which(''DataExplorer'')));';
     L{end+1} = '';
     L{end+1} = '% Load with stride sampling (never reads the full array)';
-    L{end+1} = sprintf('T = SampleNetCDF(''%s'', Variable=''%s'');', filepath, varname);
+    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'');', filepath, varname);
     L{end+1} = '';
     L{end+1} = '% Geo scatter: color = time, size = value';
     L{end+1} = sprintf('de_geoscatter(T.longitude, T.latitude, double(T.time), T.%s, ...', ...
@@ -2565,7 +2565,7 @@ if ext == ".zip"
         L{end+1} = 'opts.MissingRule = ''fill'';';
         L{end+1} = sprintf('T = readtable(inner_path, opts, ''Sheet'', ''%s'');', sheet);
     elseif sampled_n > 0
-        L{end+1} = sprintf('T = SampleData(inner_path, %d, ''Seed'', 42);', sampled_n);
+        L{end+1} = sprintf('T = ReservoirSample(inner_path, %d, Seed=42);', sampled_n);
     else
         L{end+1} = 'opts = detectImportOptions(inner_path, ''FileType'', ''text'');';
         L{end+1} = 'opts.MissingRule = ''fill'';';
@@ -2604,7 +2604,7 @@ else
         sampled_n = ud.sampled;
     end
     if sampled_n > 0
-        L{end+1} = sprintf('T = SampleData(''%s'', %d, ''Seed'', 42);', filepath, sampled_n);
+        L{end+1} = sprintf('T = ReservoirSample(''%s'', %d, Seed=42);', filepath, sampled_n);
     else
         L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
         L{end+1} = 'opts.MissingRule = ''fill'';';
