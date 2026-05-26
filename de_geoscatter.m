@@ -8,11 +8,15 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %   de_geoscatter(lon, lat, time_vals, prcp_vals, ColorLabel="Month", SizeLabel="prcp")
 %   [fig, ax] = de_geoscatter(...)
 %
+%   % Embed in a tiledlayout or subplot:
+%   tl = tiledlayout(1, 3);
+%   de_geoscatter(lon, lat, tmax, std_tmax, Parent=nexttile(tl), Title="tmax")
+%
 %   All four vector arguments must have the same length.
 %   color_data is mapped linearly to parula(256).
 %   size_data  is mapped linearly to marker area [MinSize, MaxSize] pt².
 %   Negative values in size_data are fine — the full range is normalised.
-%   A size legend is drawn in the lower-right corner showing min / mid / max values.
+%   A size legend is drawn in the lower-right corner when no Parent is given.
 %
 %   Optional arguments
 %   ──────────────────
@@ -27,6 +31,9 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %   SizeLim     ([NaN NaN])     Fix the data range used for size normalization [lo, hi].
 %                               Values outside the range are clamped to MinSize/MaxSize.
 %                               Useful for comparing std or range across variables.
+%   Parent      ([ ])           Axes handle to draw into.  When supplied, no new figure
+%                               is created and the size legend is omitted (use a shared
+%                               legend or colorbar at the layout level instead).
 
 arguments
     lon        (:,1) double
@@ -41,7 +48,10 @@ arguments
     options.MaxSize    (1,1) double  = 200
     options.ColorLim   (1,2) double  = [NaN NaN]
     options.SizeLim    (1,2) double  = [NaN NaN]
+    options.Parent                   = []
 end
+
+standalone = isempty(options.Parent);
 
 %% ── Normalise size_data to [MinSize, MaxSize] ─────────────────────────────────
 s_lo = min(size_data, [], 'omitnan');
@@ -58,15 +68,21 @@ else
 end
 sz_pts = options.MinSize + sz_norm .* (options.MaxSize - options.MinSize);
 
-%% ── Main scatter ──────────────────────────────────────────────────────────────
-if strlength(options.Title) > 0
-    fig_name = sprintf('Geo Scatter: %s', char(options.Title));
+%% ── Figure / axes ────────────────────────────────────────────────────────────
+if standalone
+    if strlength(options.Title) > 0
+        fig_name = sprintf('Geo Scatter: %s', char(options.Title));
+    else
+        fig_name = sprintf('Geo Scatter: %s', char(options.ColorLabel));
+    end
+    fig = figure('Color', 'w', 'Name', fig_name, 'NumberTitle', 'off');
+    ax  = axes(fig, 'Position', [0.08 0.08 0.70 0.85]);
 else
-    fig_name = sprintf('Geo Scatter: %s', char(options.ColorLabel));
+    ax  = options.Parent;
+    fig = ancestor(ax, 'figure');
 end
-fig = figure('Color', 'w', 'Name', fig_name, 'NumberTitle', 'off');
-ax  = axes(fig, 'Position', [0.08 0.08 0.70 0.85]);
 
+%% ── Main scatter ──────────────────────────────────────────────────────────────
 scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
 colormap(ax, parula(256));
 if ~any(isnan(options.ColorLim))
@@ -87,23 +103,25 @@ end
 box(ax, 'on');
 grid(ax, 'on');
 
-%% ── Size legend (inset axes, lower-right corner) ─────────────────────────────
-leg_ax = axes(fig, 'Position', [0.80 0.05 0.18 0.32]);
-axis(leg_ax, 'off');
-hold(leg_ax, 'on');
+%% ── Size legend (inset axes, lower-right corner — standalone only) ───────────
+if standalone
+    leg_ax = axes(fig, 'Position', [0.80 0.05 0.18 0.32]);
+    axis(leg_ax, 'off');
+    hold(leg_ax, 'on');
 
-rep_vals = [s_lo, (s_lo + s_hi) / 2, s_hi];
-rep_sz   = [options.MinSize, (options.MinSize + options.MaxSize) / 2, options.MaxSize];
-y_pos    = [2.6, 1.6, 0.6];
-for ki = 1:3
-    scatter(leg_ax, 0.35, y_pos(ki), rep_sz(ki), [0.45 0.45 0.45], ...
-        'filled', 'MarkerFaceAlpha', 0.6);
-    text(leg_ax, 0.70, y_pos(ki), sprintf('%.3g', rep_vals(ki)), ...
-        'VerticalAlignment', 'middle', 'FontSize', 7);
+    rep_vals = [s_lo, (s_lo + s_hi) / 2, s_hi];
+    rep_sz   = [options.MinSize, (options.MinSize + options.MaxSize) / 2, options.MaxSize];
+    y_pos    = [2.6, 1.6, 0.6];
+    for ki = 1:3
+        scatter(leg_ax, 0.35, y_pos(ki), rep_sz(ki), [0.45 0.45 0.45], ...
+            'filled', 'MarkerFaceAlpha', 0.6);
+        text(leg_ax, 0.70, y_pos(ki), sprintf('%.3g', rep_vals(ki)), ...
+            'VerticalAlignment', 'middle', 'FontSize', 7);
+    end
+    text(leg_ax, 0.35, 3.4, char(options.SizeLabel), ...
+        'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 8, ...
+        'Interpreter', 'none');
+    xlim(leg_ax, [0 1.3]);
+    ylim(leg_ax, [0 3.8]);
 end
-text(leg_ax, 0.35, 3.4, char(options.SizeLabel), ...
-    'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 8, ...
-    'Interpreter', 'none');
-xlim(leg_ax, [0 1.3]);
-ylim(leg_ax, [0 3.8]);
 end
