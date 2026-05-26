@@ -7,9 +7,12 @@ Usage:
 """
 import argparse
 import os
+import shutil
 import urllib.request
+import urllib.error
 import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).parent.parent
 EXAMPLES = ROOT / "examples"
@@ -44,27 +47,51 @@ def _progress(count, block, total):
         print(f"\r  {pct:5.1f}%", end="", flush=True)
 
 
+def _check_http(url: str) -> None:
+    """Raise RuntimeError if the server returns a non-2xx status."""
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, method="HEAD")
+        ) as resp:
+            if resp.status >= 300:
+                raise RuntimeError(f"HTTP {resp.status} fetching {url!r}")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code} fetching {url!r}") from exc
+
+
 def download_file(dest: Path, url: str, force: bool = False) -> bool:
     """Download url to dest. Returns True if downloaded, False if skipped."""
     if dest.exists() and not force:
         print(f"  skip  {dest.name} (already present)")
         return False
+    _check_http(url)
     print(f"  fetch {dest.name}")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, dest, reporthook=_progress)
-    print()   # newline after progress
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        urllib.request.urlretrieve(url, tmp, reporthook=_progress)
+        tmp.rename(dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    finally:
+        print()
     return True
 
 
 def extract_entry(zip_path: Path, entry: str, dest: Path, force: bool = False):
     """Extract a single entry from a zip to dest."""
+    # Guard against zip path traversal
+    resolved = Path(dest).resolve()
+    if not str(resolved).startswith(str(EXAMPLES.resolve())):
+        raise ValueError(f"Path traversal detected in entry {entry!r}")
     if dest.exists() and not force:
         print(f"  skip  {dest.name} (already present)")
         return
     print(f"  extract {entry} → {dest.name}")
     with zipfile.ZipFile(zip_path) as zf:
         with zf.open(entry) as src, open(dest, "wb") as out:
-            out.write(src.read())
+            shutil.copyfileobj(src, out)
 
 
 def main():
@@ -82,7 +109,7 @@ def main():
             download_file(dest, url, force=args.force)
         else:
             # Download the zip to a temp name, then extract
-            zip_dest = EXAMPLES / Path(url).name
+            zip_dest = EXAMPLES / Path(urlparse(url).path).name
             download_file(zip_dest, url, force=args.force)
             if zip_dest.exists():
                 extract_entry(zip_dest, extract, dest, force=args.force)
