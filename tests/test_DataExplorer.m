@@ -1461,6 +1461,34 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'sparkline_cat must be in recipe');
         end
 
+        function test_netcdf_multi_var_produces_multiple_figures(testCase)
+            % DataExplorer on a 2-data-variable NetCDF must produce at least 2 figures.
+            tmp = [tempname '.nc'];
+            cl = onCleanup(@() delete(tmp));
+            nccreate(tmp, 'lon',  'Dimensions', {'lon', 4}, 'Format', 'classic');
+            nccreate(tmp, 'lat',  'Dimensions', {'lat', 3}, 'Format', 'classic');
+            nccreate(tmp, 'temp', 'Dimensions', {'lon', 4, 'lat', 3}, 'Format', 'classic');
+            nccreate(tmp, 'prcp', 'Dimensions', {'lon', 4, 'lat', 3}, 'Format', 'classic');
+            ncwrite(tmp, 'lon',  [100;110;120;130]);
+            ncwrite(tmp, 'lat',  [10;20;30]);
+            ncwrite(tmp, 'temp', rand(4,3));
+            ncwrite(tmp, 'prcp', rand(4,3) * 10);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            figs_before = findobj(0,'Type','figure');
+
+            DataExplorer(tmp);
+
+            figs_after = findobj(0,'Type','figure');
+            new_figs   = setdiff(figs_after, figs_before);
+            cl3 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            testCase.verifyGreaterThanOrEqual(numel(new_figs), 2, ...
+                'Expected at least one figure per NetCDF data variable');
+        end
+
         function test_load_netcdf_with_ncvariable_no_prompt(testCase)
             % load_netcdf with NCVariable set must not error on 2D data (no prompt).
             tmp = [tempname '.nc'];

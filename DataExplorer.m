@@ -67,6 +67,48 @@ if isempty(source) && ~istable(source)
     source = fullfile(fpath, fname);
 end
 
+%% ── 1a.  NetCDF multi-variable fast-path ─────────────────────────────────
+if ischar(source) || isstring(source)
+    [~, ~, nc_ext_] = fileparts(string(source));
+    if ismember(lower(string(nc_ext_)), [".nc", ".nc4", ".netcdf"]) && ...
+            strlength(options.NCVariable) == 0
+        nc_info_   = ncinfo(string(source));
+        data_vars_ = nc_list_data_vars(nc_info_);
+        if ~isempty(data_vars_)
+            n_plot_ = min(options.MaxVars, numel(data_vars_));
+            fprintf('  NetCDF: %d data variable(s) found; plotting %d.\n', ...
+                numel(data_vars_), n_plot_);
+            T = table();
+            for nc_vi_ = 1:n_plot_
+                opts_vi_            = options;
+                opts_vi_.NCVariable = string(data_vars_{nc_vi_});
+                try
+                    T_vi_ = se_load(string(source), opts_vi_);
+                catch ME_
+                    fprintf('  ⚠ Skipping "%s": %s\n', data_vars_{nc_vi_}, ME_.message);
+                    continue
+                end
+                [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
+                [~, fn_, fe_]     = fileparts(string(source));
+                prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, data_vars_{nc_vi_});
+                se_echo_load_code(string(source), T_vi_);
+                se_report(T_vi_, prof_vi_);
+                panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
+                se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
+                recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, panel_vi_, opts_vi_);
+                if ~isempty(recipe_vi_)
+                    T_ret_ = T_vi_;
+                    run(recipe_vi_);
+                    T_vi_  = T_ret_;
+                end
+                T = T_vi_;
+            end
+            return
+        end
+        % No data vars found — fall through to normal single-variable path
+    end
+end
+
 if ischar(source) || isstring(source)
     T = se_load(string(source), options);
 elseif istable(source)
@@ -773,7 +815,7 @@ function T = load_netcdf(filepath, options)
 end
 
 % ── nc_list_data_vars ─────────────────────────────────────────────────────────
-function data_vars = nc_list_data_vars(info) %#ok<DEFNU>
+function data_vars = nc_list_data_vars(info)
 %NC_LIST_DATA_VARS  Names of data variables in a NetCDF file.
 %   A coordinate variable is one whose name matches any dimension name used
 %   anywhere in the file.  Everything else with at least one element is a
