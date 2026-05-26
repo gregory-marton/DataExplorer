@@ -1591,6 +1591,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_samplenetcdf_returns_table_within_maxrows(testCase)
+            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 30; nlat = 20; ntime = 5;
@@ -1603,10 +1604,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = SampleNetCDF(tmp, Variable='prcp', MaxRows=100, Verbose=false);
+            T = StrideSample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
             testCase.verifyClass(T, 'table');
             testCase.verifyLessThanOrEqual(height(T), 120, ...
-                'SampleNetCDF should not exceed MaxRows significantly');
+                'StrideSample should not exceed MaxRows significantly');
             expected_cols = {'longitude','latitude','time','prcp'};
             for k = 1:numel(expected_cols)
                 testCase.verifyTrue(ismember(expected_cols{k}, T.Properties.VariableNames), ...
@@ -1615,6 +1616,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_samplenetcdf_latrange_filters_rows(testCase)
+            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 10; nlat = 10; ntime = 3;
@@ -1627,13 +1629,14 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = SampleNetCDF(tmp, Variable='prcp', LatRange=[30 60], Verbose=false);
+            T = StrideSample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
             testCase.verifyTrue(all(T.latitude >= 30 & T.latitude <= 60), ...
                 'All returned rows must satisfy LatRange');
             testCase.verifyGreaterThan(height(T), 0, 'Expected some rows in LatRange [30,60]');
         end
 
         function test_samplenetcdf_auto_selects_first_data_variable(testCase)
+            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nccreate(tmp,'longitude','Dimensions',{'longitude',4},'Format','classic');
@@ -1645,7 +1648,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      [1;2]);
             ncwrite(tmp,'prcp',      rand(4,3,2));
 
-            T = SampleNetCDF(tmp, Verbose=false);
+            T = StrideSample(string(tmp), Verbose=false);
             testCase.verifyTrue(ismember('prcp', T.Properties.VariableNames), ...
                 'Expected data variable "prcp" in output table');
         end
@@ -1682,7 +1685,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_netcdf_spatial_recipe_contains_geoscatter(testCase)
-            % Recipe for a spatial grid NetCDF must call SampleNetCDF and de_geoscatter.
+            % Recipe for a spatial grid NetCDF must call StrideSample and de_geoscatter.
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 8; nlat = 6; ntime = 3;
@@ -1707,8 +1710,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_path = fullfile(hits(newest).folder, hits(newest).name);
             recipe_text = fileread(recipe_path);
 
-            testCase.verifyTrue(contains(recipe_text, 'SampleNetCDF'), ...
-                'Recipe must call SampleNetCDF');
+            testCase.verifyTrue(contains(recipe_text, 'StrideSample'), ...
+                'Recipe must call StrideSample');
             testCase.verifyTrue(contains(recipe_text, 'de_geoscatter'), ...
                 'Recipe must call de_geoscatter');
 
