@@ -666,6 +666,23 @@ function T = load_netcdf(filepath, options)
         elseif options.AutoSelect
             raw = '3';   % flatten preserves all coordinates — best for grouping flow
             fprintf('  AutoSelect: flattening to long-format table\n');
+        elseif strlength(options.NCVariable) > 0
+            % NCVariable was explicitly set → use size heuristic, no prompt
+            if total_elems <= options.MaxRows * 10
+                raw = '3';
+                fprintf('  Auto: flattening to long-format (%d elements)\n', total_elems);
+            else
+                % Mean over time-like dimension if present; else dim 1
+                dim_choice = 1;
+                for k = 1:ndim
+                    if ~isempty(regexpi(dim_names{k}, 'time|^t$|day|month|year', 'once'))
+                        dim_choice = k; break;
+                    end
+                end
+                raw = '1';
+                fprintf('  Auto: mean over "%s" (%d elements > MaxRows×10)\n', ...
+                    dim_names{dim_choice}, total_elems);
+            end
         else
             while true
                 raw = input('  Choice (Enter = 1): ', 's');
@@ -753,6 +770,29 @@ function T = load_netcdf(filepath, options)
     T = se_sample(T, options.MaxRows);
     fprintf('  ✓ Loaded %d × %d table from "%s".\n', height(T), width(T), varname);
     T.Properties.UserData = struct('sheet', '', 'inner_file', '', 'nc_varname', varname);
+end
+
+% ── nc_list_data_vars ─────────────────────────────────────────────────────────
+function data_vars = nc_list_data_vars(info) %#ok<DEFNU>
+%NC_LIST_DATA_VARS  Names of data variables in a NetCDF file.
+%   A coordinate variable is one whose name matches any dimension name used
+%   anywhere in the file.  Everything else with at least one element is a
+%   data variable.
+all_dims = {};
+for k = 1:numel(info.Variables)
+    if ~isempty(info.Variables(k).Dimensions)
+        all_dims = [all_dims, {info.Variables(k).Dimensions.Name}]; %#ok<AGROW>
+    end
+end
+all_dims = unique(all_dims);
+
+data_vars = {};
+for k = 1:numel(info.Variables)
+    v = info.Variables(k);
+    if ~ismember(v.Name, all_dims) && ~isempty(v.Size) && prod(v.Size) > 0
+        data_vars{end+1} = v.Name; %#ok<AGROW>
+    end
+end
 end
 
 function rc = filter_coords(coord_vars, dim_names)

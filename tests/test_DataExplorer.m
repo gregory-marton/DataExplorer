@@ -1461,6 +1461,26 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'sparkline_cat must be in recipe');
         end
 
+        function test_load_netcdf_with_ncvariable_no_prompt(testCase)
+            % load_netcdf with NCVariable set must not error on 2D data (no prompt).
+            tmp = [tempname '.nc'];
+            cl = onCleanup(@() delete(tmp));
+            nccreate(tmp, 'lon',  'Dimensions', {'lon', 4}, 'Format', 'classic');
+            nccreate(tmp, 'lat',  'Dimensions', {'lat', 3}, 'Format', 'classic');
+            nccreate(tmp, 'temp', 'Dimensions', {'lon', 4, 'lat', 3}, 'Format', 'classic');
+            ncwrite(tmp, 'lon',  [100;110;120;130]);
+            ncwrite(tmp, 'lat',  [10;20;30]);
+            ncwrite(tmp, 'temp', rand(4,3));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            T = DataExplorer(tmp, NCVariable='temp');
+            testCase.verifyClass(T, 'table');
+            testCase.verifyGreaterThan(height(T), 0);
+        end
+
         function test_recipe_produces_statebins_figure_when_run(testCase)
             % Write a CSV with StateCode + wide years, run DataExplorer, then verify a
             % Choropleth figure appears (produced by the recipe's de_statebins call).
