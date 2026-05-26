@@ -3564,7 +3564,7 @@ if ~isempty(wide_yr_idxs)
 
     fig2 = figure('Name', se_fig_title(sprintf('%s × year', catname), prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-    ax = axes(fig2); %#ok<LAXES>
+    ax = axes(fig2);
 
     Heat = NaN(n_st_plot, n_t);
     for s = 1:n_st_plot
@@ -3808,7 +3808,7 @@ pct_mat(isnan(pct_mat)) = 0;
 fig = figure('Name', se_fig_title( ...
     sprintf('%% of %s total by %s', total_code, catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-ax = axes(fig); %#ok<LAXES>
+ax = axes(fig);
 
 % area() cycles through ColorOrder; hold(on) prevents reset on first call
 n_shown = size(pct_mat, 1);
@@ -3900,7 +3900,7 @@ n_rows_show = n_rows_all(top_idx);
 
 fig = figure('Name', se_fig_title(sprintf('By %s over time', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-ax = axes(fig); %#ok<LAXES>
+ax = axes(fig);
 hold(ax, 'on');
 
 % "Other" line first (dashed gray, rendered behind named lines)
@@ -3935,7 +3935,8 @@ if has_other
     try
         h_o.DataTipTemplate.DataTipRows(end+1) = ...
             dataTipTextRow(catname, repmat({other_label}, numel(yr_sorted), 1));
-    catch, end
+    catch
+    end
 end
 
 % Named top-K lines with CI
@@ -3967,7 +3968,8 @@ for lk = plot_order
     try
         h_k.DataTipTemplate.DataTipRows(end+1) = ...
             dataTipTextRow(catname, repmat(levels_show(lk), numel(yr_sorted), 1));
-    catch, end
+    catch
+    end
 end
 
 hold(ax, 'off');
@@ -3989,7 +3991,7 @@ end
 function tf = se_is_total_level(lv)
 % Case-insensitive word-boundary match for "total" in a level name.
 % Catches: 'Total', 'TOTAL', 'US Total', 'Grand Total', etc.
-tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b'));
+tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b', 'once'));
 end
 
 

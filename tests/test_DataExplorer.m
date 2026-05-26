@@ -1442,6 +1442,31 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must contain sparkline_cat for geo x categorical dataset');
         end
 
+        function test_inversion_geo_figures_in_recipe_not_during_seplot(testCase)
+            % For a geo x cat dataset, the recipe must contain de_statebins and sparkline_cat.
+            states = categorical(repelem(["ME";"NY";"CA"], 3));
+            msns   = categorical(repmat(["A";"B";"C"], 3, 1));
+            T = table(states, msns, [1;2;3;4;5;6;7;8;9], [10;11;12;13;14;15;16;17;18], [19;20;21;22;23;24;25;26;27], ...
+                'VariableNames', {'StateCode','MSN','x2020','x2021','x2022'});
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits);
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
+                'de_statebins must be in recipe');
+            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
+                'sparkline_cat must be in recipe');
+        end
+
     end
 
 end
