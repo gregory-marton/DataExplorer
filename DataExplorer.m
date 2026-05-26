@@ -1538,8 +1538,12 @@ elseif isscalar(cat_cols)
 end
 
 % ── Build figure ─────────────────────────────────────────────────────────────
-fig = figure('Name', se_fig_title('Map', prof.source_name),...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+if ~isempty(enc_col)
+    fig_name = sprintf('Map: %s', prof.name{enc_col});
+else
+    fig_name = se_fig_title('Map', prof.source_name);
+end
+fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 se_stamp_source(fig, prof.source_name);
 BASE_SZ = 20;   % default marker area in points²
 
@@ -1656,7 +1660,7 @@ else
     fprintf('    (Mapping Toolbox not found — using plain scatter as fallback)\n');
 end
 
-title(ax, se_src_prefix(prof.source_name, sprintf('map  (n = %d)', sum(valid))), ...
+title(ax, sprintf('%s  (n = %d)', fig_name, sum(valid)), ...
     'FontSize', 11, 'Interpreter', 'none');
 end
 
