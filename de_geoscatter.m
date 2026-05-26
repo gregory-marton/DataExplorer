@@ -92,8 +92,11 @@ end
 sc = scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
 sc.DataTipTemplate.DataTipRows(1).Label = 'Longitude';
 sc.DataTipTemplate.DataTipRows(2).Label = 'Latitude';
-sc.DataTipTemplate.DataTipRows(3).Label = char(options.ColorLabel);
-sc.DataTipTemplate.DataTipRows(4) = dataTipTextRow(char(options.SizeLabel), size_data);
+sc.DataTipTemplate.DataTipRows = [
+    sc.DataTipTemplate.DataTipRows(1:2)
+    dataTipTextRow(char(options.ColorLabel), color_data)
+    dataTipTextRow(char(options.SizeLabel),  size_data)
+];
 colormap(ax, options.Colormap);
 if ~any(isnan(options.ColorLim))
     clim(ax, options.ColorLim);
