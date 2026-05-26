@@ -83,7 +83,7 @@ def extract_entry(zip_path: Path, entry: str, dest: Path, force: bool = False):
     """Extract a single entry from a zip to dest."""
     # Guard against zip path traversal
     resolved = Path(dest).resolve()
-    if not str(resolved).startswith(str(EXAMPLES.resolve())):
+    if not resolved.is_relative_to(EXAMPLES.resolve()):
         raise ValueError(f"Path traversal detected in entry {entry!r}")
     if dest.exists() and not force:
         print(f"  skip  {dest.name} (already present)")
