@@ -18,7 +18,8 @@ function [fig, ax] = de_geoscatter(lon, lat, color_data, size_data, options)
 %   ──────────────────
 %   ColorLabel  ("Color")   Colorbar label.
 %   SizeLabel   ("Size")    Size-legend title.
-%   Title       ("")        Figure/axes title string.
+%   Title       ("")        Variable name — used in window title and axes title.
+%   Source      ("")        Dataset name — appended to axes title only (not window title).
 %   MinSize     (5)         Minimum marker area (pt²).
 %   MaxSize     (200)       Maximum marker area (pt²).
 
@@ -30,6 +31,7 @@ arguments
     options.ColorLabel (1,1) string = "Color"
     options.SizeLabel  (1,1) string = "Size"
     options.Title      (1,1) string = ""
+    options.Source     (1,1) string = ""
     options.MinSize    (1,1) double = 5
     options.MaxSize    (1,1) double = 200
 end
@@ -60,7 +62,12 @@ cb.Label.String = char(options.ColorLabel);
 xlabel(ax, 'Longitude');
 ylabel(ax, 'Latitude');
 if strlength(options.Title) > 0
-    title(ax, char(options.Title), 'Interpreter', 'none');
+    if strlength(options.Source) > 0
+        ax_title = sprintf('%s  —  %s', char(options.Title), char(options.Source));
+    else
+        ax_title = char(options.Title);
+    end
+    title(ax, ax_title, 'Interpreter', 'none');
 end
 box(ax, 'on');
 grid(ax, 'on');

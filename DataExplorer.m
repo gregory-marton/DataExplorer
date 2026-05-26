@@ -947,9 +947,11 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
     L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, ''%s'');', vname_safe);
     L{end+1} = '';
     L{end+1} = '% Geo scatter: color = temporal mean, size = temporal std';
+    [~, src_base] = fileparts(filepath);
+    src_base_sq = strrep(src_base, '''', '''''');
     L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vname_safe, vname_safe);
     L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vname_sq, vname_sq);
-    L{end+1} = sprintf('    Title=''%s'');', vname_sq);
+    L{end+1} = sprintf('    Title=''%s'', Source=''%s'');', vname_sq, src_base_sq);
     code = strjoin(L, newline);
 
     [~, basename] = fileparts(filepath);
