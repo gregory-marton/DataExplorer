@@ -74,6 +74,12 @@ The function executes a linear pipeline:
 
 `SampleData.m` uses only base MATLAB (implements Algorithm R reservoir sampling directly).
 
+## Working Conventions
+
+**File inspection:** Use the `Read` tool to read files and inspect code. Reserve `Bash` for running commands (tests, git, MATLAB). Do not use `grep`/`cat`/`head`/`tail` via Bash when `Read` will do.
+
+**Test harness:** Run `python3 -m pytest tests/ -v` (fast, smoke) to gate commits. Slow MATLAB tests (`-m slow`) are integration tests — run them as a background pass after all tasks complete, not in per-step TDD loops.
+
 ## Example Datasets
 
 `examples/` contains 13 datasets covering the full format range used for manual testing and (eventually) regression testing: Excel (multi-sheet), ZIP (CSV inside), NetCDF, ASC. Notable:
