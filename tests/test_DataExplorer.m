@@ -1467,6 +1467,35 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'sparkline_cat must be in recipe');
         end
 
+        function test_recipe_produces_statebins_figure_when_run(testCase)
+            % Write a CSV with StateCode + wide years, run DataExplorer, then verify a
+            % Choropleth figure appears (produced by the recipe's de_statebins call).
+            states = categorical(repelem(["ME";"NY";"CA";"TX";"FL"], 3));
+            T = table(states, (1:15)', (16:30)', (31:45)', ...
+                'VariableNames', {'StateCode','x2020','x2021','x2022'});
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            figs_before = findobj(0,'Type','figure');
+            DataExplorer(tmp);
+            figs_after = findobj(0,'Type','figure');
+            new_figs = setdiff(figs_after, figs_before);
+            cl3 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
+
+            % At least one figure must be a statebins tile-grid choropleth
+            % (de_statebins sets the figure Name to the Title argument)
+            names = arrayfun(@(f) string(f.Name), new_figs(isgraphics(new_figs)), 'UniformOutput', false);
+            names = [names{:}];
+            has_choro = any(contains(names, 'Choropleth'));
+            testCase.verifyTrue(has_choro, ...
+                'Recipe must produce a Choropleth figure via de_statebins');
+        end
+
     end
 
 end
