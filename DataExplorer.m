@@ -130,6 +130,10 @@ if ischar(source) || isstring(source)
                 end
                 if ~isempty(recipe_vi_)
                     T_ret_ = T_vi_; run(recipe_vi_); T_vi_ = T_ret_;
+                    fprintf('\n  ══════════════════════════════════════════════════════════\n');
+                    fprintf('  Recipe script: %s\n', recipe_vi_);
+                    fprintf('  To keep it:    save_recipe(''%s_%s_recipe.m'')\n', fn_, vname_vi_);
+                    fprintf('  ══════════════════════════════════════════════════════════\n\n');
                 end
                 T = T_vi_;
             end
