@@ -365,12 +365,11 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_dataexplorer_wide_year_state_choropleth_has_sparklines(testCase)
-            % DataExplorer should produce a choropleth with per-tile sparklines when
-            % the input table has wide-format year columns (x####) and a state column.
-            % de_statebins/de_tilegrid replaced the interactive slider with static
-            % sparklines — no Mapping Toolbox required.
-            % Regression: se_plot_state_choropleth did not pivot wide years to long,
-            % so it called without TimeCol and no time-series rendering appeared.
+            % Post-inversion (Task 6): geo × categorical sparklines are recipe-only.
+            % DataExplorer with wide-format year columns and a state+category column pair
+            % must include de_statebins and sparkline_cat in the generated recipe.
+            % The direct render path no longer produces a sparkline_cat figure; the recipe
+            % code generator (cg_geo_multicategorical_code) takes that role instead.
 
             % 20 states × 3 MSN codes = 60 rows.  Each state appears 3 times so
             % the profiler does not flag it as an all-unique ID column.  20 unique
@@ -379,26 +378,29 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                     'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD'};
             msn3 = {'COAL','GAS','OIL'};
             [st, ms] = ndgrid(US20, msn3);
+            tmp = [tempname '.csv'];
             T = table(categorical(st(:)), categorical(ms(:)), ...
                 100 + 50*randn(60,1), ...
                 110 + 50*randn(60,1), ...
                 120 + 50*randn(60,1), ...
                 'VariableNames', {'StateCode','MSN','x2020','x2021','x2022'});
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
 
             old_vis = get(0, 'DefaultFigureVisible');
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
-            figs_before = findobj(0, 'Type', 'figure');
 
-            DataExplorer(T);
+            DataExplorer(tmp);
 
-            figs_after  = findobj(0, 'Type', 'figure');
-            new_figs    = setdiff(figs_after, figs_before);
-            fig_cleanup = onCleanup(@() close(new_figs(isgraphics(new_figs))));
-
-            sparklines = findobj(new_figs, 'Type', 'line', 'Tag', 'sparkline');
-            testCase.verifyNotEmpty(sparklines, ...
-                'DataExplorer with wide-year state data should draw per-tile sparklines in choropleth');
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'Expected a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
+                'Recipe must contain de_statebins for wide-year state+category dataset');
+            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
+                'Recipe must contain sparkline_cat for wide-year state+category dataset');
         end
 
         function test_de_statebins_sparklines_with_timecol(testCase)
@@ -1245,9 +1247,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_geo_multicategorical_produces_figure(testCase)
-            % Cross-indexed StateCode × MSN + wide year columns should produce
-            % a figure whose name contains both categorical column names.
-            % 3 states × 3 MSN codes = 9 rows, ratio = 9/(3×3) = 1.0 → fires.
+            % Post-inversion (Task 6): geo × categorical tile figure is recipe-only.
+            % For StateCode × MSN + wide year columns, the recipe must include
+            % de_statebins with sparkline_cat. No direct figure is created during
+            % DataExplorer() — the figure appears at recipe execution time.
             states = repelem(["ME";"NY";"CA"], 3);
             msns   = repmat(["A";"B";"C"], 3, 1);
             T = table(categorical(states), categorical(msns), ...
@@ -1255,23 +1258,24 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             for yr = 2000:2003
                 T.(['x' num2str(yr)]) = randn(9, 1);
             end
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
 
             old_vis = get(0,'DefaultFigureVisible');
             set(0,'DefaultFigureVisible','off');
-            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
-            figs_before = findobj(0,'Type','figure');
+            vis_cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            DataExplorer(T);
+            DataExplorer(tmp);
 
-            figs_after = findobj(0,'Type','figure');
-            new_figs   = setdiff(figs_after, figs_before);
-            cl2 = onCleanup(@() close(new_figs(isgraphics(new_figs))));
-
-            names = arrayfun(@(f) string(f.Name), new_figs, 'UniformOutput', false);
-            names = [names{:}];
-            has_geo_cat = any(contains(names,'StateCode') & contains(names,'MSN'));
-            testCase.verifyTrue(has_geo_cat, ...
-                'Expected a figure with both StateCode and MSN in its name');
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'Expected a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
+                'Recipe must contain de_statebins for geo x categorical dataset');
+            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
+                'Recipe must contain sparkline_cat for geo x categorical dataset');
         end
 
         function test_tilegrid_scatter_cat_draws_points(testCase)

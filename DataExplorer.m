@@ -3050,39 +3050,16 @@ if ~isempty(cat_useful)
     end
 end
 
-%% ── Cross-indexed geo × categorical: sparklines or scatter per tile ──────────
-all_cats_for_geo = [cat_useful(:)', cat_big(:)'];
-geo_cats   = all_cats_for_geo(arrayfun(@(ci) ...
-    se_looks_like_states(prof,ci,T) || se_looks_like_countries(prof,ci,T), all_cats_for_geo));
-other_cats = all_cats_for_geo(~ismember(all_cats_for_geo, geo_cats));
-for gi = 1:numel(geo_cats)
-    geo_ci = geo_cats(gi);
-    for oi = 1:numel(other_cats)
-        other_ci = other_cats(oi);
-        n_geo    = prof.nunique(geo_ci);
-        n_other  = prof.nunique(other_ci);
-        ratio    = height(T) / (n_geo * n_other);
-        if ratio >= 0.5 && ratio <= 1.5
-            num_plot = unique([ts_num(:)', sel_num(:)'], 'stable');
-            if ~isempty(wide_yr_idxs) || numel(num_plot) >= 2
-                se_plot_geo_multicategorical(T, prof, geo_ci, other_ci, ...
-                    wide_yr_idxs, wide_yr_vals, num_plot);
-            end
-        end
-    end
-end
-
 % High-cardinality categoricals: geo treatment OR top-K drill-down with Other
+% Note: geo × categorical sparkline_cat figures are now recipe-only
+%       (cg_geo_multicategorical_code). The direct render path was removed here.
 TOP_K = 8;
 for k = 1:numel(cat_big)
     ci = cat_big(k);
     if se_looks_like_states(prof, ci, T)
         se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis);
     elseif se_looks_like_countries(prof, ci, T)
-        num_idxs = unique([sel_num, ts_num(:)']);
-        num_idxs = num_idxs(prof.type(num_idxs) == "numeric");
-        if ~isempty(time_idx), num_idxs = num_idxs(num_idxs ~= time_idx); end
-        se_plot_country_choropleth(T, prof, ci, num_idxs, time_idx, is_year_axis);
+        % country choropleth moved to recipe (cg_country_choropleth_code)
     else
         catname_k  = prof.name{ci};
         cat_col_k  = T.(catname_k);
@@ -3500,35 +3477,6 @@ end
 end
 
 
-% ── se_plot_country_choropleth ────────────────────────────────────────────────
-function se_plot_country_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis) %#ok<INUSL>
-%SE_PLOT_COUNTRY_CHOROPLETH  Thin wrapper: calls de_countrybins for each numeric variable.
-catname = prof.name{cat_idx};
-tcn = '';
-if ~isempty(time_idx), tcn = prof.name{time_idx}; end
-
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
-if ~isempty(wide_yr_idxs) && isempty(time_idx)
-    fig_title = se_fig_title(sprintf('World choropleth: %s', catname), prof.source_name);
-    T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
-    de_countrybins(T_long, 'CountryCol', catname, 'ColorCol', 'Value', ...
-        'TimeCol', 'Year', 'Title', fig_title);
-    num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
-end
-
-for j = 1:numel(num_idxs)
-    ncn       = prof.name{num_idxs(j)};
-    fig_title = se_fig_title(sprintf('World choropleth: %s', ncn), prof.source_name);
-    if isempty(tcn)
-        de_countrybins(T, 'CountryCol', catname, 'ColorCol', ncn, 'Title', fig_title);
-    else
-        de_countrybins(T, 'CountryCol', catname, 'ColorCol', ncn, ...
-            'TimeCol', tcn, 'Title', fig_title);
-    end
-end
-end
-
-
 % ── se_plot_state_summary ─────────────────────────────────────────────────────
 function se_plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis)
 %SE_PLOT_STATE_SUMMARY  Bar charts of mean-per-state and state×time heatmaps.
@@ -3737,70 +3685,6 @@ T_long.Year  = repelem(yr_sorted(:), n_rows);
 value_col    = cell2mat(arrayfun(@(ti) double(T.(yr_names_s(ti))), ...
                    (1:n_t)', 'UniformOutput', false));
 T_long.Value = value_col;
-end
-
-
-% ── se_plot_geo_multicategorical ──────────────────────────────────────────────
-function se_plot_geo_multicategorical(T, prof, geo_idx, cat_idx, yr_idxs, yr_vals, num_idxs)
-%SE_PLOT_GEO_MULTICATEGORICAL  Tile-grid figure with per-tile category sparklines or scatter.
-%   Fires when a geo categorical and another categorical cross-index the dataset rows.
-geo_name  = prof.name{geo_idx};
-cat_name  = prof.name{cat_idx};
-is_states = se_looks_like_states(prof, geo_idx, T);
-
-% Top-K category levels by row frequency, excluding total-like labels
-TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
-cat_col  = T.(cat_name);
-cat_levs = cellstr(categories(cat_col));
-cnt_levs = countcats(cat_col);
-is_tot   = cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), cat_levs);
-cat_levs = cat_levs(~is_tot);
-cnt_levs = cnt_levs(~is_tot);
-if isempty(cat_levs), return; end
-[~, ord] = sort(cnt_levs,'descend');
-K        = min(5, numel(cat_levs));
-top_levs = cat_levs(ord(1:K));
-
-if ~isempty(yr_idxs)
-    T_long  = se_pivot_wide_to_long(T, prof, yr_idxs, yr_vals);
-    T_filt  = T_long(ismember(string(T_long.(cat_name)), string(top_levs)), :);
-    ydata_v = T_filt.Value(~isnan(T_filt.Value));
-    if isempty(ydata_v) || min(ydata_v) >= max(ydata_v), return; end
-    title_str = sprintf('%s x %s: Value by category over time', geo_name, cat_name);
-    fprintf('  Geo x categorical tile: %s\n', title_str);
-    if is_states
-        de_statebins(T_filt, 'StateCol',geo_name, 'ColorCol','Value', ...
-            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
-            'TopK',K, 'Title',title_str);
-    else
-        de_countrybins(T_filt, 'CountryCol',geo_name, 'ColorCol','Value', ...
-            'TimeCol','Year', 'CellRenderer','sparkline_cat', 'CatCol',cat_name, ...
-            'TopK',K, 'Title',title_str);
-    end
-
-
-elseif numel(num_idxs) >= 2
-    num1_name = prof.name{num_idxs(1)};
-    num2_name = prof.name{num_idxs(2)};
-    T_plot    = T(ismember(string(T.(cat_name)), string(top_levs)), :);
-    xd = T_plot.(num1_name);  xd = xd(~isnan(xd));
-    yd = T_plot.(num2_name);  yd = yd(~isnan(yd));
-    if isempty(xd) || isempty(yd), return; end
-    sh_xlim   = [min(xd), max(xd)];
-    sh_ylim2  = [min(yd), max(yd)];
-    if sh_xlim(1) >= sh_xlim(2) || sh_ylim2(1) >= sh_ylim2(2), return; end
-    title_str = sprintf('%s x %s: %s vs %s', geo_name, cat_name, num1_name, num2_name);
-    fprintf('  Geo x categorical scatter: %s\n', title_str);
-    if is_states
-        de_statebins(T_plot, 'StateCol',geo_name, 'CellRenderer','scatter_cat', ...
-            'CatCol',cat_name, 'XCol',num1_name, 'YCol',num2_name, ...
-            'SharedXLim',sh_xlim, 'SharedYLim',sh_ylim2, 'Title',title_str);
-    else
-        de_countrybins(T_plot, 'CountryCol',geo_name, 'CellRenderer','scatter_cat', ...
-            'CatCol',cat_name, 'XCol',num1_name, 'YCol',num2_name, ...
-            'SharedXLim',sh_xlim, 'SharedYLim',sh_ylim2, 'Title',title_str);
-    end
-end
 end
 
 
