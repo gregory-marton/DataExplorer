@@ -117,17 +117,19 @@ if ischar(source) || isstring(source)
                 prof_sp_.source_name = sprintf('%s%s  [%s]', fn_, fe_, ...
                     strjoin(sp_vars_, ', '));
                 prof_sp_.nc_spatial_grid = true;
-                se_report(T_sp_, prof_sp_);
+                % Sampling note: rows kept vs. total elements in first spatial var.
+                var_idx_sp_ = find(strcmp({nc_info_.Variables.Name}, sp_vars_{1}), 1);
+                sz_sp_      = double(nc_info_.Variables(var_idx_sp_).Size);
+                total_sp_   = prod(sz_sp_);
+                dim_str_    = strjoin(arrayfun(@num2str, sz_sp_, 'UniformOutput', false), '×');
+                prof_sp_.sampling_note = sprintf('stride sampled: %d / %d total  (%s)', ...
+                    height(T_sp_), total_sp_, dim_str_);
                 se_plot(T_sp_, prof_sp_, options, se_detect_panel(T_sp_, prof_sp_));
-                % Individual recipe + geo scatter per variable
-                for sp_k_ = 1:numel(sp_vars_)
-                    recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_{sp_k_});
-                    T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
-                    fprintf('\n  ══════════════════════════════════════════════════════════\n');
-                    fprintf('  Recipe script: %s\n', recipe_sp_);
-                    fprintf('  To keep it:    save_recipe(''%s_%s_recipe.m'')\n', fn_, sp_vars_{sp_k_});
-                    fprintf('  ══════════════════════════════════════════════════════════\n\n');
-                end
+                % Single recipe covering all spatial variables + one geo scatter per var.
+                recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_);
+                T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
+                fprintf('\n  Recipe written — to keep it: save_recipe(''name.m'')\n');
+                fprintf('    %s\n\n', recipe_sp_);
                 T = T_sp_;
             end
 
@@ -923,40 +925,52 @@ function tf = nc_is_spatial_grid(info, varname)
     tf = has_lat && has_lon;
 end
 
-function recipe_path = cg_netcdf_spatial_recipe(filepath, varname)
-%CG_NETCDF_SPATIAL_RECIPE  Write a recipe for a spatial NetCDF grid variable.
-%   Recipe calls StrideSample + de_geoscatter — both are public library
-%   functions the student can re-use with different arguments.
-    % Resolve to absolute path so the recipe works regardless of working directory.
+function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
+%CG_NETCDF_SPATIAL_RECIPE  Write a single recipe for all spatial NetCDF variables.
+%   sp_vars is a cell array of variable name strings.
+%   Recipe calls StrideSample + de_geoscatter for each variable.
     d = dir(filepath);
     if ~isempty(d)
         filepath = fullfile(d(1).folder, d(1).name);
     end
-    vname_safe = matlab.lang.makeValidName(varname);
-    fpath_sq   = strrep(char(filepath), '''', '''''');
-    vname_sq   = strrep(varname, '''', '''''');
+    fpath_sq = strrep(char(filepath), '''', '''''');
+    [~, basename] = fileparts(filepath);
+    src_base_sq = strrep(basename, '''', '''''');
+
+    all_safe = cellfun(@matlab.lang.makeValidName, sp_vars, 'UniformOutput', false);
+    vars_cell_str = ['{''', strjoin(all_safe, ''','''), '''}'];
+
     L = {};
-    L{end+1} = sprintf('%% DataExplorer recipe — %s  [%s]', filepath, varname);
+    L{end+1} = sprintf('%% DataExplorer recipe — %s  [%s]', filepath, strjoin(sp_vars, ', '));
     L{end+1} = '';
     L{end+1} = 'addpath(fileparts(which(''DataExplorer'')));';
     L{end+1} = '';
-    L{end+1} = '% Stride-sample the variable (never reads the full array)';
-    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'');', fpath_sq, vname_sq);
+    L{end+1} = '% Stride-sample each variable and combine into one table';
+    first_sq = strrep(sp_vars{1}, '''', '''''');
+    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'', Verbose=false);', fpath_sq, first_sq);
+    for k = 2:numel(sp_vars)
+        vn_sq   = strrep(sp_vars{k}, '''', '''''');
+        vn_safe = all_safe{k};
+        ln_ = sprintf('T.%s = StrideSample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
+            vn_safe, fpath_sq, vn_sq, vn_safe);
+        L{end+1} = ln_; %#ok<AGROW>
+    end
     L{end+1} = '';
-    L{end+1} = '% Aggregate by grid cell: one point per (lon, lat) across all time steps';
-    L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, ''%s'');', vname_safe);
+    L{end+1} = '% Aggregate by grid cell: mean and std across all time steps';
+    L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, %s);', vars_cell_str);
     L{end+1} = '';
-    L{end+1} = '% Geo scatter: color = temporal mean, size = temporal std';
-    [~, src_base] = fileparts(filepath);
-    src_base_sq = strrep(src_base, '''', '''''');
-    L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vname_safe, vname_safe);
-    L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vname_sq, vname_sq);
-    L{end+1} = sprintf('    Title=''%s'', Source=''%s'');', vname_sq, src_base_sq);
+    L{end+1} = '% Geo scatter per variable: color = temporal mean, size = temporal std';
+    for k = 1:numel(sp_vars)
+        vn_sq   = strrep(sp_vars{k}, '''', '''''');
+        vn_safe = all_safe{k};
+        L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vn_safe, vn_safe); %#ok<AGROW>
+        L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vn_sq, vn_sq); %#ok<AGROW>
+        L{end+1} = sprintf('    Title=''%s'', Source=''%s'');', vn_sq, src_base_sq); %#ok<AGROW>
+    end
     code = strjoin(L, newline);
 
-    [~, basename] = fileparts(filepath);
-    recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s_%s.m', ...
-        matlab.lang.makeValidName(basename), vname_safe));
+    recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s.m', ...
+        matlab.lang.makeValidName(basename)));
     fid = fopen(recipe_path, 'w');
     fprintf(fid, '%s\n', code);
     fclose(fid);
@@ -1451,6 +1465,10 @@ for pg = 1:n_pages
                 idx_range(1), idx_range(end), nv, pg, n_pages));
     end
     title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
+    if isfield(prof, 'sampling_note') && strlength(prof.sampling_note) > 0
+        subtitle(tl, char(prof.sampling_note), 'FontSize', 8, ...
+            'Color', [0.5 0.5 0.5], 'Interpreter', 'none');
+    end
 
     for k = 1:n_this
         idx = not_skip(idx_range(k));
