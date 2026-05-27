@@ -6,3 +6,5 @@ examples/LLCP2024.ASC
 examples/LLCP2024ASC.zip
 examples/FIADB_URBAN_ENTIRE_CSV.zip
 examples/ncdd-202501-grd-scaled.nc
+examples/usautoBI.csv
+examples/usautoBI.rda
