@@ -128,8 +128,6 @@ if ischar(source) || isstring(source)
                 % Single recipe covering all spatial variables + one geo scatter per var.
                 recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_);
                 T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
-                fprintf('\n  Recipe written — to keep it: save_recipe(''name.m'')\n');
-                fprintf('    %s\n\n', recipe_sp_);
                 T = T_sp_;
             end
 
@@ -152,15 +150,9 @@ if ischar(source) || isstring(source)
                 se_report(T_vi_, prof_vi_);
                 panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
                 se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
-                recipe_vi_ = se_assemble_recipe(string(source), T_vi_, prof_vi_, ...
-                    panel_vi_, opts_vi_);
-                if ~isempty(recipe_vi_)
-                    % NetCDF recipes call DataExplorer() — skip auto-run to avoid recursion.
-                    fprintf('\n  ══════════════════════════════════════════════════════════\n');
-                    fprintf('  Recipe script: %s\n', recipe_vi_);
-                    fprintf('  To keep it:    save_recipe(''%s_%s_recipe.m'')\n', fn_, vname_vi_);
-                    fprintf('  ══════════════════════════════════════════════════════════\n\n');
-                end
+                % NetCDF recipes call DataExplorer() — skip auto-run to avoid recursion.
+                % Recipe is printed to console by se_assemble_recipe.
+                se_assemble_recipe(string(source), T_vi_, prof_vi_, panel_vi_, opts_vi_);
                 T = T_vi_;
             end
             return
@@ -220,7 +212,7 @@ se_plot(T, prof, options, panel);
 if ischar(source) || isstring(source)
     recipe_path = se_assemble_recipe(string(source), T, prof, panel, options);
     if ~isempty(recipe_path)
-        [~, bname, src_ext_] = fileparts(string(source));
+        [~, ~, src_ext_] = fileparts(string(source));
         is_nc_ = ismember(lower(string(src_ext_)), [".nc", ".nc4", ".netcdf"]);
         if ~is_nc_
             % NetCDF recipes call DataExplorer() which would recurse; skip auto-run.
@@ -229,10 +221,7 @@ if ischar(source) || isstring(source)
             run(recipe_path);
             T = T_return;
         end
-        fprintf('\n  ══════════════════════════════════════════════════════════\n');
-        fprintf('  Recipe script: %s\n', recipe_path);
-        fprintf('  To keep it:    save_recipe(''%s_recipe.m'')\n', bname);
-        fprintf('  ══════════════════════════════════════════════════════════\n\n');
+        % Recipe is printed to console by se_assemble_recipe.
     end
 end
 
@@ -974,6 +963,7 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
     fid = fopen(recipe_path, 'w');
     fprintf(fid, '%s\n', code);
     fclose(fid);
+    se_print_recipe(code, sprintf('%s_recipe.m', basename));
 end
 
 function rc = filter_coords(coord_vars, dim_names)
@@ -2860,19 +2850,13 @@ num_idxs = find(prof.type == "numeric" & ~prof.skip);
 L = {};
 
 if ~isempty(wide_yr_idxs)
-    [yr_sorted, yr_ord] = sort(wide_yr_vals);
+    [~, yr_ord] = sort(wide_yr_vals);
     yr_names_s = prof.name(wide_yr_idxs(yr_ord));
     yr_cell = strjoin(cellfun(@(s) sprintf('''%s''', s), yr_names_s, 'UniformOutput', false), ', ');
-    yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput', false), ', ');
 
     L{end+1} = sprintf('%% Choropleth: %s (wide years → long)', catname);
     L{end+1} = sprintf('yr_ch = {%s};', yr_cell);
-    L{end+1} = sprintf('yr_v_ch = [%s];', yr_vec);
-    L{end+1} = 'n_yr_ch = numel(yr_v_ch); n_r_ch = height(T);';
-    L{end+1} = 'kp_ch = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_ch));';
-    L{end+1} = 'T_long_ch = repmat(T(:,kp_ch), n_yr_ch, 1);';
-    L{end+1} = 'T_long_ch.Year = repelem(yr_v_ch(:), n_r_ch);';
-    L{end+1} = 'T_long_ch.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_ch, ''UniformOutput'', false).''), [], 1);';
+    L{end+1} = 'T_long_ch = de_pivot_wide_years(T, yr_ch);';
     L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
@@ -2914,19 +2898,13 @@ num_idxs = find(prof.type == "numeric" & ~prof.skip);
 L = {};
 
 if ~isempty(wide_yr_idxs)
-    [yr_sorted, yr_ord] = sort(wide_yr_vals);
+    [~, yr_ord] = sort(wide_yr_vals);
     yr_names_s = prof.name(wide_yr_idxs(yr_ord));
     yr_cell = strjoin(cellfun(@(s) sprintf('''%s''', s), yr_names_s, 'UniformOutput', false), ', ');
-    yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput', false), ', ');
 
     L{end+1} = sprintf('%% World choropleth: %s (wide years → long)', catname);
     L{end+1} = sprintf('yr_co = {%s};', yr_cell);
-    L{end+1} = sprintf('yr_v_co = [%s];', yr_vec);
-    L{end+1} = 'n_yr_co = numel(yr_v_co); n_r_co = height(T);';
-    L{end+1} = 'kp_co = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_co));';
-    L{end+1} = 'T_long_co = repmat(T(:,kp_co), n_yr_co, 1);';
-    L{end+1} = 'T_long_co.Year = repelem(yr_v_co(:), n_r_co);';
-    L{end+1} = 'T_long_co.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_co, ''UniformOutput'', false).''), [], 1);';
+    L{end+1} = 'T_long_co = de_pivot_wide_years(T, yr_co);';
     L{end+1} = sprintf('de_countrybins(T_long_co, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''World choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
@@ -2963,21 +2941,15 @@ other_cats = cat_all(~ismember(cat_all, geo_cats));
 if isempty(geo_cats) || isempty(other_cats), return; end
 
 TOTAL_WORDS = {'total','totals','grand total','all totals'};
-[yr_sorted, yr_ord] = sort(wide_yr_vals);
+[~, yr_ord] = sort(wide_yr_vals);
 yr_names_s = prof.name(wide_yr_idxs(yr_ord));
 yr_cell = strjoin(cellfun(@(s) sprintf('''%s''',s), yr_names_s, 'UniformOutput',false), ', ');
-yr_vec  = strjoin(arrayfun(@num2str, yr_sorted, 'UniformOutput',false), ', ');
 
 L = {};
 % Pivot header (shared across all geo x cat pairs in this dataset)
 L{end+1} = '%% Geo x categorical sparkline_cat';
 L{end+1} = sprintf('yr_gm = {%s};', yr_cell);
-L{end+1} = sprintf('yr_v_gm = [%s];', yr_vec);
-L{end+1} = 'n_yr_gm = numel(yr_v_gm); n_r_gm = height(T);';
-L{end+1} = 'kp_gm = T.Properties.VariableNames(~ismember(T.Properties.VariableNames, yr_gm));';
-L{end+1} = 'T_long_gm = repmat(T(:,kp_gm), n_yr_gm, 1);';
-L{end+1} = 'T_long_gm.Year = repelem(yr_v_gm(:), n_r_gm);';
-L{end+1} = 'T_long_gm.Value = reshape(cell2mat(cellfun(@(c) double(T.(c)), yr_gm, ''UniformOutput'', false).''), [], 1);';
+L{end+1} = 'T_long_gm = de_pivot_wide_years(T, yr_gm);';
 L{end+1} = '';
 
 n_pairs = 0;
@@ -3107,6 +3079,19 @@ if fid == -1
 end
 fprintf(fid, '%s\n', script_text);
 fclose(fid);
+se_print_recipe(script_text, sprintf('%s_recipe.m', bname_safe));
+end
+
+
+% ── se_print_recipe ──────────────────────────────────────────────────────────
+function se_print_recipe(code, save_name)
+%SE_PRINT_RECIPE  Print recipe code to the console with a save command.
+sep = repmat('═', 1, 64);
+fprintf('\n  %s\n', sep);
+fprintf('%s\n', code);
+fprintf('  %s\n', sep);
+fprintf('  save_recipe(''%s'')\n', save_name);
+fprintf('  %s\n\n', sep);
 end
 
 
