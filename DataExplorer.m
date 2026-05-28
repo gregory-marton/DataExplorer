@@ -3897,7 +3897,7 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
     fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
-        'Title', fig_title);
+        'TimeCol', 'Year', 'Title', fig_title);
     num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
 
     % Per-sub-category heatmap: for any other categorical in T_long (e.g. MSN),
@@ -3910,8 +3910,10 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
         sc     = char(sub_cats(sci));
         sc_col = T_long.(sc);
         if ~iscategorical(sc_col) && ~isstring(sc_col), continue; end
+        % Count only levels that actually appear (categories() includes zero-count)
         if iscategorical(sc_col)
-            n_lv = numel(categories(sc_col));
+            lv_cnt = countcats(sc_col);
+            n_lv   = sum(lv_cnt > 0);
         else
             n_lv = numel(unique(sc_col(~ismissing(sc_col))));
         end
