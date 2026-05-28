@@ -27,7 +27,7 @@ arguments
 end
 
 [~, ~, ext] = fileparts(filepath);
-is_excel = ismember(lower(ext), {".xlsx", ".xls", ".xlsm", ".xlsb"});
+is_excel = ismember(lower(string(ext)), [".xlsx", ".xls", ".xlsm", ".xlsb"]);
 
 if is_excel
     io_args = {'VariableNamesRange', char(options.VariableNamesRange), ...

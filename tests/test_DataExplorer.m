@@ -1125,6 +1125,27 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Totals over time figure should contain at least one line');
         end
 
+        function test_tilegrid_choropleth_no_datatip_error(testCase)
+            % de_tilegrid with ColorCol must not error on DataTipTemplate
+            % (primitive Patch objects don't support it).
+            states = ["ME";"NY";"CA"];
+            vals   = [1; 2; 3];
+            T = table(string(states), double(vals), 'VariableNames', {'State','Value'});
+            g.codes       = {'ME','NY','CA'};
+            g.rows        = [0, 1, 2];
+            g.cols        = [0, 0, 0];
+            g.is_overflow = [false; false; false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, 'ColorCol','Value');
+            testCase.assertNotEmpty(fig, 'Expected a figure handle');
+            close(fig);
+        end
+
         function test_tilegrid_heatmap_cat_draws_lines(testCase)
             % Long-format table: 2 states × 2 cat levels × 3 years = 12 rows.
             % de_tilegrid with CellRenderer='heatmap_cat' must produce a

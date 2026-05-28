@@ -261,12 +261,6 @@ for ti = 1:n_tiles
     xv = [c+GAP, c+1-GAP, c+1-GAP, c+GAP  ];
     yv = [r+GAP, r+GAP,   r+1-GAP, r+1-GAP];
     patch_h{ti} = patch(ax, xv, yv, fc, 'EdgeColor', ec, 'LineWidth', lw);
-    if has_choro && ~isnan(Heat_bg(ti))
-        ph = patch_h{ti};
-        ph.DataTipTemplate.DataTipRows(1) = dataTipTextRow(char(options.MapLabel), CODES{ti});
-        ph.DataTipTemplate.DataTipRows(2) = dataTipTextRow(char(options.ColorCol),  Heat_bg(ti));
-        ph.DataTipTemplate.DataTipRows    = ph.DataTipTemplate.DataTipRows(1:2);
-    end
 
     tc  = tg_text_color(fc);
     if has_spark
