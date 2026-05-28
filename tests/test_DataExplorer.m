@@ -618,8 +618,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             new_figs    = setdiff(figs_after, figs_before);
             cleanup2    = onCleanup(@() close(new_figs(isgraphics(new_figs))));
 
+            % "By Group over time" is the timeseries figure; "Total by Group over time"
+            % and "Share by Group over time" are the stacked-area figures — exclude those.
             ts_figs = new_figs(arrayfun(@(f) ...
-                contains(f.Name,'Group') & contains(f.Name,'over time'), new_figs));
+                strncmp(f.Name,'By ',3) & contains(f.Name,'over time'), new_figs));
             testCase.assumeNotEmpty(ts_figs, 'should produce a "By Group over time" figure');
 
             ax_h = findobj(ts_figs(1), 'Type', 'axes');
@@ -1085,19 +1087,21 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
 
             names = arrayfun(@(f) f.Name, new_figs, 'UniformOutput', false);
-            has_totals  = any(cellfun(@(n) contains(n, 'Totals over time'), names));
+            has_totals  = any(cellfun(@(n) ...
+                (contains(n,'Total by') || contains(n,'Share by')) && contains(n,'over time'), names));
             has_pairplot = any(cellfun(@(n) contains(n, 'Pairplot'), names));
 
             testCase.verifyTrue(has_totals, ...
-                'panel dataset should produce a "Totals over time" figure');
+                'panel dataset should produce a "Total by X over time" stacked-area figure');
             testCase.verifyFalse(has_pairplot, ...
                 'panel dataset should NOT produce a "Pairplot" figure');
         end
 
         function test_panel_totals_has_line(testCase)
-            % The "Totals over time" figure should contain a line plot with one
-            % line per year point.  Use 3 rows per state so the State column
-            % is not flagged as all-unique (ID column) and thus not skipped.
+            % Panel dataset with one categorical: se_plot_panel_totals should produce
+            % "Total by State over time" (absolute stacked area) and
+            % "Share by State over time" (100% stacked area) figures.
+            % Use 3 rows per state so the State column is not flagged as all-unique.
             n_states = 4;  n_per = 3;
             states = repelem(strcat('S', string(1:n_states))', n_per);
             T = table(categorical(states), 'VariableNames', {'State'});
@@ -1117,12 +1121,13 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
 
             names = arrayfun(@(f) f.Name, new_figs, 'UniformOutput', false);
-            totals_figs = new_figs(cellfun(@(n) contains(n, 'Totals over time'), names));
-            testCase.assumeNotEmpty(totals_figs, 'no Totals over time figure found');
+            totals_figs = new_figs(cellfun(@(n) ...
+                contains(n,'Total by') && contains(n,'over time'), names));
+            testCase.assumeNotEmpty(totals_figs, 'no "Total by X over time" stacked-area figure found');
 
-            lines_h = findobj(totals_figs(1), 'Type', 'line');
-            testCase.verifyNotEmpty(lines_h, ...
-                'Totals over time figure should contain at least one line');
+            area_h = findobj(totals_figs(1), 'Type', 'area');
+            testCase.verifyNotEmpty(area_h, ...
+                '"Total by X over time" figure should contain stacked area series');
         end
 
         function test_tilegrid_choropleth_no_datatip_error(testCase)
@@ -1419,10 +1424,12 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
             DataExplorer(tmp);
 
-            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
-            testCase.assertNotEmpty(hits);
-            [~, newest] = max([hits.datenum]);
-            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            % Use the known recipe path directly to avoid datenum tie-breaking issues.
+            [~, bname, ~] = fileparts(tmp);
+            bname_safe = regexprep(bname, '[^A-Za-z0-9_]', '_');
+            recipe_file = fullfile(tempdir, ['dataexplorer_' bname_safe '.m']);
+            testCase.assertTrue(exist(recipe_file, 'file') > 0, 'Recipe file not found');
+            recipe_text = fileread(recipe_file);
             testCase.verifyTrue(contains(recipe_text, 'heatmap_cat'), ...
                 'Recipe must contain heatmap_cat for geo x categorical dataset');
         end
