@@ -3377,6 +3377,9 @@ function se_plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_yea
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
+% Drop levels with no rows (pre-filtered categoricals retain all levels)
+present = cellfun(@(lv) sum(cat_col == lv) > 0, levels);
+levels  = levels(present);
 levels  = levels(~se_total_mask(levels));
 if isempty(levels), return; end
 [colors, plot_order] = se_level_colors(levels);
@@ -4135,6 +4138,13 @@ for li = 1:numel(levels_all)
     end
     overall_mean(li) = mean(yr_means, 'omitnan');
 end
+
+% Drop levels with no rows (e.g. pre-filtered categoricals retain all levels)
+has_rows = n_rows_all > 0;
+levels_all   = levels_all(has_rows);
+n_rows_all   = n_rows_all(has_rows);
+overall_mean = overall_mean(has_rows);
+if isempty(levels_all), return; end
 
 % Exclude total/aggregate levels (string pattern + sum-of-others heuristic)
 keep = ~se_total_mask(levels_all, overall_mean);
