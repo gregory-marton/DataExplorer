@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`DataExplorer` is a standalone MATLAB utility for interactive, forgiving exploration of mixed-type tabular datasets. It is a demo/tool project — no build system, CI/CD, or test suite. The main deliverable is `DataExplorer.m` plus two sampling helpers: `ReservoirSample.m` (random, tabular) and `StrideSample.m` (deterministic, tabular + 3-D NetCDF).
+`DataExplorer` is a standalone MATLAB utility for interactive, forgiving exploration of mixed-type tabular datasets. It is a demo/tool project — no build system, CI/CD, or test suite. The main deliverable is `DataExplorer.m` plus two sampling helpers: `de_reservoir_sample.m` (random, tabular) and `de_stride_sample.m` (deterministic, tabular + 3-D NetCDF).
 
 ## Usage
 
@@ -22,11 +22,11 @@ T = DataExplorer(T_in)
 T = DataExplorer('bigfile.csv', MaxRows=10000, MaxVars=8, Columns={'col1','col2'})
 
 % Random reservoir sample for large files (equal probability, any order)
-T = ReservoirSample('bigfile.csv', 50000)
+T = de_reservoir_sample('bigfile.csv', 50000)
 
 % Deterministic stride sample for large files or 3-D NetCDF grids
-T = StrideSample('bigfile.csv', MaxRows=50000)
-T = StrideSample('climate.nc', Variable='prcp', MaxRows=10000)
+T = de_stride_sample('bigfile.csv', MaxRows=50000)
+T = de_stride_sample('climate.nc', Variable='prcp', MaxRows=10000)
 ```
 
 ## Architecture: Five Phases in DataExplorer.m
@@ -76,7 +76,7 @@ The function executes a linear pipeline:
 - **Statistics and Machine Learning Toolbox:** Checked at runtime via `ver('stats')`. Enables violin plots and advanced distribution features. Code must degrade gracefully when absent.
 - **Mapping Toolbox:** Used for geo figure rendering.
 
-`ReservoirSample.m` and `StrideSample.m` use only base MATLAB.
+`de_reservoir_sample.m` and `de_stride_sample.m` use only base MATLAB.
 
 ## Working Conventions
 
@@ -159,7 +159,7 @@ Recipe output is currently vanilla MATLAB (portable, no dependency). The alterna
 **Recipe abstraction audit (2026-05-26):** Typical recipe length for a Prod_dataset-style file is ~80–90 lines — just under the 100-line threshold. Two clear abstraction candidates:
 1. **Wide-year pivot** (highest priority): the 7-line `repmat`/`repelem`/`reshape+cell2mat` block appears in all three geo `cg_*` generators (`cg_state_choropleth_code`, `cg_country_choropleth_code`, `cg_geo_multicategorical_code`). Each uses a different variable suffix (`_ch`, `_co`, `_gm`) to avoid collisions. A `de_pivot_wide_years(T, yr_cols)` library function returning `T_long` would reduce each to one line and save ~14 lines per recipe.
 2. **Time-series block** (lower priority): the overlaid+stacked block in `cg_best_plots_code` (~30 lines for compositional datasets) could become `de_timeseries(T, time_col, value_cols)` but that function doesn't yet exist.
-The NetCDF spatial recipe is already short (9 lines) thanks to `StrideSample` + `de_geoscatter`.
+The NetCDF spatial recipe is already short (9 lines) thanks to `de_stride_sample` + `de_geoscatter`.
 
 ### Task 6 — Improve se_select_columns interestingness ranker
 Current ranker (line 1832): numeric score = `std/range`; categorical score = Shannon entropy.

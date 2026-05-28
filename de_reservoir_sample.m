@@ -1,4 +1,4 @@
-function T = ReservoirSample(filepath, nrows, options)
+function T = de_reservoir_sample(filepath, nrows, options)
 %RESERVOIRSAMPLE  Uniform random sample from a large CSV/TSV/text file.
 %
 %   Reads the file in chunks without loading it fully into memory,
@@ -7,12 +7,12 @@ function T = ReservoirSample(filepath, nrows, options)
 %
 %   Usage
 %   ─────
-%   T = ReservoirSample('ebirddata.tsv')          % 10 000 rows (default)
-%   T = ReservoirSample('ebirddata.tsv', 50000)   % 50 000 rows
-%   T = ReservoirSample('bigfile.csv', 10000, Seed=42)   % reproducible sample
+%   T = de_reservoir_sample('ebirddata.tsv')          % 10 000 rows (default)
+%   T = de_reservoir_sample('ebirddata.tsv', 50000)   % 50 000 rows
+%   T = de_reservoir_sample('bigfile.csv', 10000, Seed=42)   % reproducible sample
 %
 %   The result is a MATLAB table you can pass directly to DataExplorer:
-%       T = ReservoirSample('ebirddata.tsv', 10000);
+%       T = de_reservoir_sample('ebirddata.tsv', 10000);
 %       DataExplorer(T);
 %   or save for later:
 %       save('my_sample.mat', 'T');
@@ -35,13 +35,13 @@ arguments
 end
 
 if ~isfile(filepath)
-    error('ReservoirSample:notFound', 'File not found: %s', filepath);
+    error('de_reservoir_sample:notFound', 'File not found: %s', filepath);
 end
 
 [~, fname, ext] = fileparts(filepath);
 ext = lower(ext);
 if ~ismember(ext, [".csv", ".tsv", ".txt", ".dat", ".tab", ".asc"])
-    warning('ReservoirSample:format', ...
+    warning('de_reservoir_sample:format', ...
         'Unexpected extension "%s". Attempting to read as delimited text.', ext);
 end
 
@@ -65,7 +65,7 @@ delim     = delims{di};
 
 if options.Verbose
     info   = dir(filepath);
-    fprintf('\n  ReservoirSample: %s%s  (%.1f MB)\n', fname, ext, info.bytes/1e6);
+    fprintf('\n  de_reservoir_sample: %s%s  (%.1f MB)\n', fname, ext, info.bytes/1e6);
     fprintf('  Format: %s\n', dnames{di});
     fprintf('  Target sample: %d rows\n\n', nrows);
 end
@@ -77,7 +77,7 @@ try
         'FileExtensions', {'.csv','.tsv','.txt','.dat','.tab','.asc'});
     ds.TextscanFormats = repmat({'%q'}, 1, numel(ds.VariableNames));
 catch ME
-    error('ReservoirSample:datastoreError', ...
+    error('de_reservoir_sample:datastoreError', ...
         'Could not create datastore: %s\nCheck that the file is readable text.', ...
         ME.message);
 end

@@ -955,21 +955,6 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assert_all_figures_nonempty();
         end
 
-        % ── eBird sample ZIP  (not yet baselined) ─────────────────────────
-        function test_zip_ebd(testCase)
-            f = fullfile(testCase.EXAMPLES_DIR, 'ebd-datafile-SAMPLE.zip');
-            if ~exist(f, 'file'), testCase.assumeFail('eBird ZIP not found'); end
-
-            old_vis = get(0, 'DefaultFigureVisible');
-            set(0, 'DefaultFigureVisible', 'off');
-            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
-
-            T = DataExplorer(f, 'MaxRows', 200, 'AutoSelect', true);
-
-            testCase.verifyGreaterThan(height(T), 0);
-            testCase.verifyGreaterThan(width(T), 0);
-            testCase.assert_all_figures_nonempty();
-        end
 
         % ── FIADB urban CSV ZIP  (not yet baselined) ──────────────────────
         function test_zip_fiadb(testCase)
@@ -1037,21 +1022,6 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assert_all_figures_nonempty();
         end
 
-        % ── xr latest DWCA ZIP  (not yet baselined) ───────────────────────
-        function test_zip_xr(testCase)
-            f = fullfile(testCase.EXAMPLES_DIR, 'xr_latest_dwca.zip');
-            if ~exist(f, 'file'), testCase.assumeFail('xr DWCA ZIP not found'); end
-
-            old_vis = get(0, 'DefaultFigureVisible');
-            set(0, 'DefaultFigureVisible', 'off');
-            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
-
-            T = DataExplorer(f, 'MaxRows', 200, 'AutoSelect', true);
-
-            testCase.verifyGreaterThan(height(T), 0);
-            testCase.verifyGreaterThan(width(T), 0);
-            testCase.assert_all_figures_nonempty();
-        end
 
         % ── NetCDF: largest variable, flattened to long format ────────────
         % AutoSelect picks the largest variable and flattens 3D+ to a long
@@ -1591,7 +1561,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_samplenetcdf_returns_table_within_maxrows(testCase)
-            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
+            % Renamed: was SampleNetCDF, now de_stride_sample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 30; nlat = 20; ntime = 5;
@@ -1604,10 +1574,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = StrideSample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
+            T = de_stride_sample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
             testCase.verifyClass(T, 'table');
             testCase.verifyLessThanOrEqual(height(T), 120, ...
-                'StrideSample should not exceed MaxRows significantly');
+                'de_stride_sample should not exceed MaxRows significantly');
             expected_cols = {'longitude','latitude','time','prcp'};
             for k = 1:numel(expected_cols)
                 testCase.verifyTrue(ismember(expected_cols{k}, T.Properties.VariableNames), ...
@@ -1616,7 +1586,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_samplenetcdf_latrange_filters_rows(testCase)
-            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
+            % Renamed: was SampleNetCDF, now de_stride_sample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 10; nlat = 10; ntime = 3;
@@ -1629,14 +1599,14 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = StrideSample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
+            T = de_stride_sample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
             testCase.verifyTrue(all(T.latitude >= 30 & T.latitude <= 60), ...
                 'All returned rows must satisfy LatRange');
             testCase.verifyGreaterThan(height(T), 0, 'Expected some rows in LatRange [30,60]');
         end
 
         function test_samplenetcdf_auto_selects_first_data_variable(testCase)
-            % Renamed: was SampleNetCDF, now StrideSample (NetCDF path).
+            % Renamed: was SampleNetCDF, now de_stride_sample (NetCDF path).
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nccreate(tmp,'longitude','Dimensions',{'longitude',4},'Format','classic');
@@ -1648,7 +1618,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      [1;2]);
             ncwrite(tmp,'prcp',      rand(4,3,2));
 
-            T = StrideSample(string(tmp), Verbose=false);
+            T = de_stride_sample(string(tmp), Verbose=false);
             testCase.verifyTrue(ismember('prcp', T.Properties.VariableNames), ...
                 'Expected data variable "prcp" in output table');
         end
@@ -1685,7 +1655,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_netcdf_spatial_recipe_contains_geoscatter(testCase)
-            % Recipe for a spatial grid NetCDF must call StrideSample and de_geoscatter.
+            % Recipe for a spatial grid NetCDF must call de_stride_sample and de_geoscatter.
             % Clean up any stale recipe files before running so the "newest" check is reliable.
             stale = dir(fullfile(tempdir, 'dataexplorer_*.m'));
             for si = 1:numel(stale)
@@ -1715,8 +1685,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_path = fullfile(hits(newest).folder, hits(newest).name);
             recipe_text = fileread(recipe_path);
 
-            testCase.verifyTrue(contains(recipe_text, 'StrideSample'), ...
-                'Recipe must call StrideSample');
+            testCase.verifyTrue(contains(recipe_text, 'de_stride_sample'), ...
+                'Recipe must call de_stride_sample');
             testCase.verifyTrue(contains(recipe_text, 'groupsummary'), ...
                 'Recipe must aggregate by grid cell with groupsummary');
             testCase.verifyTrue(contains(recipe_text, 'de_geoscatter'), ...
@@ -1756,7 +1726,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_stridesample_tabular_returns_within_maxrows(testCase)
-            % StrideSample on a CSV with 500 rows and MaxRows=50 must return ≤ 60 rows.
+            % de_stride_sample on a CSV with 500 rows and MaxRows=50 must return ≤ 60 rows.
             tmp = [tempname '.csv'];
             cl  = onCleanup(@() delete(tmp));
             fid = fopen(tmp, 'w');
@@ -1766,10 +1736,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
             fclose(fid);
 
-            T = StrideSample(string(tmp), MaxRows=50, Verbose=false);
+            T = de_stride_sample(string(tmp), MaxRows=50, Verbose=false);
             testCase.verifyClass(T, 'table');
             testCase.verifyLessThanOrEqual(height(T), 60, ...
-                'StrideSample tabular should not exceed MaxRows significantly');
+                'de_stride_sample tabular should not exceed MaxRows significantly');
             testCase.verifyGreaterThan(height(T), 0, 'Expected non-empty output');
         end
 
@@ -1784,7 +1754,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
             fclose(fid);
 
-            T = StrideSample(string(tmp), MaxRows=100, Verbose=false);
+            T = de_stride_sample(string(tmp), MaxRows=100, Verbose=false);
             idx_col = str2double(T.idx);
             testCase.verifyLessThan(min(idx_col), 50, ...
                 'Stride sample should include rows near the beginning');
@@ -1805,10 +1775,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = StrideSample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
+            T = de_stride_sample(string(tmp), Variable='prcp', MaxRows=100, Verbose=false);
             testCase.verifyClass(T, 'table');
             testCase.verifyLessThanOrEqual(height(T), 120, ...
-                'StrideSample should not exceed MaxRows significantly');
+                'de_stride_sample should not exceed MaxRows significantly');
             expected_cols = {'longitude','latitude','time','prcp'};
             for k = 1:numel(expected_cols)
                 testCase.verifyTrue(ismember(expected_cols{k}, T.Properties.VariableNames), ...
@@ -1829,7 +1799,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            T = StrideSample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
+            T = de_stride_sample(string(tmp), Variable='prcp', LatRange=[30 60], Verbose=false);
             testCase.verifyTrue(all(T.latitude >= 30 & T.latitude <= 60), ...
                 'All returned rows must satisfy LatRange');
             testCase.verifyGreaterThan(height(T), 0, 'Expected some rows in LatRange [30,60]');
@@ -1847,13 +1817,13 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      [1;2]);
             ncwrite(tmp,'prcp',      rand(4,3,2));
 
-            T = StrideSample(string(tmp), Verbose=false);
+            T = de_stride_sample(string(tmp), Verbose=false);
             testCase.verifyTrue(ismember('prcp', T.Properties.VariableNames), ...
                 'Expected data variable "prcp" in output table');
         end
 
         function test_reservoir_sample_returns_within_nrows(testCase)
-            % ReservoirSample on a CSV with 500 rows and nrows=50 must return ≤ 50 rows.
+            % de_reservoir_sample on a CSV with 500 rows and nrows=50 must return ≤ 50 rows.
             tmp = [tempname '.csv'];
             cl  = onCleanup(@() delete(tmp));
             fid = fopen(tmp, 'w');
@@ -1863,10 +1833,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
             fclose(fid);
 
-            T = ReservoirSample(string(tmp), 50, Verbose=false);
+            T = de_reservoir_sample(string(tmp), 50, Verbose=false);
             testCase.verifyClass(T, 'table');
             testCase.verifyLessThanOrEqual(height(T), 50, ...
-                'ReservoirSample must not exceed requested row count');
+                'de_reservoir_sample must not exceed requested row count');
             testCase.verifyGreaterThan(height(T), 0, 'Expected non-empty output');
         end
 

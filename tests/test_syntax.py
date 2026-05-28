@@ -3,7 +3,7 @@ import pytest
 from conftest import ROOT, run_matlab
 
 
-M_FILES = sorted(ROOT.glob("*.m"))
+M_FILES = sorted(f for f in ROOT.glob("*.m") if not f.name.startswith("."))
 
 
 @pytest.mark.parametrize("mfile", M_FILES, ids=[f.name for f in M_FILES])

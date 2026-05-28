@@ -1,17 +1,17 @@
-function T = StrideSample(filepath, options)
+function T = de_stride_sample(filepath, options)
 %STRIDESAMPLE  Deterministic stride sample from a CSV/TSV or 3-D NetCDF file.
 %
 %   Uses stride sampling — reads every Nth row/element — so the sample covers
 %   the full extent of the file deterministically (same result each run).
-%   For random sampling use ReservoirSample instead.
+%   For random sampling use de_reservoir_sample instead.
 %
 %   Usage
 %   ─────
-%   T = StrideSample('bigfile.csv')
-%   T = StrideSample('bigfile.csv', MaxRows=5000)
-%   T = StrideSample('climate.nc', Variable='prcp', MaxRows=5000)
-%   T = StrideSample('climate.nc', LatRange=[30 60])
-%   DataExplorer(StrideSample('climate.nc'))
+%   T = de_stride_sample('bigfile.csv')
+%   T = de_stride_sample('bigfile.csv', MaxRows=5000)
+%   T = de_stride_sample('climate.nc', Variable='prcp', MaxRows=5000)
+%   T = de_stride_sample('climate.nc', LatRange=[30 60])
+%   DataExplorer(de_stride_sample('climate.nc'))
 %
 %   For tabular files the stride is estimated from file size + a 64 KB probe.
 %   For NetCDF files the variable must have exactly 3 dimensions; stride is
@@ -38,7 +38,7 @@ arguments
 end
 
 if ~isfile(filepath)
-    error('StrideSample:notFound', 'File not found: %s', filepath);
+    error('de_stride_sample:notFound', 'File not found: %s', filepath);
 end
 
 [~, fname, ext] = fileparts(filepath);
@@ -58,7 +58,7 @@ function T = stride_tabular(filepath, fname, ext, options)
 
 tab_exts = [".csv", ".tsv", ".txt", ".dat", ".tab", ".asc"];
 if ~ismember(ext, tab_exts)
-    warning('StrideSample:format', ...
+    warning('de_stride_sample:format', ...
         'Unexpected extension "%s". Attempting to read as delimited text.', ext);
 end
 
@@ -77,7 +77,7 @@ delim   = delims{di};
 
 if options.Verbose
     info = dir(filepath);
-    fprintf('\n  StrideSample: %s%s  (%.1f MB)\n', fname, ext, info.bytes/1e6);
+    fprintf('\n  de_stride_sample: %s%s  (%.1f MB)\n', fname, ext, info.bytes/1e6);
     fprintf('  Format: %s\n', dnames{di});
     fprintf('  Target rows: %d\n', options.MaxRows);
 end
@@ -112,7 +112,7 @@ try
         'FileExtensions', {'.csv','.tsv','.txt','.dat','.tab','.asc'});
     ds.TextscanFormats = repmat({'%q'}, 1, numel(ds.VariableNames));
 catch ME
-    error('StrideSample:datastoreError', ...
+    error('de_stride_sample:datastoreError', ...
         'Could not create datastore: %s', ME.message);
 end
 
@@ -177,7 +177,7 @@ if strlength(options.Variable) > 0
     varname = char(options.Variable);
     var_idx = find(strcmp(all_var_names, varname), 1);
     if isempty(var_idx)
-        error('StrideSample:noVar', 'Variable "%s" not found in %s', varname, filepath);
+        error('de_stride_sample:noVar', 'Variable "%s" not found in %s', varname, filepath);
     end
 else
     var_idx = [];
@@ -188,7 +188,7 @@ else
         end
     end
     if isempty(var_idx)
-        error('StrideSample:noVar', 'No data variable found in %s', filepath);
+        error('de_stride_sample:noVar', 'No data variable found in %s', filepath);
     end
     varname = info.Variables(var_idx).Name;
 end
@@ -197,13 +197,13 @@ v         = info.Variables(var_idx);
 sz        = double(v.Size);
 ndim      = numel(sz);
 if ndim ~= 3
-    error('StrideSample:unsupported', ...
-        'Variable "%s" has %d dimensions; StrideSample requires exactly 3.', varname, ndim);
+    error('de_stride_sample:unsupported', ...
+        'Variable "%s" has %d dimensions; de_stride_sample requires exactly 3.', varname, ndim);
 end
 dim_names = {v.Dimensions.Name};
 
 if options.Verbose
-    fprintf('\n  StrideSample (NetCDF): %s%s  —  "%s"  [%s]\n', fname, ext, varname, ...
+    fprintf('\n  de_stride_sample (NetCDF): %s%s  —  "%s"  [%s]\n', fname, ext, varname, ...
         strjoin(arrayfun(@num2str, sz, 'UniformOutput', false), '×'));
     fprintf('  Target rows: %d\n\n', options.MaxRows);
 end

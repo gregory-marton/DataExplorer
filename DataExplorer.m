@@ -89,12 +89,12 @@ if ischar(source) || isstring(source)
                 fprintf('  Loading %d spatial grid variable(s): %s\n', ...
                     numel(sp_vars_), strjoin(sp_vars_, ', '));
                 try
-                    T_sp_ = StrideSample(string(source), ...
+                    T_sp_ = de_stride_sample(string(source), ...
                         Variable=string(sp_vars_{1}), ...
                         MaxRows=options.MaxRows, Verbose=true);
                     for sp_k_ = 2:numel(sp_vars_)
                         try
-                            T_extra_ = StrideSample(string(source), ...
+                            T_extra_ = de_stride_sample(string(source), ...
                                 Variable=string(sp_vars_{sp_k_}), ...
                                 MaxRows=options.MaxRows, Verbose=false);
                             vn_ = matlab.lang.makeValidName(sp_vars_{sp_k_});
@@ -611,7 +611,7 @@ function T = load_text(filepath, options)
         fprintf('  ℹ Large file (%.0f MB) — using reservoir sampling to read %d rows.\n', ...
             file_mb, options.MaxRows);
         fprintf('    This avoids loading the full file into memory.\n');
-        T = ReservoirSample(filepath, options.MaxRows, Verbose=true);
+        T = de_reservoir_sample(filepath, options.MaxRows, Verbose=true);
         T = se_record_sampled(T, height(T));
     else
         opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
@@ -917,7 +917,7 @@ end
 function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
 %CG_NETCDF_SPATIAL_RECIPE  Write a single recipe for all spatial NetCDF variables.
 %   sp_vars is a cell array of variable name strings.
-%   Recipe calls StrideSample + de_geoscatter for each variable.
+%   Recipe calls de_stride_sample + de_geoscatter for each variable.
     d = dir(filepath);
     if ~isempty(d)
         filepath = fullfile(d(1).folder, d(1).name);
@@ -936,11 +936,11 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
     L{end+1} = '';
     L{end+1} = '% Stride-sample each variable and combine into one table';
     first_sq = strrep(sp_vars{1}, '''', '''''');
-    L{end+1} = sprintf('T = StrideSample(''%s'', Variable=''%s'', Verbose=false);', fpath_sq, first_sq);
+    L{end+1} = sprintf('T = de_stride_sample(''%s'', Variable=''%s'', Verbose=false);', fpath_sq, first_sq);
     for k = 2:numel(sp_vars)
         vn_sq   = strrep(sp_vars{k}, '''', '''''');
         vn_safe = all_safe{k};
-        ln_ = sprintf('T.%s = StrideSample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
+        ln_ = sprintf('T.%s = de_stride_sample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
             vn_safe, fpath_sq, vn_sq, vn_safe);
         L{end+1} = ln_; %#ok<AGROW>
     end
@@ -2653,7 +2653,7 @@ if ext == ".zip"
         L{end+1} = 'opts.MissingRule = ''fill'';';
         L{end+1} = sprintf('T = readtable(inner_path, opts, ''Sheet'', ''%s'');', sheet);
     elseif sampled_n > 0
-        L{end+1} = sprintf('T = ReservoirSample(inner_path, %d, Seed=42);', sampled_n);
+        L{end+1} = sprintf('T = de_reservoir_sample(inner_path, %d, Seed=42);', sampled_n);
     else
         L{end+1} = 'opts = detectImportOptions(inner_path, ''FileType'', ''text'');';
         L{end+1} = 'opts.MissingRule = ''fill'';';
@@ -2692,7 +2692,7 @@ else
         sampled_n = ud.sampled;
     end
     if sampled_n > 0
-        L{end+1} = sprintf('T = ReservoirSample(''%s'', %d, Seed=42);', filepath, sampled_n);
+        L{end+1} = sprintf('T = de_reservoir_sample(''%s'', %d, Seed=42);', filepath, sampled_n);
     else
         L{end+1} = sprintf('opts = detectImportOptions(''%s'', ''FileType'', ''text'');', filepath);
         L{end+1} = 'opts.MissingRule = ''fill'';';
