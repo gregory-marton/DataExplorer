@@ -238,6 +238,7 @@ if ~exist(json_path, 'file')
 end
 
 raw = jsondecode(fileread(json_path));
+if isstruct(raw), raw = num2cell(raw); end
 n   = numel(raw);
 CODES = cell(n, 1);
 ROWS  = zeros(n, 1);

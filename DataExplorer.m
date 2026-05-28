@@ -3662,6 +3662,7 @@ if isempty(GEO_GRIDS)
         catch
             continue
         end
+        if isstruct(raw), raw = num2cell(raw); end
         vocab = containers.Map('KeyType','char','ValueType','logical');
         for ri = 1:numel(raw)
             e = raw{ri};
