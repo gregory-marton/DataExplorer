@@ -56,7 +56,7 @@ fig = []; ax = [];
 
 %% ── Validate ─────────────────────────────────────────────────────────────────
 varnames  = string(T.Properties.VariableNames);
-needs_color = options.CellRenderer == "color" || options.CellRenderer == "sparkline_cat";
+needs_color = options.CellRenderer == "color" || options.CellRenderer == "heatmap_cat";
 if options.CountryCol == "" || ~ismember(options.CountryCol, varnames) || ...
    (needs_color && options.ColorCol == "")
     fprintf('  ℹ de_countrybins: need CountryCol + ColorCol — nothing to plot.\n');

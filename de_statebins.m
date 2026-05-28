@@ -77,7 +77,7 @@ fig = []; ax = [];
 
 %% ── Validate ─────────────────────────────────────────────────────────────────
 varnames  = string(T.Properties.VariableNames);
-needs_color = options.CellRenderer == "color" || options.CellRenderer == "sparkline_cat";
+needs_color = options.CellRenderer == "color" || options.CellRenderer == "heatmap_cat";
 if options.StateCol == "" || ~ismember(options.StateCol, varnames) || ...
    (needs_color && options.ColorCol == "")
     fprintf('  ℹ de_statebins: need StateCol + ColorCol — nothing to plot.\n');

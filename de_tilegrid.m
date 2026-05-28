@@ -67,7 +67,7 @@ varnames  = string(T.Properties.VariableNames);
 has_color = options.ColorCol ~= "" && ismember(options.ColorCol, varnames);
 has_time  = options.TimeCol  ~= "" && ismember(options.TimeCol,  varnames);
 has_choro = has_color && numel(normed) == height(T) && height(T) > 0;
-is_sparkline_cat = options.CellRenderer == "sparkline_cat" && ...
+is_heatmap_cat = options.CellRenderer == "heatmap_cat" && ...
     options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
     options.ColorCol ~= "" && ismember(options.ColorCol, varnames) && ...
     numel(normed) == height(T) && height(T) > 0;
@@ -79,7 +79,7 @@ is_scatter_cat = options.CellRenderer == "scatter_cat" && ...
 
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
-if has_time && (has_choro || is_sparkline_cat)
+if has_time && (has_choro || is_heatmap_cat)
     tdata = T.(char(options.TimeCol));
     if isa(tdata, 'datetime')
         t_vals = unique(tdata(~isnat(tdata)));
@@ -129,12 +129,12 @@ if ~any(isnan(options.CLim))
     vmax = options.CLim(2);
 end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
-if is_sparkline_cat || is_scatter_cat, has_choro = false; end
+if is_heatmap_cat || is_scatter_cat, has_choro = false; end
 
 %% ── Multi-category sparkline data ────────────────────────────────────────────
 multi_heat = []; top_cat_levels = {};
 sh_lo = NaN; sh_hi = NaN; K = 0;
-if is_sparkline_cat
+if is_heatmap_cat
     ydata_sc   = double(T.(char(options.ColorCol)));
     if has_time
         tdata_sc = T.(char(options.TimeCol));
@@ -214,7 +214,7 @@ BG = [0.97 0.97 0.97];
 max_col = max(COLS);
 max_row = max(ROWS);
 tile_px = 36;
-needs_cbar = has_choro || is_sparkline_cat;
+needs_cbar = has_choro || is_heatmap_cat;
 fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(needs_cbar)));
 fig_h   = min(1000, max(380, round((max_row + 2) * tile_px)));
 fig = figure('Color', BG, 'NumberTitle', 'off');
@@ -247,7 +247,7 @@ else
 end
 lbl_y_frac = 0.50;
 if has_spark, lbl_y_frac = 0.28; end
-if is_sparkline_cat, lbl_y_frac = 0.10; end
+if is_heatmap_cat, lbl_y_frac = 0.10; end
 
 for ti = 1:n_tiles
     r  = ROWS(ti);  c = COLS(ti);
@@ -261,6 +261,12 @@ for ti = 1:n_tiles
     xv = [c+GAP, c+1-GAP, c+1-GAP, c+GAP  ];
     yv = [r+GAP, r+GAP,   r+1-GAP, r+1-GAP];
     patch_h{ti} = patch(ax, xv, yv, fc, 'EdgeColor', ec, 'LineWidth', lw);
+    if has_choro && ~isnan(Heat_bg(ti))
+        ph = patch_h{ti};
+        ph.DataTipTemplate.DataTipRows(1) = dataTipTextRow(char(options.MapLabel), CODES{ti});
+        ph.DataTipTemplate.DataTipRows(2) = dataTipTextRow(char(options.ColorCol),  Heat_bg(ti));
+        ph.DataTipTemplate.DataTipRows    = ph.DataTipTemplate.DataTipRows(1:2);
+    end
 
     tc  = tg_text_color(fc);
     if has_spark
@@ -304,7 +310,7 @@ title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     'FontSize', 11, 'Interpreter', 'none');
 
 %% ── Sparklines (per-tile time series) ───────────────────────────────────────
-if has_spark && has_choro && ~is_sparkline_cat
+if has_spark && has_choro && ~is_heatmap_cat
     tile_h   = 1 - 2*GAP;
     SPARK_MX = 0.10;
     x_ticks  = linspace(0, 1, n_t);
@@ -329,7 +335,7 @@ if has_spark && has_choro && ~is_sparkline_cat
 end
 
 %% ── Legend key ───────────────────────────────────────────────────────────────
-if has_spark && has_choro && ~is_sparkline_cat
+if has_spark && has_choro && ~is_heatmap_cat
     t1s = tg_yr_str(t_vals, 1, is_year_axis);
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     key_str = ['color: mean  |  spark: ' t1s char(8594) tns];
@@ -340,8 +346,8 @@ if has_spark && has_choro && ~is_sparkline_cat
         'Margin', 3, 'LineWidth', 0.5);
 end
 
-%% ── Category heatmap (CellRenderer='sparkline_cat': x=time, y=category, color=value)
-if is_sparkline_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
+%% ── Category heatmap (CellRenderer='heatmap_cat': x=time, y=category, color=value)
+if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
     heat_top = GAP + 0.20;
     heat_bot = 1 - GAP;
     cell_h   = (heat_bot - heat_top) / K;

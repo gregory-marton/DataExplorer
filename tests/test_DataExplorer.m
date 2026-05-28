@@ -367,8 +367,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_dataexplorer_wide_year_state_choropleth_has_sparklines(testCase)
             % Post-inversion (Task 6): geo × categorical sparklines are recipe-only.
             % DataExplorer with wide-format year columns and a state+category column pair
-            % must include de_statebins and sparkline_cat in the generated recipe.
-            % The direct render path no longer produces a sparkline_cat figure; the recipe
+            % must include de_statebins and heatmap_cat in the generated recipe.
+            % The direct render path no longer produces a heatmap_cat figure; the recipe
             % code generator (cg_geo_multicategorical_code) takes that role instead.
 
             % 20 states × 3 MSN codes = 60 rows.  Each state appears 3 times so
@@ -399,8 +399,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
             testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
                 'Recipe must contain de_statebins for wide-year state+category dataset');
-            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
-                'Recipe must contain sparkline_cat for wide-year state+category dataset');
+            testCase.verifyTrue(contains(recipe_text, 'heatmap_cat'), ...
+                'Recipe must contain heatmap_cat for wide-year state+category dataset');
         end
 
         function test_de_statebins_sparklines_with_timecol(testCase)
@@ -1155,9 +1155,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Totals over time figure should contain at least one line');
         end
 
-        function test_tilegrid_sparkline_cat_draws_lines(testCase)
+        function test_tilegrid_heatmap_cat_draws_lines(testCase)
             % Long-format table: 2 states × 2 cat levels × 3 years = 12 rows.
-            % de_tilegrid with CellRenderer='sparkline_cat' must produce a
+            % de_tilegrid with CellRenderer='heatmap_cat' must produce a
             % vectorised cat_heat patch object covering all non-empty tiles.
             states = repelem(["ME";"NY"], 6);
             cats   = repmat(repelem(["A";"B"], 3), 2, 1);
@@ -1177,7 +1177,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
             fig = de_tilegrid(T, g, normed, ...
                 'ColorCol','Value', 'TimeCol','Year', ...
-                'CellRenderer','sparkline_cat', 'CatCol','Cat', 'TopK',5);
+                'CellRenderer','heatmap_cat', 'CatCol','Cat', 'TopK',5);
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
@@ -1186,8 +1186,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Expected cat_heat patch object in figure');
         end
 
-        function test_tilegrid_sparkline_cat_no_timecol(testCase)
-            % sparkline_cat must draw cat_heat patches even without TimeCol.
+        function test_tilegrid_heatmap_cat_no_timecol(testCase)
+            % heatmap_cat must draw cat_heat patches even without TimeCol.
             % Pre-aggregated table: one row per state×category (no year column).
             states = ["ME";"ME";"NY";"NY"];
             cats   = ["A";"B";"A";"B"];
@@ -1206,16 +1206,16 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
             fig = de_tilegrid(T, g, normed, ...
                 'ColorCol','Value', ...
-                'CellRenderer','sparkline_cat', 'CatCol','Cat', 'TopK',5);
+                'CellRenderer','heatmap_cat', 'CatCol','Cat', 'TopK',5);
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
             heat_patches = findobj(fig, 'Type','patch', 'Tag','cat_heat');
             testCase.verifyNotEmpty(heat_patches, ...
-                'sparkline_cat without TimeCol should still draw cat_heat patches');
+                'heatmap_cat without TimeCol should still draw cat_heat patches');
         end
 
-        function test_statebins_sparkline_cat_passthrough(testCase)
+        function test_statebins_heatmap_cat_passthrough(testCase)
             % de_statebins must forward CellRenderer options to de_tilegrid
             % and produce a cat_heat patch object.
             states = repelem(["ME";"NY";"CA";"TX"], 4);
@@ -1230,7 +1230,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
             fig = de_statebins(T, 'StateCol','StateCode', 'ColorCol','Value', ...
-                'TimeCol','Year', 'CellRenderer','sparkline_cat', ...
+                'TimeCol','Year', 'CellRenderer','heatmap_cat', ...
                 'CatCol','Cat', 'TopK',4);
             testCase.assertNotEmpty(fig, 'Expected a figure handle from de_statebins');
             cl2 = onCleanup(@() close(fig));
@@ -1243,7 +1243,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_geo_multicategorical_produces_figure(testCase)
             % Post-inversion (Task 6): geo × categorical tile figure is recipe-only.
             % For StateCode × MSN + wide year columns, the recipe must include
-            % de_statebins with sparkline_cat. No direct figure is created during
+            % de_statebins with heatmap_cat. No direct figure is created during
             % DataExplorer() — the figure appears at recipe execution time.
             states = repelem(["ME";"NY";"CA"], 3);
             msns   = repmat(["A";"B";"C"], 3, 1);
@@ -1268,8 +1268,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
             testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
                 'Recipe must contain de_statebins for geo x categorical dataset');
-            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
-                'Recipe must contain sparkline_cat for geo x categorical dataset');
+            testCase.verifyTrue(contains(recipe_text, 'heatmap_cat'), ...
+                'Recipe must contain heatmap_cat for geo x categorical dataset');
         end
 
         function test_tilegrid_scatter_cat_draws_points(testCase)
@@ -1413,8 +1413,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must contain de_countrybins for ISO-2 country codes');
         end
 
-        function test_cg_geo_multicategorical_code_emits_sparkline_cat(testCase)
-            % 3 states x 3 MSN codes x 2 years → recipe must include sparkline_cat call.
+        function test_cg_geo_multicategorical_code_emits_heatmap_cat(testCase)
+            % 3 states x 3 MSN codes x 2 years → recipe must include heatmap_cat call.
             states = categorical(repelem(["ME";"NY";"CA"], 3));
             msns   = categorical(repmat(["A";"B";"C"], 3, 1));
             T = table(states, msns, [1;2;3;4;5;6;7;8;9], [10;11;12;13;14;15;16;17;18], [19;20;21;22;23;24;25;26;27], ...
@@ -1432,12 +1432,12 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assertNotEmpty(hits);
             [~, newest] = max([hits.datenum]);
             recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
-            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
-                'Recipe must contain sparkline_cat for geo x categorical dataset');
+            testCase.verifyTrue(contains(recipe_text, 'heatmap_cat'), ...
+                'Recipe must contain heatmap_cat for geo x categorical dataset');
         end
 
         function test_inversion_geo_figures_in_recipe_not_during_seplot(testCase)
-            % For a geo x cat dataset, the recipe must contain de_statebins and sparkline_cat.
+            % For a geo x cat dataset, the recipe must contain de_statebins and heatmap_cat.
             states = categorical(repelem(["ME";"NY";"CA"], 3));
             msns   = categorical(repmat(["A";"B";"C"], 3, 1));
             T = table(states, msns, [1;2;3;4;5;6;7;8;9], [10;11;12;13;14;15;16;17;18], [19;20;21;22;23;24;25;26;27], ...
@@ -1457,8 +1457,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
             testCase.verifyTrue(contains(recipe_text, 'de_statebins'), ...
                 'de_statebins must be in recipe');
-            testCase.verifyTrue(contains(recipe_text, 'sparkline_cat'), ...
-                'sparkline_cat must be in recipe');
+            testCase.verifyTrue(contains(recipe_text, 'heatmap_cat'), ...
+                'heatmap_cat must be in recipe');
         end
 
         function test_netcdf_recipe_load_code_uses_dataexplorer(testCase)

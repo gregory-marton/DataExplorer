@@ -1769,7 +1769,11 @@ if use_stacked
     Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
     labels_s = labels(sord);
-    area(ax_s, tdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    hs = area(ax_s, tdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    for k = 1:numel(hs)
+        hs(k).DataTipTemplate.DataTipRows(end+1) = ...
+            dataTipTextRow('Series', repmat(labels_s(k), numel(tdata_u), 1));
+    end
     ylabel(ax_s, 'Value (stacked)', 'FontSize', 8);
     legend(ax_s, labels_s, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
     set(ax_s, 'FontSize', 8); box(ax_s, 'off');
@@ -1921,7 +1925,11 @@ if use_stacked
     Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
     labels_s = labels(sord);
-    area(ax_s, xdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    hs = area(ax_s, xdata_u, Y_plot(:, sord), 'LineStyle', 'none', 'FaceAlpha', 0.85);
+    for k = 1:numel(hs)
+        hs(k).DataTipTemplate.DataTipRows(end+1) = ...
+            dataTipTextRow('Series', repmat(labels_s(k), numel(xdata_u), 1));
+    end
     ylabel(ax_s, 'Value (stacked)', 'FontSize', 8);
     xlabel(ax_s, x_lbl, 'FontSize', 8, 'Interpreter', 'none');
     legend(ax_s, labels_s, 'Location', 'bestoutside', 'FontSize', 7, 'Interpreter', 'none');
@@ -2007,9 +2015,9 @@ function plot_num_diag(ax, x, varname, nmissing, n)
 
     % Stats block — top-right corner
     lo = min(valid);  hi = max(valid);
-    mu = mean(valid); sg = std(valid);
+    mu = mean(valid); sg = std(valid);  md = median(valid);
     text(ax, 0.98, 0.97, ...
-        sprintf('μ = %.3g\nσ = %.3g\n[%.3g, %.3g]', mu, sg, lo, hi), ...
+        sprintf('μ = %.3g\nσ = %.3g\nm = %.3g\n[%.3g, %.3g]', mu, sg, md, lo, hi), ...
         'Units', 'normalized', 'HorizontalAlignment', 'right', ...
         'VerticalAlignment', 'top', 'FontSize', 6.5, ...
         'Color', [0.2 0.2 0.2]);
@@ -2928,7 +2936,7 @@ end
 
 % ── cg_geo_multicategorical_code ────────────────────────────────────────────
 function code = cg_geo_multicategorical_code(T, prof)
-%CG_GEO_MULTICATEGORICAL_CODE  Recipe code for geo x cat sparkline_cat figures.
+%CG_GEO_MULTICATEGORICAL_CODE  Recipe code for geo x categorical heatmap figures.
 code = '';
 [wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
 if isempty(wide_yr_idxs), return; end
@@ -2947,7 +2955,7 @@ yr_cell = strjoin(cellfun(@(s) sprintf('''%s''',s), yr_names_s, 'UniformOutput',
 
 L = {};
 % Pivot header (shared across all geo x cat pairs in this dataset)
-L{end+1} = '%% Geo x categorical sparkline_cat';
+L{end+1} = '%% Geo x categorical heatmap';
 L{end+1} = sprintf('yr_gm = {%s};', yr_cell);
 L{end+1} = 'T_long_gm = de_pivot_wide_years(T, yr_gm);';
 L{end+1} = '';
@@ -2984,10 +2992,10 @@ for gi = 1:numel(geo_cats)
         L{end+1} = sprintf('top_gm = {%s};', levs_cell); %#ok<AGROW>
         L{end+1} = sprintf('T_filt_gm = T_long_gm(ismember(string(T_long_gm.%s), string(top_gm)), :);', cat_name); %#ok<AGROW>
         if is_states_geo
-            L{end+1} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''sparkline_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+            L{end+1} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str); %#ok<AGROW>
         else
-            L{end+1} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''sparkline_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+            L{end+1} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str); %#ok<AGROW>
         end
         L{end+1} = ''; %#ok<AGROW>
@@ -3292,7 +3300,7 @@ if ~isempty(cat_useful)
 end
 
 % High-cardinality categoricals: geo treatment OR top-K drill-down with Other
-% Note: geo × categorical sparkline_cat figures are now recipe-only
+% Note: geo × categorical heatmap figures are now recipe-only
 %       (cg_geo_multicategorical_code). The direct render path was removed here.
 TOP_K = 8;
 for k = 1:numel(cat_big)
@@ -4179,11 +4187,10 @@ if has_other
     end
     h_o = plot(ax, yr_sorted, y_o, '--', 'Color', GRAY, 'LineWidth', 1.0, ...
         'DisplayName', other_label);
-    try
-        h_o.DataTipTemplate.DataTipRows(end+1) = ...
-            dataTipTextRow(catname, repmat({other_label}, numel(yr_sorted), 1));
-    catch
-    end
+    h_o.DataTipTemplate.DataTipRows(1).Label = 'Year';
+    h_o.DataTipTemplate.DataTipRows(2).Label = 'Mean value';
+    h_o.DataTipTemplate.DataTipRows(end+1) = ...
+        dataTipTextRow(catname, repmat({other_label}, numel(yr_sorted), 1));
 end
 
 % Named top-K lines with CI
@@ -4212,11 +4219,10 @@ for lk = plot_order
     end
     h_k = plot(ax, yr_sorted, y_k, '-', 'Color', colors(lk,:), ...
         'LineWidth', 1.2, 'DisplayName', disp_lbl);
-    try
-        h_k.DataTipTemplate.DataTipRows(end+1) = ...
-            dataTipTextRow(catname, repmat(levels_show(lk), numel(yr_sorted), 1));
-    catch
-    end
+    h_k.DataTipTemplate.DataTipRows(1).Label = 'Year';
+    h_k.DataTipTemplate.DataTipRows(2).Label = 'Mean value';
+    h_k.DataTipTemplate.DataTipRows(end+1) = ...
+        dataTipTextRow(catname, repmat(levels_show(lk), numel(yr_sorted), 1));
 end
 
 hold(ax, 'off');
