@@ -3179,13 +3179,12 @@ end
 
 % ── se_plot_panel_totals ──────────────────────────────────────────────────────
 function se_plot_panel_totals(T, prof, panel)
-%SE_PLOT_PANEL_TOTALS  "Totals over time" figure: mean over all rows per year.
-%   Also prints top-N category levels by time-variance to the console.
+%SE_PLOT_PANEL_TOTALS  100%-stacked area per categorical + console tips.
 
 wide_yr_idxs = panel.wide_yr_idxs;
 wide_yr_vals = panel.wide_yr_vals;
 n_yr = numel(wide_yr_vals);
-[yr_sorted, sort_ord] = sort(wide_yr_vals);
+[~, sort_ord] = sort(wide_yr_vals);
 
 % Exclude rows where any categorical column has a total-like value
 T_notot = T;
@@ -3199,23 +3198,6 @@ for vn = string(T.Properties.VariableNames)
         T_notot = T_notot(~ismember(string(col_v), tot_v), :);
     end
 end
-
-yr_means = zeros(1, n_yr);
-for k = 1:n_yr
-    col = double(T_notot.(prof.name{wide_yr_idxs(sort_ord(k))}));
-    yr_means(k) = mean(col, 'omitnan');
-end
-
-fig = figure('Name', se_fig_title('Totals over time', prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-ax = axes(fig);
-plot(ax, yr_sorted, yr_means, '-', 'Color', [0.2 0.4 0.8], 'LineWidth', 2);
-xlabel(ax, 'Year');
-ylabel(ax, 'Mean value (all rows)');
-title(ax, sprintf('Aggregate over time — %s', panel.description), ...
-    'Interpreter', 'none', 'FontSize', 10);
-grid(ax, 'on');
-se_stamp_source(fig, prof.source_name);
 
 % Print top-3 levels per non-geo categorical, ranked by time-variance
 for k = 1:numel(panel.non_geo_idxs)
