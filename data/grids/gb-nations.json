@@ -1,0 +1,36 @@
+[
+  {
+    "code": "SCO",
+    "row": 0,
+    "col": 1,
+    "names": [
+      "Scotland",
+      "Alba"
+    ]
+  },
+  {
+    "code": "NIR",
+    "row": 1,
+    "col": 0,
+    "names": [
+      "Northern Ireland"
+    ]
+  },
+  {
+    "code": "ENG",
+    "row": 1,
+    "col": 1,
+    "names": [
+      "England"
+    ]
+  },
+  {
+    "code": "WAL",
+    "row": 2,
+    "col": 0,
+    "names": [
+      "Wales",
+      "Cymru"
+    ]
+  }
+]

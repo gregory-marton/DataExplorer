@@ -1,0 +1,219 @@
+[
+  {
+    "code": "AM",
+    "row": 0,
+    "col": 1,
+    "names": [
+      "Amazonas"
+    ]
+  },
+  {
+    "code": "RR",
+    "row": 0,
+    "col": 2,
+    "names": [
+      "Roraima"
+    ]
+  },
+  {
+    "code": "AP",
+    "row": 0,
+    "col": 3,
+    "names": [
+      "Amapá"
+    ]
+  },
+  {
+    "code": "PA",
+    "row": 1,
+    "col": 2,
+    "names": [
+      "Pará"
+    ]
+  },
+  {
+    "code": "MA",
+    "row": 1,
+    "col": 3,
+    "names": [
+      "Maranhão"
+    ]
+  },
+  {
+    "code": "CE",
+    "row": 1,
+    "col": 4,
+    "names": [
+      "Ceará"
+    ]
+  },
+  {
+    "code": "RN",
+    "row": 1,
+    "col": 5,
+    "names": [
+      "Rio Grande do Norte"
+    ]
+  },
+  {
+    "code": "AC",
+    "row": 1,
+    "col": 0,
+    "names": [
+      "Acre"
+    ]
+  },
+  {
+    "code": "RO",
+    "row": 2,
+    "col": 0,
+    "names": [
+      "Rondônia"
+    ]
+  },
+  {
+    "code": "MT",
+    "row": 2,
+    "col": 1,
+    "names": [
+      "Mato Grosso"
+    ]
+  },
+  {
+    "code": "TO",
+    "row": 2,
+    "col": 2,
+    "names": [
+      "Tocantins"
+    ]
+  },
+  {
+    "code": "PI",
+    "row": 2,
+    "col": 3,
+    "names": [
+      "Piauí"
+    ]
+  },
+  {
+    "code": "PB",
+    "row": 2,
+    "col": 5,
+    "names": [
+      "Paraíba"
+    ]
+  },
+  {
+    "code": "PE",
+    "row": 2,
+    "col": 4,
+    "names": [
+      "Pernambuco"
+    ]
+  },
+  {
+    "code": "AL",
+    "row": 3,
+    "col": 4,
+    "names": [
+      "Alagoas"
+    ]
+  },
+  {
+    "code": "SE",
+    "row": 3,
+    "col": 5,
+    "names": [
+      "Sergipe"
+    ]
+  },
+  {
+    "code": "BA",
+    "row": 3,
+    "col": 3,
+    "names": [
+      "Bahia"
+    ]
+  },
+  {
+    "code": "DF",
+    "row": 3,
+    "col": 2,
+    "names": [
+      "Distrito Federal",
+      "Brasília"
+    ]
+  },
+  {
+    "code": "GO",
+    "row": 3,
+    "col": 1,
+    "names": [
+      "Goiás"
+    ]
+  },
+  {
+    "code": "MS",
+    "row": 3,
+    "col": 0,
+    "names": [
+      "Mato Grosso do Sul"
+    ]
+  },
+  {
+    "code": "MG",
+    "row": 4,
+    "col": 3,
+    "names": [
+      "Minas Gerais"
+    ]
+  },
+  {
+    "code": "ES",
+    "row": 4,
+    "col": 4,
+    "names": [
+      "Espírito Santo"
+    ]
+  },
+  {
+    "code": "RJ",
+    "row": 5,
+    "col": 4,
+    "names": [
+      "Rio de Janeiro"
+    ]
+  },
+  {
+    "code": "SP",
+    "row": 4,
+    "col": 2,
+    "names": [
+      "São Paulo"
+    ]
+  },
+  {
+    "code": "PR",
+    "row": 5,
+    "col": 2,
+    "names": [
+      "Paraná"
+    ]
+  },
+  {
+    "code": "SC",
+    "row": 5,
+    "col": 3,
+    "names": [
+      "Santa Catarina"
+    ]
+  },
+  {
+    "code": "RS",
+    "row": 6,
+    "col": 3,
+    "names": [
+      "Rio Grande do Sul"
+    ]
+  }
+]

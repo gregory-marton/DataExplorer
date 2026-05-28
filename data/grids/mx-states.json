@@ -1,0 +1,270 @@
+[
+  {
+    "code": "BC",
+    "row": 0,
+    "col": 0,
+    "names": [
+      "Baja California"
+    ]
+  },
+  {
+    "code": "SON",
+    "row": 0,
+    "col": 1,
+    "names": [
+      "Sonora"
+    ]
+  },
+  {
+    "code": "CHI",
+    "row": 0,
+    "col": 2,
+    "names": [
+      "Chihuahua"
+    ]
+  },
+  {
+    "code": "COA",
+    "row": 0,
+    "col": 3,
+    "names": [
+      "Coahuila"
+    ]
+  },
+  {
+    "code": "NUL",
+    "row": 0,
+    "col": 4,
+    "names": [
+      "Nuevo León"
+    ]
+  },
+  {
+    "code": "TAM",
+    "row": 0,
+    "col": 5,
+    "names": [
+      "Tamaulipas"
+    ]
+  },
+  {
+    "code": "BCS",
+    "row": 1,
+    "col": 0,
+    "names": [
+      "Baja California Sur"
+    ]
+  },
+  {
+    "code": "SIN",
+    "row": 1,
+    "col": 1,
+    "names": [
+      "Sinaloa"
+    ]
+  },
+  {
+    "code": "DUR",
+    "row": 1,
+    "col": 2,
+    "names": [
+      "Durango"
+    ]
+  },
+  {
+    "code": "ZAC",
+    "row": 1,
+    "col": 3,
+    "names": [
+      "Zacatecas"
+    ]
+  },
+  {
+    "code": "SLP",
+    "row": 1,
+    "col": 4,
+    "names": [
+      "San Luis Potosí"
+    ]
+  },
+  {
+    "code": "VER",
+    "row": 1,
+    "col": 5,
+    "names": [
+      "Veracruz"
+    ]
+  },
+  {
+    "code": "NAY",
+    "row": 2,
+    "col": 1,
+    "names": [
+      "Nayarit"
+    ]
+  },
+  {
+    "code": "JAL",
+    "row": 2,
+    "col": 2,
+    "names": [
+      "Jalisco"
+    ]
+  },
+  {
+    "code": "AGS",
+    "row": 2,
+    "col": 3,
+    "names": [
+      "Aguascalientes"
+    ]
+  },
+  {
+    "code": "GTO",
+    "row": 2,
+    "col": 4,
+    "names": [
+      "Guanajuato"
+    ]
+  },
+  {
+    "code": "QRO",
+    "row": 2,
+    "col": 5,
+    "names": [
+      "Querétaro"
+    ]
+  },
+  {
+    "code": "HID",
+    "row": 2,
+    "col": 6,
+    "names": [
+      "Hidalgo"
+    ]
+  },
+  {
+    "code": "COL",
+    "row": 3,
+    "col": 1,
+    "names": [
+      "Colima"
+    ]
+  },
+  {
+    "code": "MIC",
+    "row": 3,
+    "col": 2,
+    "names": [
+      "Michoacán"
+    ]
+  },
+  {
+    "code": "MEX",
+    "row": 3,
+    "col": 3,
+    "names": [
+      "Estado de México",
+      "State of Mexico"
+    ]
+  },
+  {
+    "code": "CDMX",
+    "row": 3,
+    "col": 4,
+    "names": [
+      "Ciudad de México",
+      "Mexico City",
+      "DF",
+      "Distrito Federal"
+    ]
+  },
+  {
+    "code": "MOR",
+    "row": 3,
+    "col": 5,
+    "names": [
+      "Morelos"
+    ]
+  },
+  {
+    "code": "PUE",
+    "row": 3,
+    "col": 6,
+    "names": [
+      "Puebla"
+    ]
+  },
+  {
+    "code": "TLX",
+    "row": 3,
+    "col": 7,
+    "names": [
+      "Tlaxcala"
+    ]
+  },
+  {
+    "code": "GRO",
+    "row": 4,
+    "col": 2,
+    "names": [
+      "Guerrero"
+    ]
+  },
+  {
+    "code": "OAX",
+    "row": 4,
+    "col": 4,
+    "names": [
+      "Oaxaca"
+    ]
+  },
+  {
+    "code": "VER",
+    "row": 4,
+    "col": 5,
+    "names": [
+      "Veracruz"
+    ]
+  },
+  {
+    "code": "TAB",
+    "row": 4,
+    "col": 6,
+    "names": [
+      "Tabasco"
+    ]
+  },
+  {
+    "code": "CHP",
+    "row": 5,
+    "col": 4,
+    "names": [
+      "Chiapas"
+    ]
+  },
+  {
+    "code": "CAM",
+    "row": 5,
+    "col": 6,
+    "names": [
+      "Campeche"
+    ]
+  },
+  {
+    "code": "YUC",
+    "row": 5,
+    "col": 7,
+    "names": [
+      "Yucatán"
+    ]
+  },
+  {
+    "code": "ROO",
+    "row": 5,
+    "col": 8,
+    "names": [
+      "Quintana Roo"
+    ]
+  }
+]

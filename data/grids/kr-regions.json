@@ -1,0 +1,165 @@
+[
+  {
+    "code": "GG",
+    "row": 0,
+    "col": 0,
+    "names": [
+      "Gyeonggi",
+      "Gyeonggi-do"
+    ]
+  },
+  {
+    "code": "IC",
+    "row": 0,
+    "col": 1,
+    "names": [
+      "Incheon",
+      "Incheon Metropolitan City"
+    ]
+  },
+  {
+    "code": "SE",
+    "row": 0,
+    "col": 2,
+    "names": [
+      "Seoul",
+      "서울",
+      "Seoul Special City"
+    ]
+  },
+  {
+    "code": "GW",
+    "row": 0,
+    "col": 3,
+    "names": [
+      "Gangwon",
+      "Gangwon-do"
+    ]
+  },
+  {
+    "code": "CB",
+    "row": 1,
+    "col": 0,
+    "names": [
+      "Chungcheongbuk-do",
+      "North Chungcheong",
+      "Chungbuk"
+    ]
+  },
+  {
+    "code": "CN",
+    "row": 1,
+    "col": 1,
+    "names": [
+      "Daejeon",
+      "대전"
+    ]
+  },
+  {
+    "code": "SJ",
+    "row": 1,
+    "col": 2,
+    "names": [
+      "Sejong",
+      "세종",
+      "Sejong City"
+    ]
+  },
+  {
+    "code": "GB",
+    "row": 1,
+    "col": 3,
+    "names": [
+      "Gyeongsangbuk-do",
+      "North Gyeongsang",
+      "Gyeongbuk"
+    ]
+  },
+  {
+    "code": "DG",
+    "row": 1,
+    "col": 4,
+    "names": [
+      "Daegu",
+      "대구"
+    ]
+  },
+  {
+    "code": "CN2",
+    "row": 2,
+    "col": 0,
+    "names": [
+      "Chungcheongnam-do",
+      "South Chungcheong",
+      "Chungnam"
+    ]
+  },
+  {
+    "code": "JB",
+    "row": 2,
+    "col": 1,
+    "names": [
+      "Jeollabuk-do",
+      "North Jeolla",
+      "Jeonbuk"
+    ]
+  },
+  {
+    "code": "GN",
+    "row": 2,
+    "col": 3,
+    "names": [
+      "Gyeongsangnam-do",
+      "South Gyeongsang",
+      "Gyeongnam"
+    ]
+  },
+  {
+    "code": "US",
+    "row": 2,
+    "col": 4,
+    "names": [
+      "Ulsan",
+      "울산"
+    ]
+  },
+  {
+    "code": "BS",
+    "row": 2,
+    "col": 5,
+    "names": [
+      "Busan",
+      "부산"
+    ]
+  },
+  {
+    "code": "JN",
+    "row": 3,
+    "col": 1,
+    "names": [
+      "Jeollanam-do",
+      "South Jeolla",
+      "Jeonnam"
+    ]
+  },
+  {
+    "code": "GJ",
+    "row": 3,
+    "col": 2,
+    "names": [
+      "Gwangju",
+      "광주"
+    ]
+  },
+  {
+    "code": "JJ",
+    "row": 3,
+    "col": 3,
+    "names": [
+      "Jeju",
+      "제주",
+      "Jeju Island",
+      "Jeju-do"
+    ]
+  }
+]

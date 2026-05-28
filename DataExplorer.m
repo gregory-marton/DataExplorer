@@ -2845,7 +2845,7 @@ code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
 for ci = cat_all(:)'
-    if se_looks_like_states(prof, ci, T)
+    if strcmp(se_looks_like_geo(prof, ci, T), 'us-states')
         geo_idx = ci; break;
     end
 end
@@ -2893,7 +2893,7 @@ code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
 for ci = cat_all(:)'
-    if se_looks_like_countries(prof, ci, T)
+    if strcmp(se_looks_like_geo(prof, ci, T), 'world')
         geo_idx = ci; break;
     end
 end
@@ -2944,7 +2944,7 @@ if isempty(wide_yr_idxs), return; end
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 if numel(cat_all) < 2, return; end
 
-geo_cats   = cat_all(arrayfun(@(ci) se_looks_like_states(prof,ci,T) || se_looks_like_countries(prof,ci,T), cat_all));
+geo_cats   = cat_all(arrayfun(@(ci) ~isempty(se_looks_like_geo(prof,ci,T)), cat_all));
 other_cats = cat_all(~ismember(cat_all, geo_cats));
 if isempty(geo_cats) || isempty(other_cats), return; end
 
@@ -2962,9 +2962,10 @@ L{end+1} = '';
 
 n_pairs = 0;
 for gi = 1:numel(geo_cats)
-    geo_idx  = geo_cats(gi);
-    geo_name = prof.name{geo_idx};
-    is_states_geo = se_looks_like_states(prof, geo_idx, T);
+    geo_idx      = geo_cats(gi);
+    geo_name     = prof.name{geo_idx};
+    geo_grid_name = se_looks_like_geo(prof, geo_idx, T);
+    is_states_geo = strcmp(geo_grid_name, 'us-states');
 
     for oi = 1:numel(other_cats)
         cat_idx  = other_cats(oi);
@@ -2994,9 +2995,12 @@ for gi = 1:numel(geo_cats)
         if is_states_geo
             L{end+1} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str); %#ok<AGROW>
-        else
+        elseif strcmp(geo_grid_name, 'world')
             L{end+1} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str); %#ok<AGROW>
+        else
+            L{end+1} = sprintf('de_geobins(T_filt_gm, ''GeoCol'',''%s'', ''Grid'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, geo_grid_name, cat_name, K, title_str); %#ok<AGROW>
         end
         L{end+1} = ''; %#ok<AGROW>
         n_pairs = n_pairs + 1;
@@ -3155,7 +3159,7 @@ panel.is_panel      = true;
 panel.grouping_idxs = cat_all;
 
 for k = 1:numel(cat_all)
-    if se_looks_like_states(prof, cat_all(k), T) || se_looks_like_countries(prof, cat_all(k), T)
+    if ~isempty(se_looks_like_geo(prof, cat_all(k), T))
         panel.geo_idx = cat_all(k);
         break
     end
@@ -3305,10 +3309,9 @@ end
 TOP_K = 8;
 for k = 1:numel(cat_big)
     ci = cat_big(k);
-    if se_looks_like_states(prof, ci, T)
-        se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis);
-    elseif se_looks_like_countries(prof, ci, T)
-        % country choropleth moved to recipe (cg_country_choropleth_code)
+    geo_grid = se_looks_like_geo(prof, ci, T);
+    if ~isempty(geo_grid)
+        se_plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis, geo_grid);
     else
         catname_k  = prof.name{ci};
         cat_col_k  = T.(catname_k);
@@ -3640,100 +3643,91 @@ title(tl, se_src_prefix(prof.source_name, sprintf('colored by %s', catname)), ..
 end
 
 
-% ── se_looks_like_states ──────────────────────────────────────────────────────
-function tf = se_looks_like_states(prof, idx, T)
-%SE_LOOKS_LIKE_STATES  True if categorical column looks like U.S. state identifiers.
-%   Matches on: column name containing "state"; ≥80% of levels are 2-letter
-%   U.S. state/territory abbreviations; or ≥80% are full U.S. state names.
-tf = false;
-catname = prof.name{idx};
-if contains(lower(catname), 'state')
-    tf = true;
-    return;
-end
-US_CODES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA", ...
-            "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD", ...
-            "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ", ...
-            "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC", ...
-            "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY", ...
-            "DC","PR","GU","VI","AS","MP"];
-US_NAMES = ["ALABAMA","ALASKA","ARIZONA","ARKANSAS","CALIFORNIA", ...
-            "COLORADO","CONNECTICUT","DELAWARE","FLORIDA","GEORGIA", ...
-            "HAWAII","IDAHO","ILLINOIS","INDIANA","IOWA","KANSAS", ...
-            "KENTUCKY","LOUISIANA","MAINE","MARYLAND","MASSACHUSETTS", ...
-            "MICHIGAN","MINNESOTA","MISSISSIPPI","MISSOURI","MONTANA", ...
-            "NEBRASKA","NEVADA","NEW HAMPSHIRE","NEW JERSEY","NEW MEXICO", ...
-            "NEW YORK","NORTH CAROLINA","NORTH DAKOTA","OHIO","OKLAHOMA", ...
-            "OREGON","PENNSYLVANIA","RHODE ISLAND","SOUTH CAROLINA", ...
-            "SOUTH DAKOTA","TENNESSEE","TEXAS","UTAH","VERMONT","VIRGINIA", ...
-            "WASHINGTON","WEST VIRGINIA","WISCONSIN","WYOMING", ...
-            "DISTRICT OF COLUMBIA","PUERTO RICO","GUAM"];
-levels = upper(cellstr(categories(T.(catname))));
-if numel(levels) >= 3
-    if all(cellfun(@numel, levels) == 2)
-        tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_CODES)), levels)) / numel(levels) >= 0.8;
-    else
-        tf = sum(cellfun(@(lv) ismember(lv, cellstr(US_NAMES)), levels)) / numel(levels) >= 0.8;
+% ── se_looks_like_geo ─────────────────────────────────────────────────────────
+function grid_name = se_looks_like_geo(prof, idx, T)
+%SE_LOOKS_LIKE_GEO  Return the name of the best-matching grid JSON, or ''.
+%   Scans data/grids/*.json (loaded once per session via persistent cache).
+%   Column name heuristics provide a fast path for the two built-in grids.
+%   Any JSON file dropped in data/grids/ is automatically discovered.
+
+persistent GEO_GRIDS  % struct array: .name, .vocab (containers.Map, uppercase keys)
+if isempty(GEO_GRIDS)
+    grids_dir = fullfile(fileparts(mfilename('fullpath')), 'data', 'grids');
+    jfiles = dir(fullfile(grids_dir, '*.json'));
+    GEO_GRIDS = struct('name', {}, 'vocab', {});
+    for fi = 1:numel(jfiles)
+        [~, gname] = fileparts(jfiles(fi).name);
+        try
+            raw = jsondecode(fileread(fullfile(jfiles(fi).folder, jfiles(fi).name)));
+        catch
+            continue
+        end
+        vocab = containers.Map('KeyType','char','ValueType','logical');
+        for ri = 1:numel(raw)
+            e = raw{ri};
+            k = upper(strtrim(char(e.code)));
+            if ~isKey(vocab, k), vocab(k) = true; end
+            if isfield(e, 'names')
+                nms = e.names;
+                if ischar(nms) || isstring(nms), nms = {char(nms)}; end
+                for ni = 1:numel(nms)
+                    nk = upper(strtrim(char(nms{ni})));
+                    if strlength(nk) > 0 && ~isKey(vocab, nk), vocab(nk) = true; end
+                end
+            end
+        end
+        idx2 = numel(GEO_GRIDS) + 1;
+        GEO_GRIDS(idx2).name  = gname;
+        GEO_GRIDS(idx2).vocab = vocab;
     end
 end
+
+catname   = prof.name{idx};
+col_lower = lower(catname);
+
+% Fast path: column name triggers for the two most common grids
+if contains(col_lower, 'state')
+    grid_name = 'us-states';  return
+end
+if any(contains(col_lower, {'country','nation','iso'}))
+    grid_name = 'world';  return
 end
 
+% Code scan: check all loaded grids
+cat_col = T.(catname);
+% Only consider levels that actually appear in the data
+all_levels = cellstr(upper(strtrim(string(categories(cat_col)))));
+present    = cellfun(@(lv) sum(cat_col == lv) > 0, all_levels);
+levels     = all_levels(present);
+n = numel(levels);
+if n < 3, grid_name = ''; return; end
 
-% ── se_looks_like_countries ───────────────────────────────────────────────────
-function tf = se_looks_like_countries(prof, idx, T)
-%SE_LOOKS_LIKE_COUNTRIES  True if categorical column looks like country identifiers.
-%   Matches on: column name containing 'country', 'nation', or 'iso'; or
-%   ≥60% of levels are ISO alpha-2 codes; or ≥60% are ISO alpha-3 codes.
-tf = false;
-catname = prof.name{idx};
-if any(contains(lower(catname), {'country','nation','iso'}))
-    tf = true;
-    return;
+THRESHOLD = 0.60;
+best_name  = '';
+best_score = 0;
+for gi = 1:numel(GEO_GRIDS)
+    vocab = GEO_GRIDS(gi).vocab;
+    hits  = sum(cellfun(@(lv) isKey(vocab, lv), levels));
+    score = hits / n;
+    if score > best_score
+        best_score = score;
+        best_name  = GEO_GRIDS(gi).name;
+    end
 end
-ISO2 = ["AF","AL","DZ","AO","AR","AM","AU","AT","AZ","BS","BH","BD","BY","BE", ...
-        "BZ","BJ","BT","BO","BA","BW","BR","BN","BG","BF","BI","CV","KH","CM", ...
-        "CA","CF","TD","CL","CN","CO","KM","CG","CD","CR","HR","CU","CY","CZ", ...
-        "DK","DJ","DO","EC","EG","SV","GQ","ER","EE","SZ","ET","FJ","FI","FR", ...
-        "GA","GM","GE","DE","GH","GR","GT","GN","GW","GY","HT","HN","HU","IS", ...
-        "IN","ID","IR","IQ","IE","IL","IT","JM","JP","JO","KZ","KE","KP","KR", ...
-        "KW","KG","LA","LV","LB","LS","LR","LY","LT","LU","MG","MW","MY","MV", ...
-        "ML","MT","MR","MU","MX","MD","MN","ME","MA","MZ","MM","NA","NP","NL", ...
-        "NZ","NI","NE","NG","MK","NO","OM","PK","PA","PG","PY","PE","PH","PL", ...
-        "PT","QA","RO","RU","RW","SA","SN","RS","SL","SO","ZA","SS","ES","LK", ...
-        "SD","SR","SE","CH","SY","TJ","TZ","TH","TL","TG","TT","TN","TR","TM", ...
-        "UG","UA","AE","GB","US","UY","UZ","VE","VN","YE","ZM","ZW"];
-ISO3 = ["AFG","ALB","DZA","AGO","ARG","ARM","AUS","AUT","AZE","BHS","BHR","BGD", ...
-        "BLR","BEL","BLZ","BEN","BTN","BOL","BIH","BWA","BRA","BRN","BGR","BFA", ...
-        "BDI","CPV","KHM","CMR","CAN","CAF","TCD","CHL","CHN","COL","COM","COG", ...
-        "COD","CRI","HRV","CUB","CYP","CZE","DNK","DJI","DOM","ECU","EGY","SLV", ...
-        "GNQ","ERI","EST","SWZ","ETH","FJI","FIN","FRA","GAB","GMB","GEO","DEU", ...
-        "GHA","GRC","GTM","GIN","GNB","GUY","HTI","HND","HUN","ISL","IND","IDN", ...
-        "IRN","IRQ","IRL","ISR","ITA","JAM","JPN","JOR","KAZ","KEN","PRK","KOR", ...
-        "KWT","KGZ","LAO","LVA","LBN","LSO","LBR","LBY","LTU","LUX","MDG","MWI", ...
-        "MYS","MDV","MLI","MLT","MRT","MUS","MEX","MDA","MNG","MNE","MAR","MOZ", ...
-        "MMR","NAM","NPL","NLD","NZL","NIC","NER","NGA","MKD","NOR","OMN","PAK", ...
-        "PAN","PNG","PRY","PER","PHL","POL","PRT","QAT","ROU","RUS","RWA","SAU", ...
-        "SEN","SRB","SLE","SOM","ZAF","SSD","ESP","LKA","SDN","SUR","SWE","CHE", ...
-        "SYR","TJK","TZA","THA","TLS","TGO","TTO","TUN","TUR","TKM","UGA","UKR", ...
-        "ARE","GBR","USA","URY","UZB","VEN","VNM","YEM","ZMB","ZWE"];
-levels = upper(cellstr(categories(T.(catname))));
-n_lev  = numel(levels);
-if n_lev < 3, return; end
-all_len2 = all(cellfun(@numel, levels) == 2);
-all_len3 = all(cellfun(@numel, levels) == 3);
-if all_len2
-    tf = sum(cellfun(@(lv) ismember(lv, cellstr(ISO2)), levels)) / n_lev >= 0.6;
-elseif all_len3
-    tf = sum(cellfun(@(lv) ismember(lv, cellstr(ISO3)), levels)) / n_lev >= 0.6;
+if best_score >= THRESHOLD
+    grid_name = best_name;
+else
+    grid_name = '';
 end
 end
 
 
 % ── se_plot_state_summary ─────────────────────────────────────────────────────
-function se_plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis)
+function se_plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis, grid_name)
 %SE_PLOT_STATE_SUMMARY  Bar charts of mean-per-state and state×time heatmaps.
 %   Figure 1: horizontal bar chart of mean value per state, sorted descending.
 %   Figure 2 (if time axis exists): imagesc heatmap of state × time for each numeric.
+if nargin < 8 || isempty(grid_name), grid_name = 'us-states'; end
 
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
@@ -3788,7 +3782,7 @@ title(tl, se_src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 
 % ── Animated choropleth (Mapping Toolbox) — fires with or without time axis ──
-se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis);
+se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name);
 
 % ── Stacked % area chart (fires when a total code like 'US' exists + wide years) ──
 [wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
@@ -3888,8 +3882,9 @@ end
 
 
 % ── se_plot_state_choropleth ──────────────────────────────────────────────────
-function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis) %#ok<INUSL>
-%SE_PLOT_STATE_CHOROPLETH  Thin wrapper: calls de_usamap for each numeric variable.
+function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name) %#ok<INUSL>
+%SE_PLOT_STATE_CHOROPLETH  Tile choropleth for any geo grid (de_geobins wrapper).
+if nargin < 7 || isempty(grid_name), grid_name = 'us-states'; end
 catname = prof.name{cat_idx};
 tcn     = '';
 if ~isempty(time_idx), tcn = prof.name{time_idx}; end
@@ -3900,7 +3895,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
     fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
-    de_statebins(T_long, 'StateCol', catname, 'ColorCol', 'Value', ...
+    de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title);
     num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
 end
@@ -3909,9 +3904,9 @@ for j = 1:numel(num_idxs)
     ncn        = prof.name{num_idxs(j)};
     fig_title  = se_fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
     if isempty(tcn)
-        de_statebins(T, 'StateCol', catname, 'ColorCol', ncn, 'Title', fig_title);
+        de_geobins(T, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', ncn, 'Title', fig_title);
     else
-        de_statebins(T, 'StateCol', catname, 'ColorCol', ncn, ...
+        de_geobins(T, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', ncn, ...
             'TimeCol', tcn, 'Title', fig_title);
     end
 end
