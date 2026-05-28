@@ -1,0 +1,187 @@
+# in-states
+
+- code: JK
+  row: 0
+  col: 0
+  names: [Jammu and Kashmir, "Jammu & Kashmir", IN-JK]
+
+- code: HP
+  row: 0
+  col: 1
+  names: [Himachal Pradesh, IN-HP]
+
+- code: UK
+  row: 0
+  col: 2
+  names: [Uttarakhand, Uttaranchal, IN-UT]
+
+- code: UP
+  row: 0
+  col: 3
+  names: [Uttar Pradesh, IN-UP]
+
+- code: BR
+  row: 0
+  col: 4
+  names: [Bihar, IN-BR]
+
+- code: WB
+  row: 0
+  col: 5
+  names: [West Bengal, IN-WB]
+
+- code: SK
+  row: 0
+  col: 6
+  names: [Sikkim, IN-SK]
+
+- code: AR
+  row: 0
+  col: 7
+  names: [Arunachal Pradesh, IN-AR]
+
+- code: AS
+  row: 1
+  col: 6
+  names: [Assam, IN-AS]
+
+- code: NL
+  row: 1
+  col: 7
+  names: [Nagaland, IN-NL]
+
+- code: MN
+  row: 2
+  col: 7
+  names: [Manipur, IN-MN]
+
+- code: ML
+  row: 2
+  col: 6
+  names: [Meghalaya, IN-ML]
+
+- code: TR
+  row: 2
+  col: 5
+  names: [Tripura, IN-TR]
+
+- code: MZ
+  row: 3
+  col: 7
+  names: [Mizoram, IN-MZ]
+
+- code: PB
+  row: 1
+  col: 0
+  names: [Punjab, IN-PB]
+
+- code: HR
+  row: 1
+  col: 1
+  names: [Haryana, IN-HR]
+
+- code: DL
+  row: 1
+  col: 2
+  names: [Delhi, NCT, IN-DL, National Capital Territory]
+
+- code: RJ
+  row: 1
+  col: 3
+  names: [Rajasthan, Rajputana, IN-RJ]
+
+- code: MP
+  row: 1
+  col: 4
+  names: [Madhya Pradesh, IN-MP]
+
+- code: JH
+  row: 1
+  col: 5
+  names: [Jharkhand, IN-JH]
+
+- code: OD
+  row: 2
+  col: 4
+  names: [Odisha, Orissa, IN-OR]
+
+- code: CG
+  row: 2
+  col: 3
+  names: [Chhattisgarh, IN-CT]
+
+- code: GJ
+  row: 2
+  col: 1
+  names: [Gujarat, IN-GJ]
+
+- code: MH
+  row: 2
+  col: 2
+  names: [Maharashtra, IN-MH]
+
+- code: TS
+  row: 3
+  col: 3
+  names: [Telangana, IN-TG]
+
+- code: AP
+  row: 3
+  col: 4
+  names: [Andhra Pradesh, IN-AP]
+
+- code: KA
+  row: 3
+  col: 2
+  names: [Karnataka, IN-KA]
+
+- code: GA
+  row: 3
+  col: 1
+  names: [Goa, IN-GA]
+
+- code: TN
+  row: 4
+  col: 3
+  names: [Tamil Nadu, IN-TN]
+
+- code: KL
+  row: 4
+  col: 2
+  names: [Kerala, IN-KL]
+
+- code: LA
+  row: 0
+  col: -1
+  territory: true
+  names: [Ladakh, IN-LA]
+
+- code: CH
+  row: 1
+  col: -1
+  territory: true
+  names: [Chandigarh, IN-CH]
+
+- code: PY
+  row: 4
+  col: 4
+  territory: true
+  names: [Puducherry, Pondicherry, IN-PY]
+
+- code: AN
+  row: 4
+  col: 5
+  territory: true
+  names: [Andaman and Nicobar Islands, "A&N Islands", IN-AN]
+
+- code: DN
+  row: 3
+  col: 0
+  territory: true
+  names: [Dadra and Nagar Haveli and Daman and Diu, DNHDD, IN-DH]
+
+- code: LD
+  row: 4
+  col: 1
+  territory: true
+  names: [Lakshadweep, IN-LD]

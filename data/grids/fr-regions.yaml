@@ -1,0 +1,67 @@
+# fr-regions
+
+- code: HDF
+  row: 0
+  col: 1
+  names: [Hauts-de-France, Nord-Pas-de-Calais]
+
+- code: NOR
+  row: 0
+  col: 2
+  names: [Normandie, Normandy]
+
+- code: BRE
+  row: 0
+  col: 3
+  names: [Bretagne, Brittany]
+
+- code: IDF
+  row: 1
+  col: 2
+  names: [Île-de-France, Paris]
+
+- code: GES
+  row: 1
+  col: 3
+  names: [Grand Est, Alsace-Lorraine]
+
+- code: PDL
+  row: 1
+  col: 1
+  names: [Pays de la Loire]
+
+- code: CVL
+  row: 1
+  col: 4
+  names: [Centre-Val de Loire]
+
+- code: BFC
+  row: 2
+  col: 3
+  names: [Bourgogne-Franche-Comté, Burgundy]
+
+- code: NAQ
+  row: 2
+  col: 1
+  names: [Nouvelle-Aquitaine, Aquitaine]
+
+- code: ARA
+  row: 2
+  col: 2
+  names: [Auvergne-Rhône-Alpes]
+
+- code: OCC
+  row: 3
+  col: 2
+  names: [Occitanie, Languedoc]
+
+- code: PAC
+  row: 3
+  col: 3
+  names: ["Provence-Alpes-Côte d'Azur", PACA]
+
+- code: COR
+  row: 3
+  col: 4
+  territory: true
+  names: [Corse, Corsica]

@@ -1,0 +1,426 @@
+# languages
+
+- code: en
+  row: 0
+  col: 0
+  names: [English]
+
+- code: de
+  row: 0
+  col: 1
+  names: [German, Deutsch]
+
+- code: nl
+  row: 0
+  col: 2
+  names: [Dutch, Nederlands, Flemish]
+
+- code: sv
+  row: 0
+  col: 3
+  names: [Swedish, Svenska]
+
+- code: "no"
+  row: 0
+  col: 4
+  names: [Norwegian, Norsk]
+
+- code: da
+  row: 0
+  col: 5
+  names: [Danish, Dansk]
+
+- code: is
+  row: 0
+  col: 6
+  names: [Icelandic, Íslenska]
+
+- code: af
+  row: 0
+  col: 7
+  names: [Afrikaans]
+
+- code: fr
+  row: 1
+  col: 0
+  names: [French, Français]
+
+- code: es
+  row: 1
+  col: 1
+  names: [Spanish, Español, Castellano]
+
+- code: pt
+  row: 1
+  col: 2
+  names: [Portuguese, Português]
+
+- code: it
+  row: 1
+  col: 3
+  names: [Italian, Italiano]
+
+- code: ro
+  row: 1
+  col: 4
+  names: [Romanian, Română]
+
+- code: ca
+  row: 1
+  col: 5
+  names: [Catalan, Català]
+
+- code: gl
+  row: 1
+  col: 6
+  names: [Galician, Galego]
+
+- code: la
+  row: 1
+  col: 7
+  names: [Latin, Latina]
+
+- code: ru
+  row: 2
+  col: 0
+  names: [Russian, Русский]
+
+- code: pl
+  row: 2
+  col: 1
+  names: [Polish, Polski]
+
+- code: cs
+  row: 2
+  col: 2
+  names: [Czech, Čeština]
+
+- code: sk
+  row: 2
+  col: 3
+  names: [Slovak, Slovenčina]
+
+- code: bg
+  row: 2
+  col: 4
+  names: [Bulgarian, Български]
+
+- code: hr
+  row: 2
+  col: 5
+  names: [Croatian, Hrvatski]
+
+- code: sr
+  row: 2
+  col: 6
+  names: [Serbian, Српски, Srpski]
+
+- code: sl
+  row: 2
+  col: 7
+  names: [Slovenian, Slovenščina]
+
+- code: uk
+  row: 2
+  col: 8
+  names: [Ukrainian, Українська]
+
+- code: be
+  row: 2
+  col: 9
+  names: [Belarusian, Беларуская]
+
+- code: el
+  row: 3
+  col: 0
+  names: [Greek, Ελληνικά]
+
+- code: fi
+  row: 3
+  col: 1
+  names: [Finnish, Suomi]
+
+- code: hu
+  row: 3
+  col: 2
+  names: [Hungarian, Magyar]
+
+- code: et
+  row: 3
+  col: 3
+  names: [Estonian, Eesti]
+
+- code: lv
+  row: 3
+  col: 4
+  names: [Latvian, Latviešu]
+
+- code: lt
+  row: 3
+  col: 5
+  names: [Lithuanian, Lietuvių]
+
+- code: ga
+  row: 3
+  col: 6
+  names: [Irish, Gaeilge]
+
+- code: eu
+  row: 3
+  col: 7
+  names: [Basque, Euskara]
+
+- code: cy
+  row: 3
+  col: 8
+  names: [Welsh, Cymraeg]
+
+- code: mt
+  row: 3
+  col: 9
+  names: [Maltese, Malti]
+
+- code: ar
+  row: 4
+  col: 0
+  names: [Arabic, العربية]
+
+- code: he
+  row: 4
+  col: 1
+  names: [Hebrew, עברית]
+
+- code: am
+  row: 4
+  col: 2
+  names: [Amharic, አማርኛ]
+
+- code: so
+  row: 4
+  col: 3
+  names: [Somali, Soomaali]
+
+- code: fa
+  row: 5
+  col: 0
+  names: [Persian, Farsi, فارسی]
+
+- code: tr
+  row: 5
+  col: 1
+  names: [Turkish, Türkçe]
+
+- code: az
+  row: 5
+  col: 2
+  names: [Azerbaijani, Azərbaycan]
+
+- code: kk
+  row: 5
+  col: 3
+  names: [Kazakh, Қазақ]
+
+- code: uz
+  row: 5
+  col: 4
+  names: [Uzbek, "O'zbek"]
+
+- code: ky
+  row: 5
+  col: 5
+  names: [Kyrgyz, Кыргыз]
+
+- code: tk
+  row: 5
+  col: 6
+  names: [Turkmen, Türkmen]
+
+- code: hi
+  row: 6
+  col: 0
+  names: [Hindi, हिन्दी]
+
+- code: ur
+  row: 6
+  col: 1
+  names: [Urdu, اردو]
+
+- code: bn
+  row: 6
+  col: 2
+  names: [Bengali, বাংলা]
+
+- code: pa
+  row: 6
+  col: 3
+  names: [Punjabi, ਪੰਜਾਬੀ]
+
+- code: gu
+  row: 6
+  col: 4
+  names: [Gujarati, ગુજરાતી]
+
+- code: mr
+  row: 6
+  col: 5
+  names: [Marathi, मराठी]
+
+- code: ta
+  row: 6
+  col: 6
+  names: [Tamil, தமிழ்]
+
+- code: te
+  row: 6
+  col: 7
+  names: [Telugu, తెలుగు]
+
+- code: ml
+  row: 6
+  col: 8
+  names: [Malayalam, മലയാളം]
+
+- code: kn
+  row: 6
+  col: 9
+  names: [Kannada, ಕನ್ನಡ]
+
+- code: si
+  row: 6
+  col: 10
+  names: [Sinhala, සිංහල]
+
+- code: ne
+  row: 6
+  col: 11
+  names: [Nepali, नेपाली]
+
+- code: zh
+  row: 7
+  col: 0
+  names: [Chinese, 中文, Mandarin, Zhongwen, Putonghua]
+
+- code: ja
+  row: 7
+  col: 1
+  names: [Japanese, 日本語, Nihongo]
+
+- code: ko
+  row: 7
+  col: 2
+  names: [Korean, 한국어, 조선어]
+
+- code: th
+  row: 7
+  col: 3
+  names: [Thai, ภาษาไทย]
+
+- code: vi
+  row: 7
+  col: 4
+  names: [Vietnamese, Tiếng Việt]
+
+- code: km
+  row: 7
+  col: 5
+  names: [Khmer, ខ្មែរ]
+
+- code: lo
+  row: 7
+  col: 6
+  names: [Lao, ລາວ]
+
+- code: my
+  row: 7
+  col: 7
+  names: [Burmese, Myanmar, မြန်မာ]
+
+- code: ms
+  row: 7
+  col: 8
+  names: [Malay, Bahasa Melayu]
+
+- code: id
+  row: 7
+  col: 9
+  names: [Indonesian, Bahasa Indonesia]
+
+- code: tl
+  row: 7
+  col: 10
+  names: [Filipino, Tagalog]
+
+- code: mn
+  row: 7
+  col: 11
+  names: [Mongolian, Монгол]
+
+- code: sw
+  row: 8
+  col: 0
+  names: [Swahili, Kiswahili]
+
+- code: yo
+  row: 8
+  col: 1
+  names: [Yoruba]
+
+- code: ig
+  row: 8
+  col: 2
+  names: [Igbo]
+
+- code: ha
+  row: 8
+  col: 3
+  names: [Hausa]
+
+- code: zu
+  row: 8
+  col: 4
+  names: [Zulu, isiZulu]
+
+- code: xh
+  row: 8
+  col: 5
+  names: [Xhosa, isiXhosa]
+
+- code: st
+  row: 8
+  col: 6
+  names: [Sesotho, Southern Sotho]
+
+- code: sn
+  row: 8
+  col: 7
+  names: [Shona]
+
+- code: qu
+  row: 9
+  col: 0
+  names: [Quechua, Runasimi]
+
+- code: gu2
+  row: 9
+  col: 1
+  names: [Guaraní]
+
+- code: nah
+  row: 9
+  col: 2
+  names: [Nahuatl, Aztec]
+
+- code: nv
+  row: 9
+  col: 3
+  names: [Navajo, Diné bizaad]
+
+- code: mi
+  row: 9
+  col: 4
+  names: [Māori, Maori]
+
+- code: haw
+  row: 9
+  col: 5
+  names: [Hawaiian, ʻŌlelo Hawaiʻi]

@@ -1,0 +1,41 @@
+# au-states
+
+- code: WA
+  row: 0
+  col: 0
+  names: [Western Australia]
+
+- code: NT
+  row: 0
+  col: 1
+  names: [Northern Territory]
+
+- code: QLD
+  row: 0
+  col: 2
+  names: [Queensland]
+
+- code: SA
+  row: 1
+  col: 1
+  names: [South Australia]
+
+- code: NSW
+  row: 1
+  col: 2
+  names: [New South Wales]
+
+- code: TAS
+  row: 2
+  col: 0
+  names: [Tasmania]
+
+- code: VIC
+  row: 2
+  col: 1
+  names: [Victoria]
+
+- code: ACT
+  row: 2
+  col: 2
+  names: [Australian Capital Territory, Canberra]

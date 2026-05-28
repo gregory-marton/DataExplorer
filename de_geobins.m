@@ -196,13 +196,14 @@ end % de_geobins
 %% ── gb_load_grid ─────────────────────────────────────────────────────────────
 function [CODES, ROWS, COLS, NAMES_MAP] = gb_load_grid(grid_spec, show_terr)
 %GB_LOAD_GRID  Return (CODES, ROWS, COLS, NAMES_MAP) for a grid spec.
-%   NAMES_MAP is a containers.Map from upper-cased name string → primary code.
+%   Named grids are resolved via de_build_grids() (YAML→.mat cache).
+%   NAMES_MAP is a containers.Map from upper-cased name/alias → primary code.
 
 CODES = {};  ROWS = [];  COLS = [];
 NAMES_MAP = containers.Map('KeyType','char','ValueType','char');
 
 if isstruct(grid_spec)
-    % Struct array: fields code/row/col, optional territory and names
+    % Caller-supplied struct array: code/row/col/territory/names fields
     for i = 1:numel(grid_spec)
         if ~show_terr && isfield(grid_spec, 'territory') && grid_spec(i).territory
             continue
@@ -215,9 +216,7 @@ if isstruct(grid_spec)
             if ischar(nms) || isstring(nms), nms = {char(nms)}; end
             for ni = 1:numel(nms)
                 k = upper(strtrim(char(nms{ni})));
-                if ~isKey(NAMES_MAP, k)
-                    NAMES_MAP(k) = CODES{end};
-                end
+                if ~isKey(NAMES_MAP, k), NAMES_MAP(k) = CODES{end}; end
             end
         end
     end
@@ -225,51 +224,66 @@ if isstruct(grid_spec)
     return
 end
 
-% Resolve to a file path
+% Named grid or file path
 gs = char(string(grid_spec));
-if ~any(gs == filesep) && ~any(gs == '/') && ~endsWith(gs, '.json')
-    json_path = fullfile(fileparts(mfilename('fullpath')), 'data', 'grids', [gs '.json']);
-else
-    json_path = gs;
-end
-if ~exist(json_path, 'file')
-    fprintf('  ℹ de_geobins: grid file not found: %s\n', json_path);
+is_path = any(gs == filesep) || any(gs == '/') || ...
+          endsWith(gs, '.yaml') || endsWith(gs, '.json');
+
+if ~is_path
+    % Look up by name in the compiled grid cache
+    grids = de_build_grids();
+    gi = find(strcmp({grids.name}, gs), 1);
+    if isempty(gi)
+        fprintf('  ℹ de_geobins: grid "%s" not found in data/grids/\n', gs);
+        return
+    end
+    g = grids(gi);
+    keep = ~g.territory | show_terr;
+    CODES = g.codes(keep);
+    ROWS  = g.rows(keep);
+    COLS  = g.cols(keep);
+    % Build NAMES_MAP from alias_keys/alias_vals
+    ak = g.alias_keys;  av = g.alias_vals;
+    for ki = 1:numel(ak)
+        if ~isKey(NAMES_MAP, ak{ki}), NAMES_MAP(ak{ki}) = av{ki}; end
+    end
     return
 end
 
-raw = jsondecode(fileread(json_path));
-if isstruct(raw), raw = num2cell(raw); end
-n   = numel(raw);
-CODES = cell(n, 1);
-ROWS  = zeros(n, 1);
-COLS  = zeros(n, 1);
-kept  = true(n, 1);
-
+% Direct file path (.yaml or .json)
+yaml_path = gs;
+if endsWith(gs, '.json')
+    yaml_path = [gs(1:end-5) '.yaml'];
+end
+if ~exist(yaml_path, 'file')
+    fprintf('  ℹ de_geobins: grid file not found: %s\n', yaml_path);
+    return
+end
+try
+    entries = de_build_grids_parse_file(yaml_path);
+catch ME
+    fprintf('  ℹ de_geobins: could not parse %s: %s\n', yaml_path, ME.message);
+    return
+end
+n = numel(entries);
+CODES = cell(n,1);  ROWS = zeros(n,1);  COLS = zeros(n,1);  kept = true(n,1);
 for i = 1:n
-    ri = raw{i};
-    is_terr = isfield(ri, 'territory') && logical(ri.territory);
-    if is_terr && ~show_terr
-        kept(i) = false;
-        continue
-    end
-    CODES{i} = upper(strtrim(char(ri.code)));
-    ROWS(i)  = double(ri.row);
-    COLS(i)  = double(ri.col);
-    if isfield(ri, 'names')
-        nms = ri.names;
-        if ischar(nms) || isstring(nms), nms = {char(nms)}; end
+    e = entries{i};
+    is_terr = isfield(e,'territory') && logical(e.territory);
+    if is_terr && ~show_terr, kept(i) = false; continue; end
+    CODES{i} = upper(strtrim(char(e.code)));
+    ROWS(i)  = double(e.row);
+    COLS(i)  = double(e.col);
+    if isfield(e,'names') && ~isempty(e.names)
+        nms = e.names;
+        if ischar(nms)||isstring(nms), nms = {char(nms)}; end
         for ni = 1:numel(nms)
             k = upper(strtrim(char(nms{ni})));
-            if strlength(k) > 0 && ~isKey(NAMES_MAP, k)
-                NAMES_MAP(k) = CODES{i};
-            end
+            if strlength(k)>0 && ~isKey(NAMES_MAP,k), NAMES_MAP(k)=CODES{i}; end
         end
     end
 end
-
-CODES = CODES(kept);
-ROWS  = ROWS(kept);
-COLS  = COLS(kept);
+CODES = CODES(kept);  ROWS = ROWS(kept);  COLS = COLS(kept);
 end
 
 

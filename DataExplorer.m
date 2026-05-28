@@ -3633,41 +3633,27 @@ end
 
 % ── se_looks_like_geo ─────────────────────────────────────────────────────────
 function grid_name = se_looks_like_geo(prof, idx, T)
-%SE_LOOKS_LIKE_GEO  Return the name of the best-matching grid JSON, or ''.
-%   Scans data/grids/*.json (loaded once per session via persistent cache).
-%   Column name heuristics provide a fast path for the two built-in grids.
-%   Any JSON file dropped in data/grids/ is automatically discovered.
+%SE_LOOKS_LIKE_GEO  Return the name of the best-matching grid, or ''.
+%   Uses de_build_grids() (YAML→.mat cache) — any .yaml in data/grids/ is
+%   automatically discovered.  Column name heuristics provide a fast path.
 
 persistent GEO_GRIDS  % struct array: .name, .vocab (containers.Map, uppercase keys)
 if isempty(GEO_GRIDS)
-    grids_dir = fullfile(fileparts(mfilename('fullpath')), 'data', 'grids');
-    jfiles = dir(fullfile(grids_dir, '*.json'));
+    grids = de_build_grids();
     GEO_GRIDS = struct('name', {}, 'vocab', {});
-    for fi = 1:numel(jfiles)
-        [~, gname] = fileparts(jfiles(fi).name);
-        try
-            raw = jsondecode(fileread(fullfile(jfiles(fi).folder, jfiles(fi).name)));
-        catch
-            continue
-        end
-        if isstruct(raw), raw = num2cell(raw); end
+    for gi = 1:numel(grids)
+        g     = grids(gi);
         vocab = containers.Map('KeyType','char','ValueType','logical');
-        for ri = 1:numel(raw)
-            e = raw{ri};
-            k = upper(strtrim(char(e.code)));
+        for ci = 1:numel(g.codes)
+            k = char(g.codes{ci});  % already upper-cased by de_build_grids
             if ~isKey(vocab, k), vocab(k) = true; end
-            if isfield(e, 'names')
-                nms = e.names;
-                if ischar(nms) || isstring(nms), nms = {char(nms)}; end
-                for ni = 1:numel(nms)
-                    nk = upper(strtrim(char(nms{ni})));
-                    if strlength(nk) > 0 && ~isKey(vocab, nk), vocab(nk) = true; end
-                end
-            end
         end
-        idx2 = numel(GEO_GRIDS) + 1;
-        GEO_GRIDS(idx2).name  = gname;
-        GEO_GRIDS(idx2).vocab = vocab;
+        for ki = 1:numel(g.alias_keys)
+            k = char(g.alias_keys{ki});
+            if ~isKey(vocab, k), vocab(k) = true; end
+        end
+        GEO_GRIDS(gi).name  = g.name;
+        GEO_GRIDS(gi).vocab = vocab;
     end
 end
 

@@ -1,0 +1,471 @@
+# cities
+
+- code: VAN
+  row: 0
+  col: 0
+  names: [Vancouver, Metro Vancouver]
+
+- code: MON
+  row: 0
+  col: 5
+  names: [Montréal, Montreal]
+
+- code: SEA
+  row: 1
+  col: 0
+  names: [Seattle, Seattle-Tacoma]
+
+- code: CHI
+  row: 1
+  col: 2
+  names: [Chicago, Chicagoland]
+
+- code: TOR
+  row: 1
+  col: 3
+  names: [Toronto, Greater Toronto]
+
+- code: NYC
+  row: 1
+  col: 4
+  names: [New York, New York City, NYC]
+
+- code: BOS
+  row: 1
+  col: 5
+  names: [Boston]
+
+- code: SFO
+  row: 2
+  col: 0
+  names: [San Francisco, SF, Bay Area]
+
+- code: PHX
+  row: 2
+  col: 1
+  names: [Phoenix]
+
+- code: ATL
+  row: 2
+  col: 3
+  names: [Atlanta]
+
+- code: MIA
+  row: 2
+  col: 4
+  names: [Miami]
+
+- code: LAX
+  row: 3
+  col: 0
+  names: [Los Angeles, LA]
+
+- code: MEX
+  row: 3
+  col: 1
+  names: [Mexico City, Ciudad de México, CDMX]
+
+- code: HOU
+  row: 3
+  col: 2
+  names: [Houston]
+
+- code: HAV
+  row: 3
+  col: 3
+  names: [Havana, La Habana]
+
+- code: SDO
+  row: 3
+  col: 4
+  names: [Santo Domingo]
+
+- code: GDL
+  row: 4
+  col: 1
+  names: [Guadalajara]
+
+- code: BOG
+  row: 4
+  col: 2
+  names: [Bogotá, Bogota]
+
+- code: CAR
+  row: 4
+  col: 3
+  names: [Caracas]
+
+- code: LIM
+  row: 5
+  col: 1
+  names: [Lima]
+
+- code: FOR
+  row: 5
+  col: 3
+  names: [Fortaleza]
+
+- code: REC
+  row: 5
+  col: 4
+  names: [Recife]
+
+- code: SCL
+  row: 6
+  col: 0
+  names: [Santiago, Santiago de Chile]
+
+- code: SAO
+  row: 6
+  col: 2
+  names: [São Paulo, Sao Paulo]
+
+- code: RIO
+  row: 6
+  col: 3
+  names: [Rio de Janeiro]
+
+- code: BUE
+  row: 7
+  col: 1
+  names: [Buenos Aires, Ciudad de Buenos Aires, CABA]
+
+- code: OSL
+  row: 0
+  col: 8
+  names: [Oslo]
+
+- code: STO
+  row: 0
+  col: 9
+  names: [Stockholm]
+
+- code: HEL
+  row: 0
+  col: 10
+  names: [Helsinki]
+
+- code: SPB
+  row: 0
+  col: 11
+  names: [Saint Petersburg, St. Petersburg, Leningrad]
+
+- code: DUB
+  row: 1
+  col: 7
+  names: [Dublin]
+
+- code: LON
+  row: 1
+  col: 8
+  names: [London, Greater London]
+
+- code: PAR
+  row: 1
+  col: 9
+  names: [Paris, Île-de-France]
+
+- code: BER
+  row: 1
+  col: 10
+  names: [Berlin]
+
+- code: WAR
+  row: 1
+  col: 11
+  names: [Warsaw, Warszawa]
+
+- code: MOS
+  row: 1
+  col: 12
+  names: [Moscow, Москва]
+
+- code: MAD
+  row: 2
+  col: 7
+  names: [Madrid]
+
+- code: BCN
+  row: 2
+  col: 8
+  names: [Barcelona]
+
+- code: ROM
+  row: 2
+  col: 9
+  names: [Rome, Roma]
+
+- code: MIL
+  row: 2
+  col: 10
+  names: [Milan, Milano]
+
+- code: VIE
+  row: 2
+  col: 11
+  names: [Vienna, Wien]
+
+- code: IST
+  row: 2
+  col: 12
+  names: [Istanbul, Constantinople]
+
+- code: KYV
+  row: 2
+  col: 13
+  names: [Kyiv, Kiev]
+
+- code: CAS
+  row: 3
+  col: 7
+  names: [Casablanca, Dar el Beida]
+
+- code: ALG
+  row: 3
+  col: 8
+  names: [Algiers, Alger]
+
+- code: CAI
+  row: 3
+  col: 12
+  names: [Cairo, Al-Qahirah]
+
+- code: BAG
+  row: 3
+  col: 13
+  names: [Baghdad, Baghdād]
+
+- code: TEH
+  row: 3
+  col: 14
+  names: [Tehran, Teheran]
+
+- code: RIY
+  row: 4
+  col: 13
+  names: [Riyadh, Riyādh]
+
+- code: DAK
+  row: 4
+  col: 7
+  names: [Dakar]
+
+- code: LAG
+  row: 4
+  col: 8
+  names: [Lagos]
+
+- code: KAN
+  row: 4
+  col: 9
+  names: [Kano]
+
+- code: KHR
+  row: 4
+  col: 11
+  names: [Khartoum, Kharṭūm]
+
+- code: ADD
+  row: 4
+  col: 12
+  names: [Addis Ababa, Addis Abeba, Finfinne]
+
+- code: ABJ
+  row: 5
+  col: 7
+  names: [Abidjan]
+
+- code: ACC
+  row: 5
+  col: 8
+  names: [Accra]
+
+- code: KIN
+  row: 5
+  col: 10
+  names: [Kinshasa, Léopoldville]
+
+- code: NAI
+  row: 5
+  col: 11
+  names: [Nairobi]
+
+- code: DAR
+  row: 5
+  col: 12
+  names: [Dar es Salaam]
+
+- code: LUA
+  row: 6
+  col: 9
+  names: [Luanda]
+
+- code: LUS
+  row: 6
+  col: 11
+  names: [Lusaka]
+
+- code: HRR
+  row: 6
+  col: 12
+  names: [Harare, Salisbury]
+
+- code: CPT
+  row: 7
+  col: 10
+  names: [Cape Town, Kaapstad, iKapa]
+
+- code: JNB
+  row: 7
+  col: 11
+  names: [Johannesburg, Joburg, Egoli]
+
+- code: DRB
+  row: 7
+  col: 12
+  names: [Durban, eThekwini]
+
+- code: TAS
+  row: 2
+  col: 15
+  names: [Tashkent, Toshkent]
+
+- code: KHI
+  row: 3
+  col: 15
+  names: [Karachi]
+
+- code: DEL
+  row: 3
+  col: 16
+  names: [Delhi, New Delhi]
+
+- code: DHK
+  row: 3
+  col: 17
+  names: [Dhaka, Dacca]
+
+- code: MUM
+  row: 4
+  col: 15
+  names: [Mumbai, Bombay]
+
+- code: HYD
+  row: 4
+  col: 16
+  names: [Hyderabad]
+
+- code: CHE
+  row: 4
+  col: 17
+  names: [Chennai, Madras]
+
+- code: BLR
+  row: 5
+  col: 15
+  names: [Bangalore, Bengaluru]
+
+- code: COL
+  row: 5
+  col: 16
+  names: [Colombo]
+
+- code: BEI
+  row: 2
+  col: 18
+  names: [Beijing, Peking, 北京]
+
+- code: SEO
+  row: 2
+  col: 19
+  names: [Seoul, 서울]
+
+- code: TKY
+  row: 2
+  col: 20
+  names: [Tokyo, 東京, Tōkyō]
+
+- code: SHA
+  row: 3
+  col: 18
+  names: [Shanghai, 上海]
+
+- code: OSA
+  row: 3
+  col: 19
+  names: [Osaka, 大阪]
+
+- code: GZH
+  row: 4
+  col: 18
+  names: [Guangzhou, Canton, 广州]
+
+- code: HKG
+  row: 4
+  col: 19
+  names: [Hong Kong, 香港]
+
+- code: TAI
+  row: 4
+  col: 20
+  names: [Taipei, 臺北]
+
+- code: HAN
+  row: 3
+  col: 21
+  names: [Hanoi, Hà Nội]
+
+- code: BKK
+  row: 4
+  col: 21
+  names: [Bangkok, Krung Thep, กรุงเทพ]
+
+- code: MNL
+  row: 4
+  col: 22
+  names: [Manila, Metro Manila]
+
+- code: RNG
+  row: 5
+  col: 17
+  names: [Yangon, Rangoon]
+
+- code: HCM
+  row: 5
+  col: 19
+  names: [Ho Chi Minh City, Saigon, HCMC]
+
+- code: KUL
+  row: 5
+  col: 20
+  names: [Kuala Lumpur, KL]
+
+- code: SIN
+  row: 5
+  col: 21
+  names: [Singapore]
+
+- code: JAK
+  row: 6
+  col: 20
+  names: [Jakarta, Batavia]
+
+- code: BRI
+  row: 6
+  col: 22
+  names: [Brisbane]
+
+- code: PER
+  row: 7
+  col: 20
+  names: [Perth]
+
+- code: MEL
+  row: 7
+  col: 21
+  names: [Melbourne]
+
+- code: SYD
+  row: 7
+  col: 22
+  names: [Sydney]

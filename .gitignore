@@ -8,3 +8,6 @@ examples/FIADB_URBAN_ENTIRE_CSV.zip
 examples/ncdd-202501-grd-scaled.nc
 examples/usautoBI.csv
 examples/usautoBI.rda
+
+# Compiled grid cache (regenerated automatically from data/grids/*.yaml)
+data/grids/grids.mat
