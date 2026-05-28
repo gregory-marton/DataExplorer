@@ -3899,6 +3899,34 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title);
     num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
+
+    % Per-sub-category choropleths: one figure per level of any other
+    % categorical in T_long (e.g. one choropleth per MSN energy type).
+    skip_cols = [string(catname), "Year", "Value"];
+    sub_cats  = string(T_long.Properties.VariableNames);
+    sub_cats  = sub_cats(~ismember(sub_cats, skip_cols));
+    for sci = 1:numel(sub_cats)
+        sc     = char(sub_cats(sci));
+        sc_col = T_long.(sc);
+        if ~iscategorical(sc_col) && ~isstring(sc_col), continue; end
+        if iscategorical(sc_col)
+            levels = cellstr(categories(sc_col));
+        else
+            levels = cellstr(unique(sc_col(~ismissing(sc_col))));
+        end
+        levels = levels(~cellfun(@isempty, levels));
+        if numel(levels) < 2 || numel(levels) > 20, continue; end
+        fprintf('  State choropleth × %s: %d levels.\n', sc, numel(levels));
+        for vi = 1:numel(levels)
+            lv    = levels{vi};
+            T_sub = T_long(string(sc_col) == lv, :);
+            if height(T_sub) == 0, continue; end
+            sub_title = se_fig_title( ...
+                sprintf('Choropleth: %s = %s', sc, lv), prof.source_name);
+            de_geobins(T_sub, 'GeoCol', catname, 'Grid', grid_name, ...
+                'ColorCol', 'Value', 'TimeCol', 'Year', 'Title', sub_title);
+        end
+    end
 end
 
 for j = 1:numel(num_idxs)
