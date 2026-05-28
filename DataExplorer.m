@@ -3897,11 +3897,12 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
     fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
-        'TimeCol', 'Year', 'Title', fig_title);
+        'Title', fig_title);
     num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
 
-    % Per-sub-category choropleths: one figure per level of any other
-    % categorical in T_long (e.g. one choropleth per MSN energy type).
+    % Per-sub-category heatmap: for any other categorical in T_long (e.g. MSN),
+    % one de_geobins figure with heatmap_cat — time on x-axis, top-K category
+    % levels on y-axis, value as color — one small heatmap per geo tile.
     skip_cols = [string(catname), "Year", "Value"];
     sub_cats  = string(T_long.Properties.VariableNames);
     sub_cats  = sub_cats(~ismember(sub_cats, skip_cols));
@@ -3910,22 +3911,20 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
         sc_col = T_long.(sc);
         if ~iscategorical(sc_col) && ~isstring(sc_col), continue; end
         if iscategorical(sc_col)
-            levels = cellstr(categories(sc_col));
+            n_lv = numel(categories(sc_col));
         else
-            levels = cellstr(unique(sc_col(~ismissing(sc_col))));
+            n_lv = numel(unique(sc_col(~ismissing(sc_col))));
         end
-        levels = levels(~cellfun(@isempty, levels));
-        if numel(levels) < 2 || numel(levels) > 20, continue; end
-        fprintf('  State choropleth × %s: %d levels.\n', sc, numel(levels));
-        for vi = 1:numel(levels)
-            lv    = levels{vi};
-            T_sub = T_long(string(sc_col) == lv, :);
-            if height(T_sub) == 0, continue; end
-            sub_title = se_fig_title( ...
-                sprintf('Choropleth: %s = %s', sc, lv), prof.source_name);
-            de_geobins(T_sub, 'GeoCol', catname, 'Grid', grid_name, ...
-                'ColorCol', 'Value', 'TimeCol', 'Year', 'Title', sub_title);
-        end
+        if n_lv < 2 || n_lv > 20, continue; end
+        hm_title = se_fig_title( ...
+            sprintf('Choropleth: %s × %s × year', catname, sc), prof.source_name);
+        fprintf('  State heatmap choropleth: %s x %s (%d levels).\n', ...
+            catname, sc, n_lv);
+        de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, ...
+            'CellRenderer', 'heatmap_cat', ...
+            'CatCol',  sc,      'ColorCol', 'Value', ...
+            'TimeCol', 'Year',  'TopK',     min(n_lv, 5), ...
+            'Title',   hm_title);
     end
 end
 
