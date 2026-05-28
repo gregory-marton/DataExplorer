@@ -4145,23 +4145,43 @@ end
 yr_totals = sum(sum_mat, 1, 'omitnan');
 pct_mat   = sum_mat ./ yr_totals * 100;
 pct_mat(isnan(pct_mat)) = 0;
-n_shown = size(pct_mat, 1);
+abs_mat   = sum_mat;
+abs_mat(isnan(abs_mat)) = 0;
+n_shown = size(sum_mat, 1);
+cmap    = lines(n_shown);
 
-fig = figure('Name', se_fig_title( ...
+% Absolute stacked area
+fig1 = figure('Name', se_fig_title( ...
+    sprintf('Total by %s over time', catname), prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+ax1 = axes(fig1);
+hold(ax1, 'on');
+ax1.ColorOrder = cmap;
+area(ax1, yr_sorted(:), abs_mat');
+hold(ax1, 'off');
+legend(ax1, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
+xlabel(ax1, 'Year', 'FontSize', 9);
+ylabel(ax1, 'Total', 'FontSize', 8);
+title(ax1, se_src_prefix(prof.source_name, sprintf('Total over time by %s', catname)), ...
+    'FontSize', 9, 'Interpreter', 'none');
+box(ax1, 'off');
+
+% 100% stacked area
+fig2 = figure('Name', se_fig_title( ...
     sprintf('Share by %s over time', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-ax = axes(fig);
-hold(ax, 'on');
-ax.ColorOrder = lines(n_shown);
-area(ax, yr_sorted(:), pct_mat');
-hold(ax, 'off');
-legend(ax, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
-xlabel(ax, 'Year', 'FontSize', 9);
-ylabel(ax, '% share', 'FontSize', 8);
-ylim(ax, [0 105]);
-title(ax, se_src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
+ax2 = axes(fig2);
+hold(ax2, 'on');
+ax2.ColorOrder = cmap;
+area(ax2, yr_sorted(:), pct_mat');
+hold(ax2, 'off');
+legend(ax2, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
+xlabel(ax2, 'Year', 'FontSize', 9);
+ylabel(ax2, '% share', 'FontSize', 8);
+ylim(ax2, [0 105]);
+title(ax2, se_src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
     'FontSize', 9, 'Interpreter', 'none');
-box(ax, 'off');
+box(ax2, 'off');
 end
 
 
