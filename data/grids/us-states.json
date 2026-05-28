@@ -340,8 +340,8 @@
   },
   {
     "code": "AK",
-    "row": 6,
-    "col": 0,
+    "row": 0,
+    "col": 1,
     "names": [
       "Alaska"
     ]
@@ -389,7 +389,7 @@
   {
     "code": "HI",
     "row": 7,
-    "col": 0,
+    "col": 1,
     "names": [
       "Hawaii"
     ]
