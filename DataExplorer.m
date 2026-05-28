@@ -3245,6 +3245,12 @@ for k = 1:numel(panel.non_geo_idxs)
     fprintf('  Top %s by time-variance: %s\n', catname, strjoin(top3, ', '));
     fprintf('    Tip: DataExplorer(T(T.%s == ''%s'', :))\n', catname, top3{1});
 end
+
+% 100% stacked area by each grouping categorical (state share, MSN share, …)
+for k = 1:numel(panel.grouping_idxs)
+    se_plot_pct_area_by_cat(T_notot, prof, panel.grouping_idxs(k), ...
+        wide_yr_idxs, wide_yr_vals);
+end
 end
 
 
@@ -3917,7 +3923,7 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
         else
             n_lv = numel(unique(sc_col(~ismissing(sc_col))));
         end
-        if n_lv < 2 || n_lv > 20, continue; end
+        if n_lv < 2, continue; end
         hm_title = se_fig_title( ...
             sprintf('Choropleth: %s × %s × year', catname, sc), prof.source_name);
         fprintf('  State heatmap choropleth: %s x %s (%d levels).\n', ...
@@ -4107,6 +4113,71 @@ ylabel(ax, sprintf('%% of %s total', total_code), 'FontSize', 8);
 ylim(ax, [0 max(sum(pct_mat, 1), [], 'omitnan') * 1.05]);
 title(ax, se_src_prefix(prof.source_name, ...
     sprintf('State share of %s total (sum across energy types)', total_code)), ...
+    'FontSize', 9, 'Interpreter', 'none');
+box(ax, 'off');
+end
+
+
+% ── se_plot_pct_area_by_cat ───────────────────────────────────────────────────
+function se_plot_pct_area_by_cat(T, prof, cat_idx, yr_idxs, yr_vals)
+%SE_PLOT_PCT_AREA_BY_CAT  100% stacked area: each level's share of total over time.
+%   T must already have total-aggregate rows removed (use T_notot from caller).
+TOP_AREA = 20;
+
+catname = prof.name{cat_idx};
+cat_col = T.(catname);
+if ~iscategorical(cat_col), return; end
+
+levels_all = cellstr(categories(cat_col));
+cnt_all    = countcats(cat_col);
+levels     = levels_all(cnt_all > 0);  % only present levels
+n_lv       = numel(levels);
+if n_lv < 2, return; end
+
+[yr_sorted, sort_ord] = sort(yr_vals);
+yr_names = string(prof.name(yr_idxs(sort_ord)));
+n_yr     = numel(yr_sorted);
+
+sum_mat = NaN(n_lv, n_yr);
+for t = 1:n_yr
+    col_vals = double(T.(char(yr_names(t))));
+    for li = 1:n_lv
+        v = col_vals(cat_col == levels{li});
+        v = v(~isnan(v));
+        if ~isempty(v), sum_mat(li, t) = sum(v); end
+    end
+end
+
+[~, ord] = sort(mean(sum_mat, 2, 'omitnan'), 'descend');
+
+if n_lv > TOP_AREA
+    top_idx  = ord(1:TOP_AREA);
+    rest_sum = sum(sum_mat(ord(TOP_AREA+1:end), :), 1, 'omitnan');
+    sum_mat  = [sum_mat(top_idx, :); rest_sum];
+    levels   = [levels(top_idx); {sprintf('Other (%d)', n_lv - TOP_AREA)}];
+else
+    sum_mat = sum_mat(ord, :);
+    levels  = levels(ord);
+end
+
+yr_totals = sum(sum_mat, 1, 'omitnan');
+pct_mat   = sum_mat ./ yr_totals * 100;
+pct_mat(isnan(pct_mat)) = 0;
+n_shown = size(pct_mat, 1);
+
+fig = figure('Name', se_fig_title( ...
+    sprintf('Share by %s over time', catname), prof.source_name), ...
+    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+ax = axes(fig);
+hold(ax, 'on');
+ax.ColorOrder = lines(n_shown);
+area(ax, yr_sorted(:), pct_mat');
+hold(ax, 'off');
+legend(ax, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
+xlabel(ax, 'Year', 'FontSize', 9);
+ylabel(ax, '% share', 'FontSize', 8);
+ylim(ax, [0 105]);
+title(ax, se_src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
     'FontSize', 9, 'Interpreter', 'none');
 box(ax, 'off');
 end
