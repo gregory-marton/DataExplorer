@@ -100,12 +100,19 @@ for i = 1:nc
             fh = col_cov(j);  % horizontal: coverage of column variable
             fv = col_cov(i);  % vertical:   coverage of row variable
             xl = j-0.5; xm = xl+fh; yt = i-0.5; ym = i+0.5-fv;
-            ca_fill_rect(ax, xm, yt, 1-fh, 1-fv, [1.00 1.00 1.00]);  % neither
-            ca_fill_rect(ax, xl, yt,   fh, 1-fv, [0.96 0.85 0.72]);  % col only
-            ca_fill_rect(ax, xm, ym, 1-fh,   fv, [0.72 0.85 0.96]);  % row only
-            ca_fill_rect(ax, xl, ym,   fh,   fv, [0.25 0.50 0.72]);  % both
+            ca_fill_rect(ax, xm, yt, 1-fh, 1-fv, [0.85 0.85 0.85], 0.30);  % neither: faint gray, V shows through
+            ca_fill_rect(ax, xl, yt,   fh, 1-fv, [0.95 0.55 0.10], 0.65);  % col only: amber
+            ca_fill_rect(ax, xm, ym, 1-fh,   fv, [0.10 0.65 0.75], 0.65);  % row only: teal
+            ca_fill_rect(ax, xl, ym,   fh,   fv, [0.70 0.10 0.55], 0.85);  % both: magenta
+            patch(ax, [xl xl+1 xl+1 xl xl], [yt yt yt+1 yt+1 yt], 'w', ...
+                'FaceColor', 'none', 'EdgeColor', [0.20 0.20 0.20], 'LineWidth', 0.8);
         end
     end
+end
+gclr = [0.20 0.20 0.20];
+for k = 0.5:nc+0.5
+    line(ax, [0.5 nc+0.5], [k k], 'Color', gclr, 'LineWidth', 0.5);
+    line(ax, [k k], [0.5 nc+0.5], 'Color', gclr, 'LineWidth', 0.5);
 end
 nm_dc = names; vm_dc = V_mat;
 dcm = datacursormode(fig);
@@ -250,18 +257,22 @@ vn = arrayfun(@(c) sum(val == c{1}), vcats);
 show_v = vcats(vord(1:min(MAX_S,numel(vord))));
 nr = numel(show_g); nc = numel(show_v);
 P  = zeros(nr, nc);
+N  = zeros(nr, nc);
 for ci = 1:nc
     mc  = (val == show_v{ci});
     nci = sum(mc);
     if nci == 0, continue; end
     for ri = 1:nr
-        P(ri,ci) = sum(grp(mc) == show_g{ri}) / nci;
+        n_rc      = sum(grp(mc) == show_g{ri});
+        N(ri,ci)  = n_rc;
+        P(ri,ci)  = n_rc / nci;
     end
 end
 if nr > 3
     [U,~,~] = svd(P,'econ');
     [~,rord] = sort(U(:,1));
     P        = P(rord,:);
+    N        = N(rord,:);
     show_g   = show_g(rord);
 end
 ax = axes(fig);
@@ -281,6 +292,15 @@ else
 end
 title(ax, {ftitle, sub}, 'FontSize', 9, 'Interpreter', 'none');
 box(ax, 'off');
+for ri = 1:nr
+    for ci = 1:nc
+        if N(ri,ci) > 0
+            text(ax, ci, ri, ca_fmt_count(N(ri,ci)), ...
+                'HorizontalAlignment', 'center', 'FontSize', 6, ...
+                'Color', ca_label_color(P(ri,ci)));
+        end
+    end
+end
 sg_dc = show_g; sv_dc = show_v; p_dc = P;
 dcm = datacursormode(fig);
 dcm.UpdateFcn = @(~,ev) ca_heatmap_tip(ev, sg_dc, sv_dc, p_dc);
@@ -305,6 +325,10 @@ ri = max(1, min(numel(row_names), round(pos(2))));
 txt = {col_names{ci}, row_names{ri}, sprintf('P = %.3f', P(ri,ci))};
 end
 
+function s = ca_fmt_count(n)
+if n >= 1000, s = sprintf('%.3gk', n/1000); else, s = sprintf('%d', n); end
+end
+
 function s = ca_fmt_p(p)
 if p < 0.001
     s = 'p<.001';
@@ -313,9 +337,9 @@ else
 end
 end
 
-function ca_fill_rect(ax, xl, yt, w, h, clr)
+function ca_fill_rect(ax, xl, yt, w, h, clr, alp)
 if w <= 0 || h <= 0, return; end
-patch(ax, xl+[0 w w 0 0], yt+[0 0 h h 0], clr, 'EdgeColor', 'none');
+patch(ax, xl+[0 w w 0 0], yt+[0 0 h h 0], clr, 'FaceAlpha', alp, 'EdgeColor', 'none');
 end
 
 function s = ca_trunc(s, n)
