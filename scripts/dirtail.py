@@ -8,7 +8,9 @@ import psutil
 WATCH_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
 POLL_INTERVAL = 0.25       # seconds between reads / writer checks
 READ_CHUNK = 8192
-GRACE_SECONDS = 1.0        # wait after writers disappear before closing stream
+GRACE_SECONDS = 5.0        # wait after writers disappear before closing stream
+                           # (must exceed longest computation pause with no output — MATLAB
+                           #  JIT / GC pauses can easily exceed 1–2 s)
 
 def pids_writing_path(path):
     pids = set()
@@ -32,27 +34,35 @@ def follow_while_writers(path):
         return
     pos = 0
     print(f"\n=== START {path} ===", flush=True)
-    last_writer_seen = time.time()
+    last_alive = time.time()   # last sign of life: data arrival or writer detected
     try:
         while True:
+            # detect truncation/rotation: seek back to start if file shrank
+            try:
+                if path.stat().st_size < pos:
+                    pos = 0
+            except OSError:
+                pass
+
             f.seek(pos)
             data = f.read(READ_CHUNK)
             if data:
                 sys.stdout.buffer.write(data)
                 sys.stdout.buffer.flush()
                 pos = f.tell()
-                last_writer_seen = time.time()
+                last_alive = time.time()
                 continue
 
             # re-check which pids currently have the file open
             writers = pids_writing_path(path)
             if writers:
-                last_writer_seen = time.time()
+                last_alive = time.time()
                 time.sleep(POLL_INTERVAL)
                 continue
 
-            # no writers right now — allow a short grace period in case of quick reopen
-            if time.time() - last_writer_seen < GRACE_SECONDS:
+            # no writers right now — allow a grace period in case of quick reopen
+            # or a psutil miss during a computation pause with no output
+            if time.time() - last_alive < GRACE_SECONDS:
                 time.sleep(POLL_INTERVAL)
                 continue
 

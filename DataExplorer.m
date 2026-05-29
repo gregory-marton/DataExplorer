@@ -149,11 +149,9 @@ if ischar(source) || isstring(source)
                 se_echo_load_code(string(source), T_vi_);
                 se_report(T_vi_, prof_vi_);
                 panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
-                se_plot(T_vi_, prof_vi_, opts_vi_, panel_vi_);
-                % NetCDF recipes call DataExplorer() — skip auto-run to avoid recursion.
-                % Recipe is printed to console by se_assemble_recipe.
-                se_assemble_recipe(string(source), T_vi_, prof_vi_, panel_vi_, opts_vi_);
-                T = T_vi_;
+                T = T_vi_; prof = prof_vi_;
+                [~, recipe_vi_] = se_assemble_recipe(string(source), T, prof, panel_vi_, opts_vi_);
+                se_eval_recipe_plots(recipe_vi_);
             end
             return
         end
@@ -196,34 +194,19 @@ elseif istable(source)
     prof.source_name = 'table input';
 end
 
-%% ── 3.  Echo load code ────────────────────────────────────────────────────
-if ischar(source) || isstring(source)
-    se_echo_load_code(string(source), T);
-end
-
-%% ── 4.  Report ────────────────────────────────────────────────────────────
-se_report(T, prof);
-
-%% ── 4.  Plot ──────────────────────────────────────────────────────────────
+%% ── 4 + 5.  Recipe ────────────────────────────────────────────────────────
+% The recipe is the canonical code path for all figure production.
+% It is assembled, written to /tmp/, and echoed; then only the plot sections
+% are eval'd here (T and prof are already loaded above, so re-running the
+% load/clean sections would be redundant and slow).  The saved recipe file
+% is always complete (load + clean + plots) so it re-runs correctly standalone.
 panel = se_detect_panel(T, prof);
-se_plot(T, prof, options, panel);
-
-%% ── 5.  Recipe ────────────────────────────────────────────────────────────
+src_str_ = '';
 if ischar(source) || isstring(source)
-    recipe_path = se_assemble_recipe(string(source), T, prof, panel, options);
-    if ~isempty(recipe_path)
-        [~, ~, src_ext_] = fileparts(string(source));
-        is_nc_ = ismember(lower(string(src_ext_)), [".nc", ".nc4", ".netcdf"]);
-        if ~is_nc_
-            % NetCDF recipes call DataExplorer() which would recurse; skip auto-run.
-            fprintf('  Running recipe to produce best-of plots…\n');
-            T_return = T;   % run() shares our workspace; save T so recipe can't overwrite it
-            run(recipe_path);
-            T = T_return;
-        end
-        % Recipe is printed to console by se_assemble_recipe.
-    end
+    src_str_ = string(source);
 end
+[~, recipe_text] = se_assemble_recipe(src_str_, T, prof, panel, options);
+se_eval_recipe_plots(recipe_text);
 
 end % ── DataExplorer ──────────────────────────────────────────────────────
 
@@ -343,7 +326,6 @@ function T = load_from_zip(filepath, options)
                     pick_idx = default_k;
                     fprintf('  AutoSelect: picking largest "%s"\n', names_s{default_k});
                 else
-                    pick_idx = default_k; %#ok<NASGU> overwritten in loop below
                     while true
                         raw = input('  or filename for a hidden file: ', 's');
                         if isempty(raw)
@@ -883,21 +865,26 @@ function data_vars = nc_list_data_vars(info)
 %   A coordinate variable is one whose name matches any dimension name used
 %   anywhere in the file.  Everything else with at least one element is a
 %   data variable.
-all_dims = {};
+dim_per_var = cell(1, numel(info.Variables));
 for k = 1:numel(info.Variables)
-    if ~isempty(info.Variables(k).Dimensions)
-        all_dims = [all_dims, {info.Variables(k).Dimensions.Name}]; %#ok<AGROW>
+    d = info.Variables(k).Dimensions;
+    if ~isempty(d)
+        dim_per_var{k} = {d.Name};
     end
 end
-all_dims = unique(all_dims);
+all_dims = unique([dim_per_var{:}]);
 
-data_vars = {};
-for k = 1:numel(info.Variables)
+nv = numel(info.Variables);
+data_vars = cell(1, nv);
+nd = 0;
+for k = 1:nv
     v = info.Variables(k);
     if ~ismember(v.Name, all_dims) && ~isempty(v.Size) && prod(v.Size) > 0
-        data_vars{end+1} = v.Name; %#ok<AGROW>
+        nd = nd + 1;
+        data_vars{nd} = v.Name;
     end
 end
+data_vars = data_vars(1:nd);
 end
 
 function tf = nc_is_spatial_grid(info, varname)
@@ -937,25 +924,28 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
     L{end+1} = '% Stride-sample each variable and combine into one table';
     first_sq = strrep(sp_vars{1}, '''', '''''');
     L{end+1} = sprintf('T = de_stride_sample(''%s'', Variable=''%s'', Verbose=false);', fpath_sq, first_sq);
+    stride_sub = cell(1, numel(sp_vars)-1);
     for k = 2:numel(sp_vars)
         vn_sq   = strrep(sp_vars{k}, '''', '''''');
         vn_safe = all_safe{k};
-        ln_ = sprintf('T.%s = de_stride_sample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
+        stride_sub{k-1} = sprintf('T.%s = de_stride_sample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
             vn_safe, fpath_sq, vn_sq, vn_safe);
-        L{end+1} = ln_; %#ok<AGROW>
     end
+    L = [L, stride_sub];
     L{end+1} = '';
     L{end+1} = '% Aggregate by grid cell: mean and std across all time steps';
     L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, %s);', vars_cell_str);
     L{end+1} = '';
     L{end+1} = '% Geo scatter per variable: color = temporal mean, size = temporal std';
+    geo_sub = cell(1, 3*numel(sp_vars));
     for k = 1:numel(sp_vars)
         vn_sq   = strrep(sp_vars{k}, '''', '''''');
         vn_safe = all_safe{k};
-        L{end+1} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vn_safe, vn_safe); %#ok<AGROW>
-        L{end+1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vn_sq, vn_sq); %#ok<AGROW>
-        L{end+1} = sprintf('    Title=''%s'', Source=''%s'');', vn_sq, src_base_sq); %#ok<AGROW>
+        geo_sub{3*k-2} = sprintf('de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_%s, T_agg.std_%s, ...', vn_safe, vn_safe);
+        geo_sub{3*k-1} = sprintf('    ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, ...', vn_sq, vn_sq);
+        geo_sub{3*k}   = sprintf('    Title=''%s'', Source=''%s'');', vn_sq, src_base_sq);
     end
+    L = [L, geo_sub];
     code = strjoin(L, newline);
 
     recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s.m', ...
@@ -1259,24 +1249,13 @@ if isempty(dt_cols)
         ~isempty(regexpi(prof.name{i}, 'year', 'once')), num_cols));
     if isscalar(year_candidates)
         year_col = year_candidates;
-        fprintf('  ℹ "%s" treated as time axis (year column).\n', prof.name{year_col});
     end
 end
 
 if isscalar(dt_cols) && numel(num_cols) >= 2
-    fprintf('  ℹ Datetime column "%s" detected — producing time series figure.\n', ...
-        prof.name{dt_cols});
-    fprintf('    Scatter matrix follows for structural relationships.\n\n');
     se_plot_timeseries(T, prof, dt_cols, options);
 elseif ~isempty(year_col) && numel(num_cols) >= 2
-    fprintf('  ℹ Treating "%s" as time axis — producing time series figure.\n', ...
-        prof.name{year_col});
-    fprintf('    Scatter matrix follows for structural relationships.\n\n');
     se_plot_timeseries_numeric(T, prof, year_col, options);
-elseif numel(dt_cols) > 1
-    fprintf('  ℹ Multiple datetime columns found (%s) — skipping time series auto-plot.\n', ...
-        strjoin(prof.name(dt_cols), ', '));
-    fprintf('    Use Columns= to specify which to use.\n\n');
 end
 
 % ── Select columns to plot ──────────────────────────────────────────────────
@@ -1306,8 +1285,6 @@ end
 
 % ── Panel detection: wide-format categorical × year datasets ─────────────────
 if panel.is_panel
-    fprintf(['  Panel dataset detected: %s\n' ...
-             '  Generating aggregate views; pairplot suppressed.\n'], panel.description);
     se_plot_panel_totals(T, prof, panel);
     se_plot_categorical_drilldown(T, prof, sel);
     return
@@ -1523,9 +1500,6 @@ lat = lat(valid);
 lon = lon(valid);
 if numel(lat) < 2, return; end
 
-fprintf('  ℹ Lat/lon columns detected ("%s", "%s") — producing map figure.\n', ...
-    prof.name{lat_idx}, prof.name{lon_idx});
-
 % ── Decide encoding ───────────────────────────────────────────────────────────
 has_mapping = ~isempty(ver('map'));
 
@@ -1571,12 +1545,14 @@ if has_mapping
         case 'time'
             tdata  = T.(prof.name{enc_col});
             tdata  = tdata(valid);
-            tnums  = datenum(tdata); %#ok<DATNM>
+            tnums = posixtime(tdata);
             geoscatter(ax, lat, lon, BASE_SZ, tnums, 'filled', ...
                 'MarkerFaceAlpha', 0.6);
             colormap(ax, 'turbo');
             cb = colorbar(ax);
-            cb.TickLabels = datestr(linspace(min(tnums), max(tnums), 5), 'mmm yyyy'); %#ok<DATST>
+            t5 = datetime(linspace(min(tnums), max(tnums), 5), 'ConvertFrom', 'posixtime');
+            t5.Format = 'MMM yyyy';
+            cb.TickLabels = cellstr(string(t5));
             cb.Label.String = prof.name{enc_col};
 
         case 'size'
@@ -1632,8 +1608,8 @@ else
         case 'time'
             tdata = T.(prof.name{enc_col});
             tdata = tdata(valid);
-            scatter(ax, lon, lat, BASE_SZ, datenum(tdata), 'filled', ...
-                'MarkerFaceAlpha', 0.6); %#ok<DATNM>
+            scatter(ax, lon, lat, BASE_SZ, posixtime(tdata), 'filled', ...
+                'MarkerFaceAlpha', 0.6);
             colormap(ax, 'turbo');
             cb = colorbar(ax); cb.Label.String = prof.name{enc_col};
         case 'size'
@@ -2438,42 +2414,47 @@ num_ranked   = num_idx(num_ord);
 % Greedy correlation pruning:
 % Accept the top-scoring column, then keep accepting columns whose max
 % absolute correlation with all already-accepted columns is < CORR_THRESH.
-num_sel = [];
+num_sel = zeros(1, numel(num_ranked));
+nsel = 0;
 for k = 1:numel(num_ranked)
     candidate = num_ranked(k);
     if num_scores(num_ord(k)) == 0, continue; end   % constant, skip
 
-    if isempty(num_sel)
-        num_sel(end+1) = candidate; %#ok<AGROW>
+    if nsel == 0
+        nsel = nsel + 1;
+        num_sel(nsel) = candidate;
     else
         cand_col = T.(prof.name{candidate});
 
         % Keep rows where both candidate and all selected are non-NaN
         valid = ~isnan(cand_col);
-        for s = num_sel
+        for s = num_sel(1:nsel)
             valid = valid & ~isnan(T.(prof.name{s}));
         end
 
         if sum(valid) < 10
             % Too few complete rows to compute correlation — accept it
-            num_sel(end+1) = candidate; %#ok<AGROW>
+            nsel = nsel + 1;
+            num_sel(nsel) = candidate;
         else
             existing = cell2mat(arrayfun(@(s) T.(prof.name{s})(valid), ...
-                num_sel, 'UniformOutput', false));
+                num_sel(1:nsel), 'UniformOutput', false));
             r_vals = abs(corr(double(cand_col(valid)), double(existing)));
             if max(r_vals) < CORR_THRESH
-                num_sel(end+1) = candidate; %#ok<AGROW>
+                nsel = nsel + 1;
+                num_sel(nsel) = candidate;
             end
         end
     end
 
-    if numel(num_sel) >= floor(maxv * MAX_NUM_FRAC) && ~isempty(cat_idx)
+    if nsel >= floor(maxv * MAX_NUM_FRAC) && ~isempty(cat_idx)
         break
     end
-    if numel(num_sel) >= maxv
+    if nsel >= maxv
         break
     end
 end
+num_sel = num_sel(1:nsel);
 
 % ── Score categorical columns ────────────────────────────────────────────────
 
@@ -2500,31 +2481,6 @@ remaining = maxv - numel(num_sel);
 cat_sel   = cat_sel(1 : min(end, remaining));
 sel       = [num_sel, cat_sel];
 
-% ── Report what was selected and why ─────────────────────────────────────────
-n_total = sum(~prof.skip);
-if n_total > maxv
-    fprintf('  ℹ Auto-selected %d of %d plottable columns:\n', numel(sel), n_total);
-    for k = 1:numel(sel)
-        idx = sel(k);
-        t   = prof.type(idx);
-        if t == "numeric"
-            col  = T.(prof.name{idx});
-            col  = col(~isnan(col));
-            sc   = std(col) / (range(col) + eps);
-            fprintf('    %-28s  numeric      spread = %.2f\n', ...
-                prof.name{idx}, sc);
-        else
-            col = T.(prof.name{idx});
-            col = col(~isundefined(col));
-            counts = histcounts(col);
-            p   = counts(counts > 0) / numel(col);
-            ent = -sum(p .* log2(p));
-            fprintf('    %-28s  categorical  entropy = %.2f bits\n', ...
-                prof.name{idx}, ent);
-        end
-    end
-    fprintf('    Use Columns= to override, or increase MaxVars.\n\n');
-end
 end
 
 
@@ -2590,25 +2546,38 @@ function s = wrapped_name(name)
         return
     end
 
-    lines    = {};
+    lines    = cell(1, numel(parts));
+    nl = 0;
     cur_line = parts{1};
     for k = 2:numel(parts)
         candidate = [cur_line '_' parts{k}];
         if numel(candidate) <= MAX_LINE
             cur_line = candidate;
         else
-            lines{end+1} = cur_line; %#ok<AGROW>
+            nl = nl + 1;
+            lines{nl} = cur_line;
             cur_line = parts{k};
         end
     end
-    lines{end+1} = cur_line;
+    nl = nl + 1;
+    lines{nl} = cur_line;
+    lines = lines(1:nl);
     s = strjoin(lines, newline);
 end
 
 
 % ── cg_load_code ───────────────────────────────────────────────────────
 function code = cg_load_code(filepath, T)
-%SE_BUILD_LOAD_CODE  Return MATLAB code string that reloads this dataset.
+%CG_LOAD_CODE  Return MATLAB code string that loads this dataset.
+if isempty(filepath)
+    code = sprintf('%s\n%s\n%s\n%s\n%s', ...
+        '% T was provided directly as a MATLAB table.', ...
+        '% Replace this block with your own load code, for example:', ...
+        '%   opts = detectImportOptions(''your_file.csv'');', ...
+        '%   opts.MissingRule = ''fill'';', ...
+        '%   T = readtable(''your_file.csv'', opts);');
+    return
+end
 
 % Resolve to absolute path so the recipe works regardless of working directory.
 d = dir(filepath);
@@ -2639,13 +2608,13 @@ if ext == ".zip"
     L{end+1} = 'tmpdir = tempname; mkdir(tmpdir);';
     L{end+1} = sprintf('system([''unzip -j -d "'' tmpdir ''" "%s" "%s"'']);', ...
         filepath, inner_zip);
-    % Handle ZIP entries whose names have trailing whitespace (some ZIP tools
-    % add it); the clean name is what we reference below.
+    % If the ZIP entry name has trailing whitespace, rename the extracted file
+    % to the clean (trimmed) name before referencing it.
+    if ~strcmp(inner, inner_zip)
+        L{end+1} = sprintf('raw_p_ = fullfile(tmpdir, ''%s'');', inner_zip);
+        L{end+1} = sprintf('if exist(raw_p_, ''file''), movefile(raw_p_, fullfile(tmpdir, ''%s'')); end', inner);
+    end
     L{end+1} = sprintf('inner_path = fullfile(tmpdir, ''%s'');', inner);
-    L{end+1} = 'if ~exist(inner_path, ''file'')';
-    L{end+1} = '    d__ = dir([inner_path ''*'']);';
-    L{end+1} = '    if ~isempty(d__), movefile(fullfile(d__(1).folder,d__(1).name),inner_path); end';
-    L{end+1} = 'end';
     if ismember(inner_ext, {'.xlsx','.xls','.xlsm'})
         sheet = '';
         if isstruct(ud) && ~isempty(ud.sheet), sheet = ud.sheet; end
@@ -2681,11 +2650,11 @@ elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
         nc_var = char(ud.nc_varname);
     end
     if ~isempty(nc_var)
-        L{end+1} = sprintf('T = DataExplorer(''%s'', NCVariable=''%s'');', filepath, nc_var);
+        L{end+1} = sprintf('T = de_stride_sample(''%s'', Variable=''%s'');', filepath, nc_var);
     else
-        L{end+1} = sprintf('T = DataExplorer(''%s'');', filepath);
+        L{end+1} = sprintf('T = de_stride_sample(''%s'');', filepath);
+        L{end+1} = sprintf('%% Available variables: see ncinfo(''%s'').Variables', filepath);
     end
-    L{end+1} = sprintf('%% Available variables: see ncinfo(''%s'').Variables', filepath);
 else
     sampled_n = 0;
     if isstruct(ud) && isfield(ud, 'sampled')
@@ -2869,16 +2838,18 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
         if isempty(time_idx)
-            L{end+1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, ncn); %#ok<AGROW>
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, ncn);
         else
             tcn = prof.name{time_idx};
-            L{end+1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, tcn, ncn); %#ok<AGROW>
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, tcn, ncn);
         end
-        L{end+1} = ''; %#ok<AGROW>
+        sub{2*j} = '';
     end
+    L = [L, sub];
 end
 
 if isempty(L), return; end
@@ -2917,16 +2888,18 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
         if isempty(time_idx)
-            L{end+1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, ncn); %#ok<AGROW>
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, ncn);
         else
             tcn = prof.name{time_idx};
-            L{end+1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, tcn, ncn); %#ok<AGROW>
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, tcn, ncn);
         end
-        L{end+1} = ''; %#ok<AGROW>
+        sub{2*j} = '';
     end
+    L = [L, sub];
 end
 
 if isempty(L), return; end
@@ -2953,12 +2926,13 @@ TOTAL_WORDS = {'total','totals','grand total','all totals'};
 yr_names_s = prof.name(wide_yr_idxs(yr_ord));
 yr_cell = strjoin(cellfun(@(s) sprintf('''%s''',s), yr_names_s, 'UniformOutput',false), ', ');
 
-L = {};
-% Pivot header (shared across all geo x cat pairs in this dataset)
-L{end+1} = '%% Geo x categorical heatmap';
-L{end+1} = sprintf('yr_gm = {%s};', yr_cell);
-L{end+1} = 'T_long_gm = de_pivot_wide_years(T, yr_gm);';
-L{end+1} = '';
+% 4 header lines + up to 4 lines per geo×cat pair
+L = cell(1, 4 + 4*numel(geo_cats)*numel(other_cats));
+li = 0;
+li = li+1; L{li} = '%% Geo x categorical heatmap';
+li = li+1; L{li} = sprintf('yr_gm = {%s};', yr_cell);
+li = li+1; L{li} = 'T_long_gm = de_pivot_wide_years(T, yr_gm);';
+li = li+1; L{li} = '';
 
 n_pairs = 0;
 for gi = 1:numel(geo_cats)
@@ -2990,22 +2964,23 @@ for gi = 1:numel(geo_cats)
         levs_cell = strjoin(cellfun(@(s) sprintf('''%s''',strrep(s,'''','''''')), top_levs, 'UniformOutput',false), ', ');
         title_str = strrep(sprintf('%s x %s: Value by category over time', geo_name, cat_name), '''', '''''');
 
-        L{end+1} = sprintf('top_gm = {%s};', levs_cell); %#ok<AGROW>
-        L{end+1} = sprintf('T_filt_gm = T_long_gm(ismember(string(T_long_gm.%s), string(top_gm)), :);', cat_name); %#ok<AGROW>
+        li = li+1; L{li} = sprintf('top_gm = {%s};', levs_cell);
+        li = li+1; L{li} = sprintf('T_filt_gm = T_long_gm(ismember(string(T_long_gm.%s), string(top_gm)), :);', cat_name);
         if is_states_geo
-            L{end+1} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
-                geo_name, cat_name, K, title_str); %#ok<AGROW>
+            li = li+1; L{li} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, cat_name, K, title_str);
         elseif strcmp(geo_grid_name, 'world')
-            L{end+1} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
-                geo_name, cat_name, K, title_str); %#ok<AGROW>
+            li = li+1; L{li} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, cat_name, K, title_str);
         else
-            L{end+1} = sprintf('de_geobins(T_filt_gm, ''GeoCol'',''%s'', ''Grid'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
-                geo_name, geo_grid_name, cat_name, K, title_str); %#ok<AGROW>
+            li = li+1; L{li} = sprintf('de_geobins(T_filt_gm, ''GeoCol'',''%s'', ''Grid'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+                geo_name, geo_grid_name, cat_name, K, title_str);
         end
-        L{end+1} = ''; %#ok<AGROW>
+        li = li+1; L{li} = '';
         n_pairs = n_pairs + 1;
     end
 end
+L = L(1:li);
 
 if n_pairs == 0
     code = ''; return;
@@ -3014,20 +2989,43 @@ code = strjoin(L, newline);
 end
 
 
+% ── cg_panel_code ────────────────────────────────────────────────────────────
+function code = cg_panel_code(~, ~, panel)
+%CG_PANEL_CODE  Recipe code for panel (wide-year) stacked-area and grouped
+%   time-series figures.  Uses DataExplorer.m local functions via eval.
+code = '';
+if ~isstruct(panel) || ~panel.is_panel, return; end
+L = {};
+L{end+1} = '% Panel: stacked-area and grouped time series';
+L{end+1} = '% (se_plot_panel_totals, se_plot_categorical_drilldown require DataExplorer.m)';
+L{end+1} = 'panel_ = se_detect_panel(T, prof);';
+L{end+1} = 'if panel_.is_panel';
+L{end+1} = '    se_plot_panel_totals(T, prof, panel_);';
+L{end+1} = '    sel_ = se_select_columns(T, prof, 8);';
+L{end+1} = '    se_plot_categorical_drilldown(T, prof, sel_);';
+L{end+1} = 'end';
+code = strjoin(L, newline);
+end
+
+
 % ── se_assemble_recipe ───────────────────────────────────────────────────────
-function recipe_path = se_assemble_recipe(filepath, T, prof, panel, options)
-%SE_ASSEMBLE_RECIPE  Build a standalone script, write to /tmp/, return path.
+function [recipe_path, recipe_text] = se_assemble_recipe(filepath, T, prof, panel, options)
+%SE_ASSEMBLE_RECIPE  Build a self-contained recipe, write to /tmp/, print, return.
 %
-%   The script is self-contained: load + clean + 1-2 best-of plots.
-%   It runs without DataExplorer installed.
+%   Returns:
+%     recipe_path — path to the saved .m file (for save_recipe())
+%     recipe_text — the script as a string; caller should eval() this
 %
-%   panel  — struct from se_detect_panel; reserved for panel-aware recipe
-%            generation (Task 5). Stored here so future edits have it in scope.
+%   For table input (empty filepath) the Load section is a placeholder comment.
 
-assert(isstruct(panel), 'panel must be a struct'); % reserved for Task 5
+assert(isstruct(panel), 'panel must be a struct');
 
-[~, bname, ~] = fileparts(filepath);
-bname_safe = regexprep(bname, '[^A-Za-z0-9_]', '_');
+if isempty(filepath)
+    bname_safe = 'table_input';
+else
+    [~, bname, ~] = fileparts(filepath);
+    bname_safe = regexprep(bname, '[^A-Za-z0-9_]', '_');
+end
 recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s.m', bname_safe));
 
 % Select the same columns the pairplot used
@@ -3049,11 +3047,12 @@ plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
 choro_code         = cg_state_choropleth_code(T, prof);
 country_code       = cg_country_choropleth_code(T, prof);
 geo_multi_code     = cg_geo_multicategorical_code(T, prof);
+panel_code         = cg_panel_code(T, prof, panel);
 
 header = sprintf([...
     '%% DataExplorer recipe — %s\n' ...
     '%% Generated %s\n' ...
-    '%% Requires DataExplorer.m on the MATLAB path (for de_profile, de_histogram).\n' ...
+    '%% Requires DataExplorer.m on the MATLAB path (for de_profile, de_overview, de_histogram).\n' ...
     '%% To save this script: save_recipe(''%s_recipe.m'')\n'], ...
     prof.source_name, datetime('now','Format','yyyy-MM-dd HH:mm'), ...
     regexprep(prof.source_name, '[^A-Za-z0-9]', '_'));
@@ -3062,6 +3061,7 @@ sections = { ...
     header, ...
     '%% === Load ===', load_code, '', ...
     '%% === Clean ===', clean_code, '', ...
+    '%% === Overview ===', 'de_overview(T, prof);', '', ...
     '%% === Best-of Plots ===', plots_code ...
 };
 if ~isempty(choro_code)
@@ -3079,8 +3079,13 @@ if ~isempty(geo_multi_code)
     sections{end+1} = '%% === Geo x Categorical ===';
     sections{end+1} = geo_multi_code;
 end
+if ~isempty(panel_code)
+    sections{end+1} = '';
+    sections{end+1} = '%% === Panel (stacked area + grouped time series) ===';
+    sections{end+1} = panel_code;
+end
 
-script_text = strjoin(sections, newline);
+recipe_text = strjoin(sections, newline);
 
 fid = fopen(recipe_path, 'w');
 if fid == -1
@@ -3089,9 +3094,25 @@ if fid == -1
     recipe_path = '';
     return
 end
-fprintf(fid, '%s\n', script_text);
+fprintf(fid, '%s\n', recipe_text);
 fclose(fid);
-se_print_recipe(script_text, sprintf('%s_recipe.m', bname_safe));
+se_print_recipe(recipe_text, sprintf('%s_recipe.m', bname_safe));
+end
+
+
+% ── se_eval_recipe_plots ─────────────────────────────────────────────────────
+function se_eval_recipe_plots(recipe_text)
+%SE_EVAL_RECIPE_PLOTS  Eval only the plot sections of a recipe string.
+%   Skips the Load and Clean sections — T and prof are already in the caller's
+%   workspace.  Falls back to eval-ing the whole recipe if the Overview marker
+%   is absent (shouldn't happen in normal use).
+if isempty(recipe_text), return; end
+idx = strfind(recipe_text, '%% === Overview ===');
+if ~isempty(idx)
+    eval(recipe_text(idx(1):end));
+else
+    eval(recipe_text);
+end
 end
 
 
@@ -3166,13 +3187,13 @@ for k = 1:numel(cat_all)
 end
 panel.non_geo_idxs = cat_all(~ismember(cat_all, panel.geo_idx));
 
-parts = {};
+parts = cell(1, numel(cat_all)+1);
 for k = 1:numel(cat_all)
     ci = cat_all(k);
-    parts{end+1} = sprintf('%s (%d levels)', prof.name{ci}, prof.nunique(ci)); %#ok<AGROW>
+    parts{k} = sprintf('%s (%d levels)', prof.name{ci}, prof.nunique(ci));
 end
 yr_min = min(wide_yr_vals);  yr_max = max(wide_yr_vals);
-parts{end+1} = sprintf('%d years (%g%s%g)', numel(wide_yr_vals), yr_min, char(8211), yr_max);
+parts{end} = sprintf('%d years (%g%s%g)', numel(wide_yr_vals), yr_min, char(8211), yr_max);
 panel.description = strjoin(parts, [' ' char(215) ' ']);
 end
 
@@ -3183,8 +3204,6 @@ function se_plot_panel_totals(T, prof, panel)
 
 wide_yr_idxs = panel.wide_yr_idxs;
 wide_yr_vals = panel.wide_yr_vals;
-n_yr = numel(wide_yr_vals);
-[~, sort_ord] = sort(wide_yr_vals);
 
 % Exclude rows where any categorical column has a total-like value
 T_notot = T;
@@ -3197,35 +3216,6 @@ for vn = string(T.Properties.VariableNames)
     if ~isempty(tot_v)
         T_notot = T_notot(~ismember(string(col_v), tot_v), :);
     end
-end
-
-% Print top-3 levels per non-geo categorical, ranked by time-variance
-for k = 1:numel(panel.non_geo_idxs)
-    ci = panel.non_geo_idxs(k);
-    catname = prof.name{ci};
-    cat_col = T.(catname);
-    if ~iscategorical(cat_col), continue; end
-    TOTAL_WORDS_PT = {'total', 'totals', 'grand total', 'all totals'};
-    levels = cellstr(categories(cat_col));
-    is_tot_lev = cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS_PT)), levels);
-    levels = levels(~is_tot_lev);
-    n_lev  = numel(levels);
-    if n_lev == 0, continue; end
-    vars   = zeros(n_lev, 1);
-    for lk = 1:n_lev
-        mask = cat_col == levels{lk};
-        if ~any(mask), continue; end
-        lk_means = zeros(1, n_yr);
-        for jj = 1:n_yr
-            col_jj = double(T.(prof.name{wide_yr_idxs(sort_ord(jj))}));
-            lk_means(jj) = mean(col_jj(mask), 'omitnan');
-        end
-        vars(lk) = var(lk_means(~isnan(lk_means)));
-    end
-    [~, ord] = sort(vars, 'descend');
-    top3 = levels(ord(1:min(3, n_lev)));
-    fprintf('  Top %s by time-variance: %s\n', catname, strjoin(top3, ', '));
-    fprintf('    Tip: DataExplorer(T(T.%s == ''%s'', :))\n', catname, top3{1});
 end
 
 % 100% stacked area by each grouping categorical (state share, MSN share, …)
@@ -3277,7 +3267,6 @@ else
 end
 
 if ~isempty(cat_useful)
-    fprintf('  Categorical drill-down: %d grouping variable(s).\n', numel(cat_useful));
     for k = 1:numel(cat_useful)
         ci = cat_useful(k);
         if ~isempty(time_idx) && ~isempty(ts_num)
@@ -3330,8 +3319,6 @@ for k = 1:numel(cat_big)
             T_sub = T;
             T_sub.(catname_k) = categorical(cat_str, [top_labels; {other_label}]);
             T_sub = T_sub(~isundefined(T_sub.(catname_k)), :);
-            fprintf('  Drill-down: %s — top %d of %d levels + Other\n', ...
-                catname_k, n_show, prof.nunique(ci));
         else
             cat_str = string(cat_col_k);
             for ti = 1:n_show
@@ -3341,7 +3328,6 @@ for k = 1:numel(cat_big)
             T_sub = T;
             T_sub.(catname_k) = categorical(cat_str, top_labels);
             T_sub = T_sub(~isundefined(T_sub.(catname_k)), :);
-            fprintf('  Drill-down: %s — all %d levels\n', catname_k, n_show);
         end
 
         if ~isempty(time_idx) && ~isempty(ts_num)
@@ -3857,7 +3843,7 @@ end
 
 
 % ── se_plot_state_choropleth ──────────────────────────────────────────────────
-function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name) %#ok<INUSL>
+function se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, ~, grid_name)
 %SE_PLOT_STATE_CHOROPLETH  Tile choropleth for any geo grid (de_geobins wrapper).
 if nargin < 7 || isempty(grid_name), grid_name = 'us-states'; end
 catname = prof.name{cat_idx};
@@ -3998,21 +3984,25 @@ end
 function entries = zip_list_entries(filepath)
 % Return struct array (.name, .bytes) for all non-directory ZIP entries.
 % Uses system unzip -l — fast even for archives with 20 000+ entries.
-entries = struct('name', {}, 'bytes', {});
 [status, out] = system(sprintf('unzip -l "%s" 2>/dev/null', filepath));
+entries = struct('name', {}, 'bytes', {});
 if status ~= 0, return; end
 lines = strsplit(out, newline);
 % Data lines: leading spaces, byte count, date MM-DD-YY[YY], time HH:MM, name
 pat = '^\s*(\d+)\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$';
+buf = repmat(struct('name', '', 'bytes', 0), 1, numel(lines));
+ne = 0;
 for k = 1:numel(lines)
     tok = regexp(lines{k}, pat, 'tokens', 'once');
     if isempty(tok), continue; end
     name = tok{2};
     if isempty(name), continue; end
     if name(end) == '/', continue; end  % skip directory entries
-    entries(end+1).name  = name; %#ok<AGROW>
-    entries(end).bytes   = str2double(tok{1});
+    ne = ne + 1;
+    buf(ne).name  = name;
+    buf(ne).bytes = str2double(tok{1});
 end
+entries = buf(1:ne);
 end
 
 
@@ -4175,19 +4165,24 @@ end
 function [yr_idxs, yr_vals] = se_detect_wide_years(prof)
 %SE_DETECT_WIDE_YEARS  Find non-skip numeric columns named x#### (year 1900–2100).
 %   Returns empty arrays if fewer than 3 such columns exist.
-yr_idxs = [];
-yr_vals = [];
-for i = 1:numel(prof.name)
+n_cols = numel(prof.name);
+yr_idxs = zeros(1, n_cols);
+yr_vals = zeros(1, n_cols);
+ny = 0;
+for i = 1:n_cols
     if prof.skip(i) || prof.type(i) ~= "numeric", continue; end
     tok = regexp(prof.name{i}, '^x(\d{4})$', 'tokens', 'once');
     if isempty(tok), continue; end
     yr = str2double(tok{1});
     if yr >= 1900 && yr <= 2100
-        yr_idxs(end+1) = i; %#ok<AGROW>
-        yr_vals(end+1) = yr; %#ok<AGROW>
+        ny = ny + 1;
+        yr_idxs(ny) = i;
+        yr_vals(ny) = yr;
     end
 end
-if numel(yr_idxs) < 3, yr_idxs = []; yr_vals = []; end
+yr_idxs = yr_idxs(1:ny);
+yr_vals  = yr_vals(1:ny);
+if ny < 3, yr_idxs = []; yr_vals = []; end
 end
 
 
