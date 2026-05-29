@@ -568,6 +568,33 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must contain de_plot_panel_totals for panel datasets');
         end
 
+        function test_figure_names_do_not_contain_filename(testCase)
+            % Figure window Names must not contain the bare filename.
+            % Plain-file figures should use short labels: "time series (overlaid)",
+            % "Pairplot", "Overview", etc. — never "mydata.csv — ...".
+            n = 30;
+            Value = (1:n)';
+            Group = categorical(repmat({'A';'B';'C'}, 10, 1));
+            Date  = datetime(2000,1,1) + caldays((0:n-1)');
+            T = table(Value, Group, Date);
+            tmp = [tempname '.csv'];
+            [~, bname] = fileparts(tmp);
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl2 = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            DataExplorer(tmp);
+
+            figs = findall(0, 'Type', 'figure');
+            for k = 1:numel(figs)
+                name = get(figs(k), 'Name');
+                testCase.verifyFalse(contains(name, bname), ...
+                    sprintf('Figure "%s" contains the bare filename "%s"', name, bname));
+            end
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────

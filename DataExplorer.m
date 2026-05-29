@@ -2692,7 +2692,15 @@ function code = cg_best_plots_code(T, prof, sel, source_name)
 
 COLOR = '[0.35 0.55 0.75]';
 L = {};
-src_sq = strrep(source_name, '''', '''''');
+
+% Short figure-name prefix: use only the [sheet/var] tag if present, else empty.
+% Never put the bare filename in a window title.
+m_src = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
+if ~isempty(m_src)
+    fig_prefix = [strrep(strtrim(m_src{1}), '''', '''''') ' — '];
+else
+    fig_prefix = '';
+end
 
 % ── Numeric columns in sel ───────────────────────────────────────────────────
 sel_num = sel(prof.type(sel) == "numeric");
@@ -2712,8 +2720,8 @@ if numel(sel_num) >= 2
     L{end+1} = sprintf('%% Best scatter: %s vs %s', cn1, cn2);
     L{end+1} = sprintf('x = T.%s; y = T.%s;', cn1, cn2);
     L{end+1} = 'if isnumeric(x) && isnumeric(y)';
-    L{end+1} = sprintf('    figure(''Name'', ''%s — %s vs %s'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
-        src_sq, strrep(cn1,'''',''''''), strrep(cn2,'''',''''''));
+    L{end+1} = sprintf('    figure(''Name'', ''%s%s vs %s'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', ...
+        fig_prefix, strrep(cn1,'''',''''''), strrep(cn2,'''',''''''));
     L{end+1} = '    valid = ~isnan(x) & ~isnan(y); n_pts = sum(valid);';
     L{end+1} = '    alpha = max(0.05, min(0.8, 500 / max(n_pts, 1)));';
     L{end+1} = sprintf('    scatter(x(valid), y(valid), 20, %s, ''filled'', ''MarkerFaceAlpha'', alpha);', COLOR);
@@ -2771,7 +2779,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     L{end+1} = '';
 
     % Overlaid + Total
-    L{end+1} = sprintf('    figure(''Name'', ''%s — time series (overlaid)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', src_sq);
+    L{end+1} = sprintf('    figure(''Name'', ''%stime series (overlaid)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', fig_prefix);
     L{end+1} = '    ax = gca; hold(ax, ''on''); colors_ts = lines(n_s);';
     L{end+1} = '    for k = 1:n_s';
     L{end+1} = '        plot(ax, t_u, Y(:,k), ''-'', ''Color'', colors_ts(k,:), ''LineWidth'', 1.5, ''DisplayName'', ts_labels{k});';
@@ -2789,7 +2797,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     % Stacked (only when compositional and ≥2 time points)
     if is_compositional
         L{end+1} = '    if n_u > 1';
-        L{end+1} = sprintf('        figure(''Name'', ''%s — time series (stacked)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', src_sq);
+        L{end+1} = sprintf('        figure(''Name'', ''%stime series (stacked)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', fig_prefix);
         L{end+1} = '        ax = gca; Y_plot = Y; Y_plot(isnan(Y_plot)) = 0;';
         L{end+1} = '        [~, sord] = sort(mean(Y_plot, 1), ''descend'');';
         L{end+1} = '        area(ax, t_u, Y_plot(:, sord), ''LineStyle'', ''none'', ''FaceAlpha'', 0.85);';
