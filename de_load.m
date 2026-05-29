@@ -37,11 +37,7 @@ if is_excel
     end
     io = detectImportOptions(filepath, io_args{:});
     io.MissingRule = 'fill';
-    if strlength(options.Sheet) > 0
-        T = readtable(filepath, io, 'Sheet', char(options.Sheet));
-    else
-        T = readtable(filepath, io);
-    end
+    T = readtable(filepath, io);
     if isfinite(options.MaxRows) && height(T) > options.MaxRows
         n_total = height(T);
         idx     = sort(randperm(n_total, options.MaxRows));
