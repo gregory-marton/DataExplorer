@@ -1,11 +1,26 @@
-function de_plot_cat_association(T, prof)
+function de_plot_cat_association(T, prof, options)
 %DE_PLOT_CAT_ASSOCIATION  Visualise pairwise associations between categorical columns.
+%
+%   de_plot_cat_association(T, prof)
+%   de_plot_cat_association(T, prof, MaxPairs=5, VThresh=0.05)
+%
+%   Name-value options
+%   ------------------
+%   MaxPairs   Max number of full-page pair figures to produce (default 3)
+%   VThresh    Min Cramer's V to qualify for a pair figure (default 0.10)
 arguments
     T     table
     prof  struct
+    options.MaxPairs  (1,1) double = 3
+    options.VThresh   (1,1) double = 0.10
 end
 
-MAX_LABEL = 25;
+MAX_LABEL         = 25;
+MAX_PAIRS         = options.MaxPairs;
+V_THRESH          = options.VThresh;
+PARETO_MAX_GROUPS = 6;
+STACKED_MAX_GROUPS = 15;
+V_ANNOTATE_THRESH = 0.05;
 
 cat_mask = (prof.type == "categorical" | prof.type == "logical") & ~prof.skip;
 cat_idx  = find(cat_mask);
@@ -24,10 +39,8 @@ for i = 1:nc
 end
 
 src = ca_source_prefix(prof);
-ca_plot_v_matrix(V_mat, P_mat, names, src, MAX_LABEL);
+ca_plot_v_matrix(V_mat, P_mat, names, src, MAX_LABEL, V_ANNOTATE_THRESH);
 
-MAX_PAIRS = 3;
-V_THRESH  = 0.10;
 pairs = zeros(nc*(nc-1)/2, 3);
 np = 0;
 for i = 1:nc
@@ -44,12 +57,13 @@ if isempty(pairs), return; end
 pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
 for k = 1:size(pairs,1)
     ca_plot_pair(T.(names{pairs(k,1)}), T.(names{pairs(k,2)}), ...
-        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL);
+        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL, ...
+        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS);
 end
 end
 
 
-function ca_plot_v_matrix(V_mat, P_mat, names, src, max_lbl)
+function ca_plot_v_matrix(V_mat, P_mat, names, src, max_lbl, v_annotate)
 nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
@@ -69,7 +83,7 @@ for i = 1:nc
     for j = 1:nc
         if i == j, continue; end
         if i < j
-            if V_mat(i,j) >= 0.05
+            if V_mat(i,j) >= v_annotate
                 text(ax, j, i, sprintf('%.2f', V_mat(i,j)), ...
                     'HorizontalAlignment', 'center', 'FontSize', 7, ...
                     'Color', ca_label_color(V_mat(i,j)));
@@ -90,7 +104,7 @@ dcm.UpdateFcn = @(~,ev) ca_vmat_tip(ev, nm_dc, vm_dc);
 end
 
 
-function ca_plot_pair(x, y, xname, yname, V, src, max_lbl)
+function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, pareto_max_grp, stacked_max_grp)
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -106,9 +120,9 @@ else
 end
 ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl), V);
 fig    = figure('Name', ca_fig_name(ftitle, src));
-if ng <= 6
+if ng <= pareto_max_grp
     ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
-elseif ng <= 15
+elseif ng <= stacked_max_grp
     ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl);
 else
     ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl);
