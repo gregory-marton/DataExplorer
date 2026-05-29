@@ -3,6 +3,7 @@ function [T, prof] = de_load(filepath, options)
 %
 %   T          = de_load('data.csv')
 %   T          = de_load('data.xlsx', Sheet='Data')
+%   T          = de_load('data.xlsx', Sheet=7)
 %   [T, prof]  = de_load('bigfile.csv', MaxRows=50000)
 %   [T, prof]  = de_load('Prod_dataset.xlsx', Sheet='Data', MaxRows=10000)
 %
@@ -13,7 +14,7 @@ function [T, prof] = de_load(filepath, options)
 %
 %   Name-value options
 %   ──────────────────
-%   Sheet                Sheet name or index for xlsx (default: first sheet)
+%   Sheet                Sheet name (string) or 1-based index (integer) for xlsx (default: first sheet)
 %   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx, default 'A1')
 %   DataRange            Data start cell, e.g. 'A2' (xlsx, default 'A2')
 %   MaxRows              Row budget. Inf = load everything (default).
@@ -32,8 +33,11 @@ is_excel = ismember(lower(string(ext)), [".xlsx", ".xls", ".xlsm", ".xlsb"]);
 if is_excel
     io_args = {'VariableNamesRange', char(options.VariableNamesRange), ...
                'DataRange',          char(options.DataRange)};
-    if strlength(options.Sheet) > 0
-        io_args = [io_args, {'Sheet', char(options.Sheet)}];
+    sheet_val = options.Sheet;
+    sheet_given = (isnumeric(sheet_val) && isscalar(sheet_val) && sheet_val > 0) || ...
+                  (~isnumeric(sheet_val) && strlength(string(sheet_val)) > 0);
+    if sheet_given
+        io_args = [io_args, {'Sheet', sheet_val}];
     end
     io = detectImportOptions(filepath, io_args{:});
     io.MissingRule = 'fill';
