@@ -2817,6 +2817,47 @@ end
 end
 
 
+% ── cg_cat_association_code ─────────────────────────────────────────────────
+function lines = cg_cat_association_code(T, prof)
+%CG_CAT_ASSOCIATION_CODE  Recipe lines for categorical association figures.
+%   Returns one line per figure: first the V-matrix, then one line per pair.
+lines = {};
+cat_mask = (prof.type == "categorical" | prof.type == "logical") & ~prof.skip;
+cat_idx  = find(cat_mask);
+if numel(cat_idx) < 2, return; end
+names = prof.name(cat_idx);
+nc    = numel(cat_idx);
+V_THRESH  = 0.10;
+MAX_PAIRS = 3;
+pairs = zeros(nc*(nc-1)/2, 3);
+np = 0;
+for i = 1:nc
+    for j = i+1:nc
+        v = de_cramer_v(T.(names{i}), T.(names{j}));
+        if v >= V_THRESH
+            np = np + 1;
+            pairs(np,:) = [i, j, v];
+        end
+    end
+end
+pairs = pairs(1:np,:);
+out = cell(1 + MAX_PAIRS, 1);
+nl  = 1;
+out{nl} = 'de_plot_cat_association(T, prof, Figure="vmatrix");';
+if ~isempty(pairs)
+    [~, ord] = sort(pairs(:,3), 'descend');
+    pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
+    for k = 1:size(pairs,1)
+        nl = nl + 1;
+        out{nl} = sprintf( ...
+            'de_plot_cat_association(T, prof, Figure="pair", Columns=["%s" "%s"]);  %% V=%.2f', ...
+            names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3));
+    end
+end
+lines = out(1:nl);
+end
+
+
 % ── cg_state_choropleth_code ────────────────────────────────────────────────
 function code = cg_state_choropleth_code(~, prof)
 %CG_STATE_CHOROPLETH_CODE  Return recipe code for state choropleth figures.
@@ -3074,11 +3115,7 @@ header = sprintf([...
 pairplot_code = sprintf('de_plot_pairplot(T, prof, de_select_columns(T, prof, %d));', ...
     options.MaxVars);
 
-cat_only = find((prof.type == "categorical" | prof.type == "logical") & ~prof.skip);
-cat_assoc_code = '';
-if numel(cat_only) >= 2
-    cat_assoc_code = 'de_plot_cat_association(T, prof);';
-end
+cat_assoc_lines = cg_cat_association_code(T, prof);
 
 sections = { ...
     header, ...
@@ -3088,10 +3125,8 @@ sections = { ...
     '%% === Pairplot ===', pairplot_code, '', ...
     '%% === Best-of Plots ===', plots_code ...
 };
-if ~isempty(cat_assoc_code)
-    sections{end+1} = '';
-    sections{end+1} = '%% === Categorical Associations ===';
-    sections{end+1} = cat_assoc_code;
+if ~isempty(cat_assoc_lines)
+    sections = [sections, {'', '%% === Categorical Associations ==='}, cat_assoc_lines(:)'];
 end
 if ~isempty(choro_code)
     sections{end+1} = '';

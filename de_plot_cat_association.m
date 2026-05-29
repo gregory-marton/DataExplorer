@@ -3,16 +3,22 @@ function de_plot_cat_association(T, prof, options)
 %
 %   de_plot_cat_association(T, prof)
 %   de_plot_cat_association(T, prof, MaxPairs=5, VThresh=0.05)
+%   de_plot_cat_association(T, prof, Figure="vmatrix")
+%   de_plot_cat_association(T, prof, Figure="pair", Columns=["ColA" "ColB"])
 %
 %   Name-value options
 %   ------------------
 %   MaxPairs   Max number of full-page pair figures to produce (default 3)
 %   VThresh    Min Cramer's V to qualify for a pair figure (default 0.10)
+%   Figure     "all" | "vmatrix" | "pair"  (default "all")
+%   Columns    [colA colB] string array — required when Figure="pair"
 arguments
     T     table
     prof  struct
     options.MaxPairs  (1,1) double = 3
     options.VThresh   (1,1) double = 0.10
+    options.Figure    (1,1) string = "all"
+    options.Columns   (1,:) string = string([])
 end
 
 MAX_LABEL          = 25;
@@ -22,6 +28,18 @@ PARETO_MAX_GROUPS  = 6;
 STACKED_MAX_GROUPS = 15;
 V_ANNOTATE_THRESH  = 0.05;
 GLYPH_MAX_COLS     = 10;
+src = ca_source_prefix(prof);
+
+if options.Figure == "pair"
+    if numel(options.Columns) ~= 2
+        error('de_plot_cat_association: Figure="pair" requires Columns=[colA colB].');
+    end
+    col_a = options.Columns(1); col_b = options.Columns(2);
+    v = de_cramer_v(T.(col_a), T.(col_b));
+    ca_plot_pair(T.(col_a), T.(col_b), col_a, col_b, v, src, MAX_LABEL, ...
+        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS);
+    return
+end
 
 cat_mask = (prof.type == "categorical" | prof.type == "logical") & ~prof.skip;
 cat_idx  = find(cat_mask);
@@ -45,8 +63,9 @@ for i = 1:nc
     end
 end
 
-src = ca_source_prefix(prof);
 ca_plot_v_matrix(V_mat, P_mat, col_coverage, names, src, MAX_LABEL, V_ANNOTATE_THRESH, GLYPH_MAX_COLS);
+
+if options.Figure == "vmatrix", return; end
 
 pairs = zeros(nc*(nc-1)/2, 3);
 np = 0;
