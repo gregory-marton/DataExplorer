@@ -15,15 +15,15 @@ function [T, prof] = de_load(filepath, options)
 %   Name-value options
 %   ──────────────────
 %   Sheet                Sheet name (string) or 1-based index (integer) for xlsx (default: first sheet)
-%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx, default 'A1')
-%   DataRange            Data start cell, e.g. 'A2' (xlsx, default 'A2')
+%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx, default: auto-detect)
+%   DataRange            Data start cell, e.g. 'A2' (xlsx, default: auto-detect)
 %   MaxRows              Row budget. Inf = load everything (default).
 
 arguments
     filepath (1,1) string
     options.Sheet               = ""
-    options.VariableNamesRange  (1,1) string = "A1"
-    options.DataRange           (1,1) string = "A2"
+    options.VariableNamesRange  (1,1) string = ""
+    options.DataRange           (1,1) string = ""
     options.MaxRows             (1,1) double = Inf
 end
 
@@ -31,8 +31,13 @@ end
 is_excel = ismember(lower(string(ext)), [".xlsx", ".xls", ".xlsm", ".xlsb"]);
 
 if is_excel
-    io_args = {'VariableNamesRange', char(options.VariableNamesRange), ...
-               'DataRange',          char(options.DataRange)};
+    io_args = {};
+    if strlength(options.VariableNamesRange) > 0
+        io_args = [io_args, {'VariableNamesRange', char(options.VariableNamesRange)}];
+    end
+    if strlength(options.DataRange) > 0
+        io_args = [io_args, {'DataRange', char(options.DataRange)}];
+    end
     sheet_val = options.Sheet;
     sheet_given = (isnumeric(sheet_val) && isscalar(sheet_val) && sheet_val > 0) || ...
                   (~isnumeric(sheet_val) && strlength(string(sheet_val)) > 0);
