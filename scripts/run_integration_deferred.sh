@@ -22,7 +22,7 @@ fi
 
 cd "$ROOT"
 TMPOUT=$(mktemp)
-if python3 -m pytest tests/ -m slow --tb=short > "$TMPOUT" 2>&1; then
+if python3 -m pytest tests/ --tb=short > "$TMPOUT" 2>&1; then
     rm -f "$SENTINEL" "$LAST_RUN"
 else
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } >> "$LAST_RUN"

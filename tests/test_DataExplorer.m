@@ -152,6 +152,16 @@ classdef test_DataExplorer < matlab.unittest.TestCase
     % ─────────────────────────────────────────────────────────────────────────
     %  Setup / teardown
     % ─────────────────────────────────────────────────────────────────────────
+    methods (TestClassSetup)
+        function add_project_root_to_path(testCase)
+            % R2026a runtests no longer adds the repo root to the path
+            % automatically. Add it explicitly so all de_* functions are visible.
+            project_root = fileparts(fileparts(mfilename('fullpath')));
+            addpath(project_root);
+            testCase.addTeardown(@() rmpath(project_root));
+        end
+    end
+
     methods (TestMethodSetup)
         function close_all_figures(~)
             close all;
