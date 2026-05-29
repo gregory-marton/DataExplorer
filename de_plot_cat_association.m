@@ -14,16 +14,17 @@ names = prof.name(cat_idx);
 nc    = numel(cat_idx);
 
 V_mat = zeros(nc, nc);
+P_mat = ones(nc, nc);
 for i = 1:nc
     for j = i+1:nc
-        v = de_cramer_v(T.(names{i}), T.(names{j}));
-        V_mat(i,j) = v;
-        V_mat(j,i) = v;
+        [v, p] = de_cramer_v(T.(names{i}), T.(names{j}));
+        V_mat(i,j) = v; V_mat(j,i) = v;
+        P_mat(i,j) = p; P_mat(j,i) = p;
     end
 end
 
 src = ca_source_prefix(prof);
-ca_plot_v_matrix(V_mat, names, src, MAX_LABEL);
+ca_plot_v_matrix(V_mat, P_mat, names, src, MAX_LABEL);
 
 MAX_PAIRS = 3;
 V_THRESH  = 0.10;
@@ -48,27 +49,38 @@ end
 end
 
 
-function ca_plot_v_matrix(V_mat, names, src, max_lbl)
+function ca_plot_v_matrix(V_mat, P_mat, names, src, max_lbl)
 nc  = numel(names);
-fig = figure('Name', ca_fig_name("Categorical associations", src));
+fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
 imagesc(ax, V_mat, [0 1]);
 blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
-cb.Label.String = "Cramer's V";
+cb.Label.String = "Cramer's V  (0=independent, 1=fully associated)";
 short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
     'XTickLabelRotation', 40, 'FontSize', 8, 'TickLength', [0 0]);
-title(ax, {"Categorical associations (Cramer's V)", ...
-    "0 = independent,  1 = fully associated"}, 'FontSize', 10);
+sub = "Bias-Corrected Cramer's V";
+if ~isempty(src), sub = sub + "  |  " + src; end
+title(ax, {"Association Strength", sub}, 'FontSize', 10);
 for i = 1:nc
     for j = 1:nc
-        if i ~= j && V_mat(i,j) >= 0.05
-            text(ax, j, i, sprintf('%.2f', V_mat(i,j)), ...
-                'HorizontalAlignment', 'center', 'FontSize', 7, ...
-                'Color', ca_label_color(V_mat(i,j)));
+        if i == j, continue; end
+        if i < j
+            if V_mat(i,j) >= 0.05
+                text(ax, j, i, sprintf('%.2f', V_mat(i,j)), ...
+                    'HorizontalAlignment', 'center', 'FontSize', 7, ...
+                    'Color', ca_label_color(V_mat(i,j)));
+            end
+        else
+            stars = ca_sig_stars(P_mat(i,j));
+            if ~isempty(stars)
+                text(ax, j, i, stars, ...
+                    'HorizontalAlignment', 'center', 'FontSize', 8, ...
+                    'Color', ca_label_color(V_mat(i,j)));
+            end
         end
     end
 end
@@ -268,6 +280,10 @@ pos = ev.Position;
 ci = max(1, min(numel(col_names), round(pos(1))));
 ri = max(1, min(numel(row_names), round(pos(2))));
 txt = {col_names{ci}, row_names{ri}, sprintf('P = %.3f', P(ri,ci))};
+end
+
+function s = ca_sig_stars(p)
+if p < 0.001, s = '***'; elseif p < 0.01, s = '**'; elseif p < 0.05, s = '*'; else, s = ''; end
 end
 
 function s = ca_trunc(s, n)

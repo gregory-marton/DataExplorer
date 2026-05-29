@@ -1,9 +1,11 @@
-function V = de_cramer_v(x, y)
+function [V, p] = de_cramer_v(x, y)
 %DE_CRAMER_V  Cramer's V association measure between two categorical vectors.
 %
-%   V = de_cramer_v(x, y)
+%   V       = de_cramer_v(x, y)
+%   [V, p]  = de_cramer_v(x, y)
 %
-%   Returns V in [0, 1]: 0 = no association, 1 = perfect association.
+%   V in [0, 1]: 0 = no association, 1 = perfect association.
+%   p: chi-squared p-value (upper tail); p=1 when V is undefined.
 %   Does not require any toolbox.  Missing (undefined) rows are excluded.
 %
 %   Uses the bias-corrected formula (Bergsma & Wicher 2013) which adjusts
@@ -18,7 +20,7 @@ y = y(valid);
 N = numel(x);
 
 if N < 2
-    V = 0;
+    V = 0; p = 1;
     return
 end
 
@@ -28,7 +30,7 @@ r  = numel(cx);
 c  = numel(cy);
 
 if r < 2 || c < 2
-    V = 0;
+    V = 0; p = 1;
     return
 end
 
@@ -53,7 +55,7 @@ r_eff = sum(keep_r);
 c_eff = sum(keep_c);
 
 if r_eff < 2 || c_eff < 2
-    V = 0;
+    V = 0; p = 1;
     return
 end
 
@@ -66,8 +68,10 @@ r_tilde = r_eff - (r_eff-1)^2/(N-1);
 c_tilde = c_eff - (c_eff-1)^2/(N-1);
 denom   = min(r_tilde - 1, c_tilde - 1);
 if denom <= 0
-    V = 0;
+    V = 0; p = 1;
     return
 end
 V = min(sqrt(phi2_bc / denom), 1);
+df = (r_eff - 1) * (c_eff - 1);
+p  = 1 - gammainc(chi2/2, df/2);
 end
