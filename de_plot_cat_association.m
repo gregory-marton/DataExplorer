@@ -5,6 +5,8 @@ arguments
     prof  struct
 end
 
+MAX_LABEL = 25;
+
 cat_mask = (prof.type == "categorical" | prof.type == "logical") & ~prof.skip;
 cat_idx  = find(cat_mask);
 if numel(cat_idx) < 2, return; end
@@ -21,7 +23,7 @@ for i = 1:nc
 end
 
 src = ca_source_prefix(prof);
-ca_plot_v_matrix(V_mat, names, src);
+ca_plot_v_matrix(V_mat, names, src, MAX_LABEL);
 
 MAX_PAIRS = 3;
 V_THRESH  = 0.10;
@@ -41,12 +43,12 @@ if isempty(pairs), return; end
 pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
 for k = 1:size(pairs,1)
     ca_plot_pair(T.(names{pairs(k,1)}), T.(names{pairs(k,2)}), ...
-        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src);
+        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL);
 end
 end
 
 
-function ca_plot_v_matrix(V_mat, names, src)
+function ca_plot_v_matrix(V_mat, names, src, max_lbl)
 nc  = numel(names);
 fig = figure('Name', ca_fig_name("Categorical associations", src));
 ax  = axes(fig);
@@ -55,7 +57,7 @@ blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = "Cramer's V";
-short = cellfun(@(s) ca_trunc(s,36), names, 'UniformOutput', false);
+short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
     'XTickLabelRotation', 40, 'FontSize', 8, 'TickLength', [0 0]);
@@ -75,7 +77,7 @@ dcm.UpdateFcn = @(~,ev) ca_vmat_tip(ev, nm_dc, vm_dc);
 end
 
 
-function ca_plot_pair(x, y, xname, yname, V, src)
+function ca_plot_pair(x, y, xname, yname, V, src, max_lbl)
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -89,19 +91,19 @@ else
     grp = y; gname = yname; gcats = cy; ng = ny;
     val = x; vname = xname; vcats = cx;
 end
-ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,48), ca_trunc(vname,48), V);
+ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl), V);
 fig    = figure('Name', ca_fig_name(ftitle, src));
 if ng <= 6
-    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle);
+    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
 elseif ng <= 15
-    ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle);
+    ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl);
 else
-    ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle);
+    ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl);
 end
 end
 
 
-function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle)
+function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl)
 MAX_B = 15;
 ng   = numel(gcats);
 ncol = min(ng, 3);
@@ -119,12 +121,12 @@ for k = 1:ng
     no = numel(ls) - ns;
     if no > 0
         cp      = [cs(1:ns); sum(cs(ns+1:end))];
-        lp      = [cellfun(@(s) ca_trunc(s,28), ls(1:ns), 'UniformOutput', false); ...
+        lp      = [cellfun(@(s) ca_trunc(s,max_lbl), ls(1:ns), 'UniformOutput', false); ...
                    {sprintf('Other (%d)', no)}];
         full_lp = [ls(1:ns); {sprintf('Other (%d categories)', no)}];
     else
         cp      = cs(1:ns);
-        lp      = cellfun(@(s) ca_trunc(s,28), ls(1:ns), 'UniformOutput', false);
+        lp      = cellfun(@(s) ca_trunc(s,max_lbl), ls(1:ns), 'UniformOutput', false);
         full_lp = ls(1:ns);
     end
     tot = sum(cp);
@@ -139,19 +141,19 @@ for k = 1:ng
     yyaxis(ax, 'right');
     plot(ax, 1:numel(cum), cum, 'r-o', 'MarkerSize', 4);
     ylim(ax, [0 100]);
-    ylabel(ax, 'Cum %', 'FontSize', 7);
+    ylabel(ax, 'Cumulative %', 'FontSize', 7);
     yyaxis(ax, 'left');
     ylabel(ax, '%', 'FontSize', 7);
     set(ax, 'XTick', 1:numel(cp), 'XTickLabel', lp, ...
         'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
-    title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,24), ca_trunc(gcats{k},24), tot), ...
+    title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot), ...
         'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
 end
 end
 
 
-function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle)
+function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl)
 MAX_S = 12;
 ng = numel(gcats);
 vn = arrayfun(@(c) sum(val == c{1}), vcats);
@@ -172,7 +174,7 @@ for gi = 1:ng
         P(gi,end) = max(0, 1 - sum(P(gi,1:end-1)));
     end
 end
-slabs = cellfun(@(s) ca_trunc(s,32), top_v, 'UniformOutput', false);
+slabs = cellfun(@(s) ca_trunc(s,max_lbl), top_v, 'UniformOutput', false);
 if n_oth > 0, slabs{end+1} = sprintf('Other (%d)', n_oth); end
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
 [~,gord] = sort(gn, 'descend');
@@ -191,9 +193,9 @@ for vi = 1:numel(bh)
     bh(vi).DataTipTemplate.DataTipRows(2).Value = full_gcats_s;
 end
 set(ax, 'YTick', 1:ng, ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,36), gcats(gord), 'UniformOutput', false), ...
+    'YTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), gcats(gord), 'UniformOutput', false), ...
     'FontSize', 8, 'TickLength', [0 0]);
-ylabel(ax, ca_trunc(gname, 48), 'FontSize', 9);
+ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', 9);
 xlabel(ax, 'Proportion', 'FontSize', 9);
 title(ax, ftitle, 'FontSize', 10, 'Interpreter', 'none');
 legend(ax, slabs, 'Location', 'eastoutside', 'FontSize', 7, 'Interpreter', 'none');
@@ -202,7 +204,7 @@ box(ax, 'off');
 end
 
 
-function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle)
+function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl)
 MAX_S = 20;
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
 [~,gord] = sort(gn,'descend');
@@ -231,10 +233,10 @@ imagesc(ax, P, [0 1]);
 blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
-cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,32), ca_trunc(vname,32));
+cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
 set(ax, 'XTick', 1:nc, 'YTick', 1:nr, ...
-    'XTickLabel', cellfun(@(s) ca_trunc(s,28), show_v, 'UniformOutput', false), ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,28), show_g, 'UniformOutput', false), ...
+    'XTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), show_v, 'UniformOutput', false), ...
+    'YTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), show_g, 'UniformOutput', false), ...
     'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
