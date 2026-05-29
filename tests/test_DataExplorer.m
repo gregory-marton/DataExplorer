@@ -605,6 +605,49 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
         end
 
+        function test_cramer_v_perfect_association(testCase)
+            % When A uniquely determines B, Cramér's V must equal 1.
+            A = categorical(repmat({'X';'Y';'Z'}, 20, 1));
+            B = categorical(repmat({'P';'Q';'R'}, 20, 1));
+            V = de_cramer_v(A, B);
+            testCase.verifyEqual(V, 1.0, 'AbsTol', 0.01, ...
+                'Cramér V must be 1 when A uniquely determines B');
+        end
+
+        function test_cramer_v_independent(testCase)
+            % Independently-drawn categorical columns should have V near 0.
+            rng(42);
+            n = 300;
+            A = categorical(randsample({'X','Y','Z'}, n, true));
+            B = categorical(randsample({'P','Q','R'}, n, true));
+            V = de_cramer_v(A, B);
+            testCase.verifyLessThan(V, 0.1, ...
+                'Cramér V must be near 0 for independent categorical columns');
+        end
+
+        function test_recipe_311_like_has_cat_association(testCase)
+            % Recipe for a categorical-heavy table must contain de_plot_cat_association.
+            Borough      = categorical(repmat({'Manhattan';'Brooklyn';'Queens';'Bronx'}, 10, 1));
+            ComplainType = categorical(repmat({'Noise';'Graffiti';'Heat';'Rodent'}, 10, 1));
+            Status       = categorical(repmat({'Open';'Closed'}, 20, 1));
+            T = table(Borough, ComplainType, Status);
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl2 = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'DataExplorer must write a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_plot_cat_association'), ...
+                'Recipe must contain de_plot_cat_association for categorical-heavy tables');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
