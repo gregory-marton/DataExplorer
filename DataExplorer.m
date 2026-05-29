@@ -124,7 +124,7 @@ if ischar(source) || isstring(source)
                 dim_str_    = strjoin(arrayfun(@num2str, sz_sp_, 'UniformOutput', false), '×');
                 prof_sp_.sampling_note = sprintf('stride sampled: %d / %d total  (%s)', ...
                     height(T_sp_), total_sp_, dim_str_);
-                se_plot(T_sp_, prof_sp_, options, se_detect_panel(T_sp_, prof_sp_));
+                se_plot(T_sp_, prof_sp_, options, prof_sp_.panel);
                 % Single recipe covering all spatial variables + one geo scatter per var.
                 recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_);
                 T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
@@ -148,7 +148,7 @@ if ischar(source) || isstring(source)
                 prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, vname_vi_);
                 se_echo_load_code(string(source), T_vi_);
                 se_report(T_vi_, prof_vi_);
-                panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
+                panel_vi_  = prof_vi_.panel;
                 T = T_vi_; prof = prof_vi_;
                 [~, recipe_vi_] = se_assemble_recipe(string(source), T, prof, panel_vi_, opts_vi_);
                 idx_ = strfind(recipe_vi_, '%% === Overview ===');
@@ -201,7 +201,7 @@ end
 % are eval'd here (T and prof are already loaded above, so re-running the
 % load/clean sections would be redundant and slow).  The saved recipe file
 % is always complete (load + clean + plots) so it re-runs correctly standalone.
-panel = se_detect_panel(T, prof);
+panel = prof.panel;
 src_str_ = '';
 if ischar(source) || isstring(source)
     src_str_ = string(source);
@@ -1277,7 +1277,7 @@ if ~isempty(options.Columns)
     sel = sel(~prof.skip(sel));   % still drop >80%-missing columns
 
 else
-    sel = se_select_columns(T, prof, options.MaxVars);
+    sel = de_select_columns(T, prof, options.MaxVars);
 end
 
 if isempty(sel)
@@ -1287,8 +1287,8 @@ end
 
 % ── Panel detection: wide-format categorical × year datasets ─────────────────
 if panel.is_panel
-    se_plot_panel_totals(T, prof, panel);
-    se_plot_categorical_drilldown(T, prof, sel);
+    de_plot_panel_totals(T, prof, panel);
+    de_plot_categorical_drilldown(T, prof, sel);
     return
 end
 
@@ -2726,7 +2726,7 @@ if numel(sel_num) >= 2
 end
 
 % ── Time series (datetime or year-axis) ──────────────────────────────────────
-[time_idx, is_year_axis] = se_find_time_axis(prof);
+[time_idx, is_year_axis] = de_find_time_axis(prof);
 ts_num = sel_num;
 if ~isempty(time_idx) && is_year_axis
     ts_num = ts_num(ts_num ~= time_idx);
@@ -2810,21 +2810,22 @@ end
 
 
 % ── cg_state_choropleth_code ────────────────────────────────────────────────
-function code = cg_state_choropleth_code(T, prof)
+function code = cg_state_choropleth_code(~, prof)
 %CG_STATE_CHOROPLETH_CODE  Return recipe code for state choropleth figures.
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
 for ci = cat_all(:)'
-    if strcmp(se_looks_like_geo(prof, ci, T), 'us-states')
+    if isfield(prof, 'geo_grid') && numel(prof.geo_grid) >= ci && ...
+            strcmp(prof.geo_grid{ci}, 'us-states')
         geo_idx = ci; break;
     end
 end
 if isempty(geo_idx), return; end
 
 catname = prof.name{geo_idx};
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
-[time_idx, ~] = se_find_time_axis(prof);
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
+[time_idx, ~] = de_find_time_axis(prof);
 num_idxs = find(prof.type == "numeric" & ~prof.skip);
 L = {};
 
@@ -2860,21 +2861,22 @@ end
 
 
 % ── cg_country_choropleth_code ───────────────────────────────────────────────
-function code = cg_country_choropleth_code(T, prof)
+function code = cg_country_choropleth_code(~, prof)
 %CG_COUNTRY_CHOROPLETH_CODE  Return recipe code for world choropleth figures.
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
 for ci = cat_all(:)'
-    if strcmp(se_looks_like_geo(prof, ci, T), 'world')
+    if isfield(prof, 'geo_grid') && numel(prof.geo_grid) >= ci && ...
+            strcmp(prof.geo_grid{ci}, 'world')
         geo_idx = ci; break;
     end
 end
 if isempty(geo_idx), return; end
 
 catname = prof.name{geo_idx};
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
-[time_idx, ~] = se_find_time_axis(prof);
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
+[time_idx, ~] = de_find_time_axis(prof);
 num_idxs = find(prof.type == "numeric" & ~prof.skip);
 L = {};
 
@@ -2913,13 +2915,17 @@ end
 function code = cg_geo_multicategorical_code(T, prof)
 %CG_GEO_MULTICATEGORICAL_CODE  Recipe code for geo x categorical heatmap figures.
 code = '';
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 if isempty(wide_yr_idxs), return; end
 
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 if numel(cat_all) < 2, return; end
 
-geo_cats   = cat_all(arrayfun(@(ci) ~isempty(se_looks_like_geo(prof,ci,T)), cat_all));
+if isfield(prof, 'geo_grid')
+    geo_cats = cat_all(arrayfun(@(ci) numel(prof.geo_grid) >= ci && ~isempty(prof.geo_grid{ci}), cat_all));
+else
+    geo_cats = [];
+end
 other_cats = cat_all(~ismember(cat_all, geo_cats));
 if isempty(geo_cats) || isempty(other_cats), return; end
 
@@ -2940,7 +2946,7 @@ n_pairs = 0;
 for gi = 1:numel(geo_cats)
     geo_idx      = geo_cats(gi);
     geo_name     = prof.name{geo_idx};
-    geo_grid_name = se_looks_like_geo(prof, geo_idx, T);
+    geo_grid_name = prof.geo_grid{geo_idx};
     is_states_geo = strcmp(geo_grid_name, 'us-states');
 
     for oi = 1:numel(other_cats)
@@ -2994,17 +3000,15 @@ end
 % ── cg_panel_code ────────────────────────────────────────────────────────────
 function code = cg_panel_code(~, ~, panel)
 %CG_PANEL_CODE  Recipe code for panel (wide-year) stacked-area and grouped
-%   time-series figures.  Uses DataExplorer.m local functions via eval.
+%   time-series figures.  Uses standalone de_* library functions.
 code = '';
 if ~isstruct(panel) || ~panel.is_panel, return; end
 L = {};
 L{end+1} = '% Panel: stacked-area and grouped time series';
-L{end+1} = '% (se_plot_panel_totals, se_plot_categorical_drilldown require DataExplorer.m)';
-L{end+1} = 'panel_ = se_detect_panel(T, prof);';
-L{end+1} = 'if panel_.is_panel';
-L{end+1} = '    se_plot_panel_totals(T, prof, panel_);';
-L{end+1} = '    sel_ = se_select_columns(T, prof, 8);';
-L{end+1} = '    se_plot_categorical_drilldown(T, prof, sel_);';
+L{end+1} = 'if prof.panel.is_panel';
+L{end+1} = '    de_plot_panel_totals(T, prof, prof.panel);';
+L{end+1} = '    sel_ = de_select_columns(T, prof, 8);';
+L{end+1} = '    de_plot_categorical_drilldown(T, prof, sel_);';
 L{end+1} = 'end';
 code = strjoin(L, newline);
 end
@@ -3040,7 +3044,7 @@ if ~isempty(options.Columns)
     end
     sel = sel(~prof.skip(sel));
 else
-    sel = se_select_columns(T, prof, options.MaxVars);
+    sel = de_select_columns(T, prof, options.MaxVars);
 end
 
 load_code   = cg_load_code(filepath, T);
@@ -3732,7 +3736,7 @@ title(tl, se_src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
 se_plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name);
 
 % ── Stacked % area chart (fires when a total code like 'US' exists + wide years) ──
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 TOTAL_CODES_ST = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
 total_code_found = '';
 for tc__ = TOTAL_CODES_ST
@@ -3838,7 +3842,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 
 % Wide-format year columns (x####): pivot to long and create one animated
 % choropleth with a year slider rather than one static figure per year column.
-[wide_yr_idxs, wide_yr_vals] = se_detect_wide_years(prof);
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
     fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);

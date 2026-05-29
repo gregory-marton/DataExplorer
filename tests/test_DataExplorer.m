@@ -483,6 +483,23 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must contain de_countrybins for ISO-2 country codes');
         end
 
+        function test_de_profile_adds_panel_and_geo_grid(testCase)
+            % de_profile must populate prof.panel (wide-year detection) and
+            % prof.geo_grid (per-column geo detection) fields.
+            StateCode = categorical({'CA';'TX';'NY';'FL';'OH'});
+            T = table(StateCode);
+            for yr = 1960:1965
+                T.(sprintf('x%d', yr)) = rand(5, 1);
+            end
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(isfield(prof, 'panel'), 'prof.panel missing from de_profile output');
+            testCase.verifyTrue(isfield(prof, 'geo_grid'), 'prof.geo_grid missing from de_profile output');
+            testCase.verifyTrue(prof.panel.is_panel, ...
+                'wide-year columns + categorical with >2 levels should be detected as a panel');
+            testCase.verifyEqual(numel(prof.geo_grid), width(T), ...
+                'prof.geo_grid must have one cell per column');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -976,15 +993,21 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
         % ── LLCP ASC (fixed-width BRFSS)  (not yet baselined) ─────────────
         function test_asc_llcp(testCase)
-            f = fullfile(testCase.EXAMPLES_DIR, 'LLCP2024.ASC');
-            if ~exist(f, 'file'), testCase.assumeFail('LLCP ASC not found'); end
+            asc_f = fullfile(testCase.EXAMPLES_DIR, 'LLCP2024.ASC');
+            zip_f = fullfile(testCase.EXAMPLES_DIR, 'LLCP2024ASC.zip');
+            if exist(asc_f, 'file')
+                f = asc_f;
+            elseif exist(zip_f, 'file')
+                f = zip_f;  % DataExplorer handles zip → ASC extraction internally
+            else
+                testCase.assumeFail('LLCP ASC not found (and zip not found)');
+                return
+            end
 
             old_vis = get(0, 'DefaultFigureVisible');
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            % BRFSS fixed-width; load_text will attempt delimiter detection.
-            % MaxRows kept small: the file is very large.
             T = DataExplorer(f, 'MaxRows', 500);
 
             testCase.verifyGreaterThan(height(T), 0);

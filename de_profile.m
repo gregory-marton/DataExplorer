@@ -13,6 +13,11 @@ function [T, prof] = de_profile(T, missingStrings)
 %     prof.skip        logical: true for ID-like or >80%-missing columns
 %     prof.skip_reason string reason for skip flag
 %     prof.orig_class  MATLAB class before conversion ("text" if originally string)
+%     prof.geo_grid    1×ncol cell array — geo grid name string for geo-like
+%                      categorical columns, '' everywhere else
+%     prof.panel       struct — panel detection result (see de_detect_wide_years)
+%                      fields: is_panel, grouping_idxs, geo_idx, non_geo_idxs,
+%                              description, wide_yr_idxs, wide_yr_vals
 %
 %   String columns ≥70% parseable as numbers are converted to double.
 %   Values matching missingStrings are recoded as NaN / <undefined>.
@@ -35,6 +40,7 @@ prof.type        = repmat("unknown", 1, ncol);
 prof.orig_class  = repmat("", 1, ncol);
 prof.nmissing    = zeros(1, ncol);
 prof.nunique     = zeros(1, ncol);
+prof.geo_grid    = repmat({''}, 1, ncol);
 
 for k = 1:ncol
     col   = T.(prof.name{k});
@@ -114,4 +120,47 @@ for k = 1:ncol
         prof.skip_reason(k) = "all values unique (ID column)";
     end
 end
+
+% ── Geo detection (per categorical column) ───────────────────────────────────
+cat_cols = find(prof.type == "categorical" & ~prof.skip);
+for k = cat_cols
+    g = de_looks_like_geo(prof, k, T);
+    if ~isempty(g)
+        prof.geo_grid{k} = g;
+    end
+end
+
+% ── Panel detection ───────────────────────────────────────────────────────────
+[wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
+panel.is_panel      = false;
+panel.grouping_idxs = [];
+panel.geo_idx       = [];
+panel.non_geo_idxs  = [];
+panel.description   = '';
+panel.wide_yr_idxs  = wide_yr_idxs;
+panel.wide_yr_vals  = wide_yr_vals;
+
+cat_all = find(prof.type == "categorical" & ~prof.skip);
+if ~isempty(wide_yr_idxs) && ~isempty(cat_all) && any(prof.nunique(cat_all) > 2)
+    panel.is_panel      = true;
+    panel.grouping_idxs = cat_all;
+
+    for k = 1:numel(cat_all)
+        if ~isempty(prof.geo_grid{cat_all(k)})
+            panel.geo_idx = cat_all(k);
+            break
+        end
+    end
+    panel.non_geo_idxs = cat_all(~ismember(cat_all, panel.geo_idx));
+
+    parts = cell(1, numel(cat_all)+1);
+    for k = 1:numel(cat_all)
+        ci = cat_all(k);
+        parts{k} = sprintf('%s (%d levels)', prof.name{ci}, prof.nunique(ci));
+    end
+    yr_min = min(wide_yr_vals);  yr_max = max(wide_yr_vals);
+    parts{end} = sprintf('%d years (%g%s%g)', numel(wide_yr_vals), yr_min, char(8211), yr_max);
+    panel.description = strjoin(parts, [' ' char(215) ' ']);
+end
+prof.panel = panel;
 end
