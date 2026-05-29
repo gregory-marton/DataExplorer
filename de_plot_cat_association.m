@@ -69,6 +69,9 @@ for i = 1:nc
         end
     end
 end
+nm_dc = names; vm_dc = V_mat;
+dcm = datacursormode(fig);
+dcm.UpdateFcn = @(~,ev) ca_vmat_tip(ev, nm_dc, vm_dc);
 end
 
 
@@ -115,18 +118,23 @@ for k = 1:ng
     ns = min(MAX_B, numel(ls));
     no = numel(ls) - ns;
     if no > 0
-        cp = [cs(1:ns); sum(cs(ns+1:end))];
-        lp = [cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false); ...
-              {sprintf('Other (%d)', no)}];
+        cp      = [cs(1:ns); sum(cs(ns+1:end))];
+        lp      = [cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false); ...
+                   {sprintf('Other (%d)', no)}];
+        full_lp = [ls(1:ns); {sprintf('Other (%d categories)', no)}];
     else
-        cp = cs(1:ns);
-        lp = cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false);
+        cp      = cs(1:ns);
+        lp      = cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false);
+        full_lp = ls(1:ns);
     end
     tot = sum(cp);
     pct = 100 * cp / tot;
     cum = cumsum(pct);
     ax  = subplot(nrow, ncol, k, 'Parent', fig);
-    bar(ax, 1:numel(cp), pct, 'FaceColor', [0.25 0.55 0.80], 'EdgeColor', 'none');
+    b   = bar(ax, 1:numel(cp), pct, 'FaceColor', [0.25 0.55 0.80], 'EdgeColor', 'none');
+    b.DataTipTemplate.DataTipRows(1).Label = 'Category';
+    b.DataTipTemplate.DataTipRows(1).Value = full_lp;
+    b.DataTipTemplate.DataTipRows(2).Label = '%';
     hold(ax, 'on');
     yyaxis(ax, 'right');
     plot(ax, 1:numel(cum), cum, 'r-o', 'MarkerSize', 4);
@@ -172,9 +180,15 @@ ax = axes(fig);
 bh = barh(ax, 1:ng, P(gord,:), 'stacked');
 colors = ca_qualitative_colors(numel(top_v));
 if n_oth > 0, colors(end+1,:) = [0.70 0.70 0.70]; end
+full_gcats_s = gcats(gord);
+full_slabs   = top_v;
+if n_oth > 0, full_slabs{end+1} = sprintf('Other (%d categories)', n_oth); end
 for vi = 1:numel(bh)
     bh(vi).FaceColor = colors(vi,:);
     bh(vi).EdgeColor = 'none';
+    bh(vi).DataTipTemplate.DataTipRows(1).Label = full_slabs{vi};
+    bh(vi).DataTipTemplate.DataTipRows(2).Label = 'Group';
+    bh(vi).DataTipTemplate.DataTipRows(2).Value = full_gcats_s;
 end
 set(ax, 'YTick', 1:ng, ...
     'YTickLabel', cellfun(@(s) ca_trunc(s,18), gcats(gord), 'UniformOutput', false), ...
@@ -229,8 +243,29 @@ else
 end
 title(ax, {ftitle, sub}, 'FontSize', 9, 'Interpreter', 'none');
 box(ax, 'off');
+sg_dc = show_g; sv_dc = show_v; p_dc = P;
+dcm = datacursormode(fig);
+dcm.UpdateFcn = @(~,ev) ca_heatmap_tip(ev, sg_dc, sv_dc, p_dc);
 end
 
+
+function txt = ca_vmat_tip(ev, names, V_mat)
+pos = ev.Position;
+ci = max(1, min(numel(names), round(pos(1))));
+ri = max(1, min(numel(names), round(pos(2))));
+if ri == ci
+    txt = {names{ri}, 'Same column'};
+else
+    txt = {names{ri}, names{ci}, sprintf('V = %.3f', V_mat(ri,ci))};
+end
+end
+
+function txt = ca_heatmap_tip(ev, row_names, col_names, P)
+pos = ev.Position;
+ci = max(1, min(numel(col_names), round(pos(1))));
+ri = max(1, min(numel(row_names), round(pos(2))));
+txt = {col_names{ci}, row_names{ri}, sprintf('P = %.3f', P(ri,ci))};
+end
 
 function s = ca_trunc(s, n)
 if numel(s) > n, s = [s(1:n-1) '~']; end
