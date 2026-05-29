@@ -500,6 +500,74 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'prof.geo_grid must have one cell per column');
         end
 
+        function test_de_plot_pairplot_produces_figure(testCase)
+            % de_plot_pairplot must create a figure whose Name contains 'Pairplot'.
+            Borough      = categorical(repmat({'Manhattan';'Brooklyn';'Queens'}, 10, 1));
+            ComplainType = categorical(repmat({'Noise';'Graffiti';'Heat'}, 10, 1));
+            T = table(Borough, ComplainType);
+            [T, prof] = de_profile(T);
+            sel = de_select_columns(T, prof, 4);
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            de_plot_pairplot(T, prof, sel);
+            figs = findall(0, 'Type', 'figure');
+            names = arrayfun(@(f) get(f,'Name'), figs, 'UniformOutput', false);
+            testCase.verifyTrue(any(contains(names, 'Pairplot')), ...
+                'de_plot_pairplot must create a figure with "Pairplot" in its Name');
+        end
+
+        function test_recipe_311_like_has_pairplot(testCase)
+            % A categorical-heavy (311-like) dataset: recipe must contain de_plot_pairplot.
+            Borough      = categorical(repmat({'Manhattan';'Brooklyn';'Queens';'Bronx'}, 10, 1));
+            ComplainType = categorical(repmat({'Noise';'Graffiti';'Heat';'Rodent'}, 10, 1));
+            Status       = categorical(repmat({'Open';'Closed'}, 20, 1));
+            T = table(Borough, ComplainType, Status);
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl2 = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'DataExplorer must write a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_plot_pairplot'), ...
+                'Recipe must contain de_plot_pairplot for categorical-heavy tables');
+        end
+
+        function test_recipe_prod_like_has_pairplot_and_panel(testCase)
+            % A panel dataset (Prod-like): recipe must contain de_plot_pairplot
+            % AND a panel section with de_plot_panel_totals.
+            states = categorical(repmat({'CA';'TX';'NY';'FL';'OH'}, 6, 1));
+            msn    = categorical(repmat({'TETCB';'CLTCB';'NGTCB';'EMTCB';'WWTCB';'SOTCB'}, 5, 1));
+            T = table(states, msn);
+            for yr = 1960:1965
+                T.(sprintf('x%d', yr)) = rand(30, 1);
+            end
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl2 = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+
+            DataExplorer(tmp);
+
+            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
+            testCase.assertNotEmpty(hits, 'DataExplorer must write a recipe file');
+            [~, newest] = max([hits.datenum]);
+            recipe_text = fileread(fullfile(hits(newest).folder, hits(newest).name));
+            testCase.verifyTrue(contains(recipe_text, 'de_plot_pairplot'), ...
+                'Recipe must contain de_plot_pairplot even for panel datasets');
+            testCase.verifyTrue(contains(recipe_text, 'de_plot_panel_totals'), ...
+                'Recipe must contain de_plot_panel_totals for panel datasets');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
