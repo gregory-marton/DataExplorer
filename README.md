@@ -1,16 +1,23 @@
 # DataExplorer
 
 A MATLAB utility for rapid, forgiving exploration of mixed-type tabular datasets.
-Point it at a file and it loads, profiles, and visualises — no configuration required.
+Point it at a file and it loads, profiles, and visualises — no
+configuration required. It also encourages and attempts to support low-code
+tinkering from there by showing the recipes that it uses and providing
+a toolbox of quick visualization functions.
 
 ## Quick start
 
 ```matlab
+Just open DataExplorer and click Run. Navigate to your file, and
+examine the results. Make sure to examine the recipe that got printed
+to console for how to reproduce those results yourself.
+
 % Add the folder to your path, then:
 T = DataExplorer('mydata.csv')
 T = DataExplorer('survey.xlsx')
 T = DataExplorer('climate.nc')
-T = DataExplorer('archive.zip')   % picks the right file inside automatically
+T = DataExplorer('archive.zip')   % prompts to pick a file if the ZIP contains several
 
 % Or explore a table you already have:
 T = DataExplorer(T_existing)
