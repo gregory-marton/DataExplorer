@@ -15,18 +15,25 @@ arguments
     options.VThresh   (1,1) double = 0.10
 end
 
-MAX_LABEL         = 25;
-MAX_PAIRS         = options.MaxPairs;
-V_THRESH          = options.VThresh;
-PARETO_MAX_GROUPS = 6;
+MAX_LABEL          = 25;
+MAX_PAIRS          = options.MaxPairs;
+V_THRESH           = options.VThresh;
+PARETO_MAX_GROUPS  = 6;
 STACKED_MAX_GROUPS = 15;
-V_ANNOTATE_THRESH = 0.05;
+V_ANNOTATE_THRESH  = 0.05;
+GLYPH_MAX_COLS     = 10;
 
 cat_mask = (prof.type == "categorical" | prof.type == "logical") & ~prof.skip;
 cat_idx  = find(cat_mask);
 if numel(cat_idx) < 2, return; end
 names = prof.name(cat_idx);
 nc    = numel(cat_idx);
+
+col_coverage = zeros(nc, 1);
+for k = 1:nc
+    xk = categorical(T.(names{k}));
+    col_coverage(k) = sum(~isundefined(xk)) / height(T);
+end
 
 V_mat = zeros(nc, nc);
 P_mat = ones(nc, nc);
@@ -39,7 +46,7 @@ for i = 1:nc
 end
 
 src = ca_source_prefix(prof);
-ca_plot_v_matrix(V_mat, P_mat, names, src, MAX_LABEL, V_ANNOTATE_THRESH);
+ca_plot_v_matrix(V_mat, P_mat, col_coverage, names, src, MAX_LABEL, V_ANNOTATE_THRESH, GLYPH_MAX_COLS);
 
 pairs = zeros(nc*(nc-1)/2, 3);
 np = 0;
@@ -63,7 +70,7 @@ end
 end
 
 
-function ca_plot_v_matrix(V_mat, P_mat, names, src, max_lbl, v_annotate)
+function ca_plot_v_matrix(V_mat, P_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
 nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
@@ -79,22 +86,24 @@ set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
 sub = "Bias-Corrected Cramer's V";
 if ~isempty(src), sub = sub + "  |  " + src; end
 title(ax, {"Association Strength", sub}, 'FontSize', 10);
+draw_glyphs = nc <= glyph_max_cols;
 for i = 1:nc
     for j = 1:nc
         if i == j, continue; end
         if i < j
             if V_mat(i,j) >= v_annotate
-                text(ax, j, i, sprintf('%.2f', V_mat(i,j)), ...
-                    'HorizontalAlignment', 'center', 'FontSize', 7, ...
+                text(ax, j, i, {sprintf('%.2f', V_mat(i,j)), ca_fmt_p(P_mat(i,j))}, ...
+                    'HorizontalAlignment', 'center', 'FontSize', 6, ...
                     'Color', ca_label_color(V_mat(i,j)));
             end
-        else
-            stars = ca_sig_stars(P_mat(i,j));
-            if ~isempty(stars)
-                text(ax, j, i, stars, ...
-                    'HorizontalAlignment', 'center', 'FontSize', 8, ...
-                    'Color', ca_label_color(V_mat(i,j)));
-            end
+        elseif draw_glyphs
+            fh = col_cov(j);  % horizontal: coverage of column variable
+            fv = col_cov(i);  % vertical:   coverage of row variable
+            xl = j-0.5; xm = xl+fh; yt = i-0.5; ym = i+0.5-fv;
+            ca_fill_rect(ax, xm, yt, 1-fh, 1-fv, [1.00 1.00 1.00]);  % neither
+            ca_fill_rect(ax, xl, yt,   fh, 1-fv, [0.96 0.85 0.72]);  % col only
+            ca_fill_rect(ax, xm, ym, 1-fh,   fv, [0.72 0.85 0.96]);  % row only
+            ca_fill_rect(ax, xl, ym,   fh,   fv, [0.25 0.50 0.72]);  % both
         end
     end
 end
@@ -296,8 +305,17 @@ ri = max(1, min(numel(row_names), round(pos(2))));
 txt = {col_names{ci}, row_names{ri}, sprintf('P = %.3f', P(ri,ci))};
 end
 
-function s = ca_sig_stars(p)
-if p < 0.001, s = '***'; elseif p < 0.01, s = '**'; elseif p < 0.05, s = '*'; else, s = ''; end
+function s = ca_fmt_p(p)
+if p < 0.001
+    s = 'p<.001';
+else
+    s = strrep(sprintf('p=%.3f', p), '0.', '.');
+end
+end
+
+function ca_fill_rect(ax, xl, yt, w, h, clr)
+if w <= 0 || h <= 0, return; end
+patch(ax, xl+[0 w w 0 0], yt+[0 0 h h 0], clr, 'EdgeColor', 'none');
 end
 
 function s = ca_trunc(s, n)
