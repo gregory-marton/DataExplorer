@@ -7,10 +7,10 @@ M_FILES = sorted(f for f in ROOT.glob("*.m") if not f.name.startswith("."))
 
 
 @pytest.mark.parametrize("mfile", M_FILES, ids=[f.name for f in M_FILES])
-def test_checkcode_clean(mfile):
+def test_checkcode_clean(mfile, matlab_bin):
     """checkcode must report zero messages for every .m file at the repo root."""
     rel = mfile.relative_to(ROOT)
-    result = run_matlab(f"checkcode('{rel}', '-id')")
+    result = run_matlab(f"checkcode('{rel}', '-id')", matlab=matlab_bin)
     assert result.returncode == 0, (
         f"MATLAB exited {result.returncode}:\n{result.stderr.strip()}"
     )

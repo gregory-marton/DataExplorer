@@ -151,7 +151,8 @@ if ischar(source) || isstring(source)
                 panel_vi_  = se_detect_panel(T_vi_, prof_vi_);
                 T = T_vi_; prof = prof_vi_;
                 [~, recipe_vi_] = se_assemble_recipe(string(source), T, prof, panel_vi_, opts_vi_);
-                se_eval_recipe_plots(recipe_vi_);
+                idx_ = strfind(recipe_vi_, '%% === Overview ===');
+                if ~isempty(idx_), eval(recipe_vi_(idx_(1):end)); else, eval(recipe_vi_); end
             end
             return
         end
@@ -206,7 +207,8 @@ if ischar(source) || isstring(source)
     src_str_ = string(source);
 end
 [~, recipe_text] = se_assemble_recipe(src_str_, T, prof, panel, options);
-se_eval_recipe_plots(recipe_text);
+idx_ = strfind(recipe_text, '%% === Overview ===');
+if ~isempty(idx_), eval(recipe_text(idx_(1):end)); else, eval(recipe_text); end
 
 end % ── DataExplorer ──────────────────────────────────────────────────────
 
@@ -3097,22 +3099,6 @@ end
 fprintf(fid, '%s\n', recipe_text);
 fclose(fid);
 se_print_recipe(recipe_text, sprintf('%s_recipe.m', bname_safe));
-end
-
-
-% ── se_eval_recipe_plots ─────────────────────────────────────────────────────
-function se_eval_recipe_plots(recipe_text)
-%SE_EVAL_RECIPE_PLOTS  Eval only the plot sections of a recipe string.
-%   Skips the Load and Clean sections — T and prof are already in the caller's
-%   workspace.  Falls back to eval-ing the whole recipe if the Overview marker
-%   is absent (shouldn't happen in normal use).
-if isempty(recipe_text), return; end
-idx = strfind(recipe_text, '%% === Overview ===');
-if ~isempty(idx)
-    eval(recipe_text(idx(1):end));
-else
-    eval(recipe_text);
-end
 end
 
 
