@@ -55,7 +55,7 @@ blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = "Cramer's V";
-short = cellfun(@(s) ca_trunc(s,18), names, 'UniformOutput', false);
+short = cellfun(@(s) ca_trunc(s,36), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
     'XTickLabelRotation', 40, 'FontSize', 8, 'TickLength', [0 0]);
@@ -89,7 +89,7 @@ else
     grp = y; gname = yname; gcats = cy; ng = ny;
     val = x; vname = xname; vcats = cx;
 end
-ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,24), ca_trunc(vname,24), V);
+ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,48), ca_trunc(vname,48), V);
 fig    = figure('Name', ca_fig_name(ftitle, src));
 if ng <= 6
     ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle);
@@ -119,12 +119,12 @@ for k = 1:ng
     no = numel(ls) - ns;
     if no > 0
         cp      = [cs(1:ns); sum(cs(ns+1:end))];
-        lp      = [cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false); ...
+        lp      = [cellfun(@(s) ca_trunc(s,28), ls(1:ns), 'UniformOutput', false); ...
                    {sprintf('Other (%d)', no)}];
         full_lp = [ls(1:ns); {sprintf('Other (%d categories)', no)}];
     else
         cp      = cs(1:ns);
-        lp      = cellfun(@(s) ca_trunc(s,14), ls(1:ns), 'UniformOutput', false);
+        lp      = cellfun(@(s) ca_trunc(s,28), ls(1:ns), 'UniformOutput', false);
         full_lp = ls(1:ns);
     end
     tot = sum(cp);
@@ -144,7 +144,7 @@ for k = 1:ng
     ylabel(ax, '%', 'FontSize', 7);
     set(ax, 'XTick', 1:numel(cp), 'XTickLabel', lp, ...
         'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
-    title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,12), ca_trunc(gcats{k},12), tot), ...
+    title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,24), ca_trunc(gcats{k},24), tot), ...
         'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
 end
@@ -172,7 +172,7 @@ for gi = 1:ng
         P(gi,end) = max(0, 1 - sum(P(gi,1:end-1)));
     end
 end
-slabs = cellfun(@(s) ca_trunc(s,16), top_v, 'UniformOutput', false);
+slabs = cellfun(@(s) ca_trunc(s,32), top_v, 'UniformOutput', false);
 if n_oth > 0, slabs{end+1} = sprintf('Other (%d)', n_oth); end
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
 [~,gord] = sort(gn, 'descend');
@@ -191,9 +191,9 @@ for vi = 1:numel(bh)
     bh(vi).DataTipTemplate.DataTipRows(2).Value = full_gcats_s;
 end
 set(ax, 'YTick', 1:ng, ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,18), gcats(gord), 'UniformOutput', false), ...
+    'YTickLabel', cellfun(@(s) ca_trunc(s,36), gcats(gord), 'UniformOutput', false), ...
     'FontSize', 8, 'TickLength', [0 0]);
-ylabel(ax, ca_trunc(gname, 24), 'FontSize', 9);
+ylabel(ax, ca_trunc(gname, 48), 'FontSize', 9);
 xlabel(ax, 'Proportion', 'FontSize', 9);
 title(ax, ftitle, 'FontSize', 10, 'Interpreter', 'none');
 legend(ax, slabs, 'Location', 'eastoutside', 'FontSize', 7, 'Interpreter', 'none');
@@ -231,10 +231,10 @@ imagesc(ax, P, [0 1]);
 blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
-cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,16), ca_trunc(vname,16));
+cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,32), ca_trunc(vname,32));
 set(ax, 'XTick', 1:nc, 'YTick', 1:nr, ...
-    'XTickLabel', cellfun(@(s) ca_trunc(s,14), show_v, 'UniformOutput', false), ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,14), show_g, 'UniformOutput', false), ...
+    'XTickLabel', cellfun(@(s) ca_trunc(s,28), show_v, 'UniformOutput', false), ...
+    'YTickLabel', cellfun(@(s) ca_trunc(s,28), show_g, 'UniformOutput', false), ...
     'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
