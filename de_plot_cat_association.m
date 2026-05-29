@@ -61,7 +61,8 @@ short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
     'XTickLabelRotation', 40, 'FontSize', 8, 'TickLength', [0 0]);
-title(ax, "Categorical associations (Cramer's V)", 'FontSize', 10);
+title(ax, {"Categorical associations (Cramer's V)", ...
+    "0 = independent,  1 = fully associated"}, 'FontSize', 10);
 for i = 1:nc
     for j = 1:nc
         if i ~= j && V_mat(i,j) >= 0.05

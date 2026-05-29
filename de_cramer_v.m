@@ -6,8 +6,8 @@ function V = de_cramer_v(x, y)
 %   Returns V in [0, 1]: 0 = no association, 1 = perfect association.
 %   Does not require any toolbox.  Missing (undefined) rows are excluded.
 %
-%   Formula: V = sqrt(chi2 / (N * min(r-1, c-1)))
-%   where r, c are the number of levels in x, y respectively.
+%   Uses the bias-corrected formula (Bergsma & Wicher 2013) which adjusts
+%   for inflated V in small samples or high-cardinality tables.
 
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
@@ -59,6 +59,15 @@ end
 
 E    = (row_sum * col_sum) / N;
 chi2 = sum(sum((O - E).^2 ./ E));
-V    = sqrt(chi2 / (N * (min(r_eff, c_eff) - 1)));
-V    = min(V, 1);
+
+% Bias-corrected Cramer's V (Bergsma & Wicher 2013)
+phi2_bc = max(0, chi2/N - (r_eff-1)*(c_eff-1)/(N-1));
+r_tilde = r_eff - (r_eff-1)^2/(N-1);
+c_tilde = c_eff - (c_eff-1)^2/(N-1);
+denom   = min(r_tilde - 1, c_tilde - 1);
+if denom <= 0
+    V = 0;
+    return
+end
+V = min(sqrt(phi2_bc / denom), 1);
 end
