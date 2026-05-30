@@ -116,7 +116,7 @@ for i = 1:nc
         if i < j
             if V_mat(i,j) >= v_annotate
                 text(ax, j, i, {sprintf('%.2f', V_mat(i,j)), ca_fmt_p(P_mat(i,j))}, ...
-                    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, ...
+                    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, ...
                     'Color', ca_label_color(V_mat(i,j)));
             end
         elseif draw_glyphs
@@ -381,8 +381,9 @@ for row = 1:ng
         seg_w = P_row(si);
         if seg_w <= 0, x = x + seg_w; continue; end
 
-        patch(ax, x + [0 seg_w seg_w 0], row + [-0.4 -0.4 0.4 0.4], ...
+        ph = patch(ax, x + [0 seg_w seg_w 0], row + [-0.4 -0.4 0.4 0.4], ...
               clrs(si,:), 'EdgeColor', 'none');
+        ph.UserData = {cat_names{si}, cp(si), gcats{gi}};
 
         max_ch = floor(seg_w * 75);
         if max_ch >= 4
@@ -422,6 +423,8 @@ title(ax, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
 xlim(ax, [0 1]);
 ylim(ax, [0.5, ng + 0.5]);
 box(ax, 'off');
+dcm = datacursormode(fig);
+dcm.UpdateFcn = @(~, ev) ca_stacked_tip(ev);
 end
 
 
@@ -616,6 +619,15 @@ if ri == ci
     txt = {names{ri}, 'Same column'};
 else
     txt = {names{ri}, names{ci}, sprintf('V = %.3f', V_mat(ri,ci))};
+end
+end
+
+function txt = ca_stacked_tip(ev)
+src = ev.Target;
+if isprop(src, 'UserData') && iscell(src.UserData) && numel(src.UserData) == 3
+    txt = {src.UserData{1}, sprintf('n = %d', src.UserData{2}), src.UserData{3}};
+else
+    txt = {'segment'};
 end
 end
 
