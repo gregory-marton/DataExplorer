@@ -26,7 +26,7 @@ MAX_LABEL          = 25;
 MAX_PAIRS          = options.MaxPairs;
 V_THRESH           = options.VThresh;
 PARETO_MAX_GROUPS  = 6;
-STACKED_MAX_GROUPS = 15;
+STACKED_MAX_GROUPS = 20;  % matches MAX_S in ca_cond_heatmap — use proportion whenever all groups fit without "Other"
 V_ANNOTATE_THRESH  = 0.05;
 GLYPH_MAX_COLS     = 10;
 src = ca_source_prefix(prof);
@@ -169,16 +169,16 @@ end
 win_name = sprintf('%s: %s × %s', plot_type, ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
 fig = figure('Name', ca_fig_name(win_name, src));
 if strcmp(plot_type, 'Pareto')
-    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
+    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, src, max_lbl);
 elseif strcmp(plot_type, 'Proportion')
-    ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl);
+    ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, src, max_lbl);
 else
-    ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl);
+    ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, src, max_lbl);
 end
 end
 
 
-function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl)
+function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, src, max_lbl)
 MAX_B     = 15;
 FONT_BASE = 9;
 ng     = numel(gcats);
@@ -213,7 +213,11 @@ for k = 1:ng
     bars_k(k) = max(1, sum(cn_k > 0) + has_oth_k);
 end
 
-sgtitle(fig, ftitle, 'FontSize', FONT_BASE+1, 'Interpreter', 'none');
+if isempty(src)
+    sgtitle(fig, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+else
+    sgtitle(fig, {ftitle, src}, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+end
 
 axs     = gobjects(ng, 1);
 cp_list = cell(ng, 1);
@@ -299,7 +303,7 @@ for k = 1:ng
     ax.YAxis(1).FontSize   = FONT_BASE+1;
     ax.YAxis(1).FontWeight = 'bold';
 
-    title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot), ...
+    title(ax, {' ', sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot)}, ...
         'FontSize', FONT_BASE+1, 'Interpreter', 'none');
     box(ax, 'off');
 
@@ -339,7 +343,7 @@ end
 end
 
 
-function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl)
+function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, src, max_lbl)
 THRESH    = 0.03;   % include a val category if ≥3% of any major group
 FONT_BASE = 9;
 ng = numel(gcats);
@@ -427,7 +431,11 @@ set(ax, 'YTick', 1:ng, 'YTickLabel', ylabels, ...
     'FontSize', FONT_BASE+1, 'TickLength', [0 0]);
 ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', FONT_BASE+2);
 xlabel(ax, 'Proportion', 'FontSize', FONT_BASE+2);
-title(ax, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+if isempty(src)
+    title(ax, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+else
+    title(ax, {ftitle, src}, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+end
 xlim(ax, [0 1]);
 ylim(ax, [0.5, ng + 0.5]);
 box(ax, 'off');
@@ -436,7 +444,7 @@ dcm.UpdateFcn = @(~, ev) ca_stacked_tip(ev);
 end
 
 
-function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl)
+function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, src, max_lbl)
 FONT_BASE  = 9;
 MAX_S      = 20;
 CLR_OTHER  = [0.82 0.82 0.82];
@@ -529,12 +537,18 @@ y_labels{yi} = 'Total';
 set(ax, 'XTick', x_ticks, 'YTick', y_ticks, ...
     'XTickLabel', x_labels, 'YTickLabel', y_labels, ...
     'XTickLabelRotation', 40, 'FontSize', FONT_BASE-2, 'TickLength', [0 0]);
+sub = '';
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
-else
-    sub = '';
 end
-title(ax, {ftitle, sub}, 'FontSize', FONT_BASE, 'Interpreter', 'none');
+if ~isempty(src)
+    if isempty(sub), sub = src; else, sub = [sub '  |  ' src]; end
+end
+if isempty(sub)
+    title(ax, ftitle, 'FontSize', FONT_BASE, 'Interpreter', 'none');
+else
+    title(ax, {ftitle, sub}, 'FontSize', FONT_BASE, 'Interpreter', 'none');
+end
 box(ax, 'off');
 
 dark_txt = [0.15 0.15 0.15];
@@ -613,6 +627,14 @@ for ri = 1:nr
     end
 end
 
+gclr = [0.35 0.35 0.35];
+for ry = 0.5 : nr_full + 0.5
+    line(ax, [0.5 nc_full+0.5], [ry ry], 'Color', gclr, 'LineWidth', 0.4);
+end
+for cx = 0.5 : nc_full + 0.5
+    line(ax, [cx cx], [0.5 nr_full+0.5], 'Color', gclr, 'LineWidth', 0.4);
+end
+
 sg_dc = show_g; sv_dc = show_v; p_dc = P;
 dcm = datacursormode(fig);
 dcm.UpdateFcn = @(~,ev) ca_heatmap_tip(ev, sg_dc, sv_dc, p_dc);
@@ -667,8 +689,8 @@ function s = ca_trunc(s, n)
 if numel(s) > n, s = [s(1:n-1) '~']; end
 end
 
-function name = ca_fig_name(label, src)
-if isempty(src), name = label; else, name = sprintf('%s: %s', src, label); end
+function name = ca_fig_name(label, ~)
+name = label;
 end
 
 function prefix = ca_source_prefix(prof)
