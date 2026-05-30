@@ -186,11 +186,24 @@ GAP_H  = 0.08;
 GAP_V  = 0.16;
 plot_h = (1 - PAD_T - PAD_B - (nrow-1)*GAP_V) / nrow;
 
-% Group sizes drive layout widths AND per-subplot bar count.
-% bars_k(k) = round(MAX_B * gn(k)/max(gn)) so the largest group gets MAX_B
-% bars and physical bar width is consistent across all subplots.
-gn     = arrayfun(@(c) sum(grp == c{1}), gcats);
-bars_k = max(1, round(MAX_B * gn / max(gn)));
+% Global top-MAX_B val categories by total count across all groups.
+% Each subplot shows whichever of these appear in its group (non-zero),
+% sorted descending, plus a local "Other" bar for the remaining tail.
+% bars_k(k) drives subplot width so real-estate reflects data density.
+vcats_all = categories(val);
+all_cn    = arrayfun(@(c) sum(val == c{1}), vcats_all);
+[~, global_ord] = sort(all_cn, 'descend');
+ns_global   = min(MAX_B, sum(all_cn > 0));
+global_cats = vcats_all(global_ord(1:ns_global));
+gc_str      = string(global_cats);
+
+bars_k = ones(ng, 1);
+for k = 1:ng
+    sv_k      = val(grp == gcats{k});
+    cn_k      = arrayfun(@(c) sum(sv_k == c{1}), global_cats);
+    has_oth_k = any(~ismember(string(sv_k), gc_str));
+    bars_k(k) = max(1, sum(cn_k > 0) + has_oth_k);
+end
 
 sgtitle(fig, ftitle, 'FontSize', FONT_BASE+1, 'Interpreter', 'none');
 
@@ -203,24 +216,27 @@ for k = 1:ng
     mask = (grp == gcats{k});
     sv   = val(mask);
     if isempty(sv), continue; end
-    vc   = categories(sv);
-    cn   = arrayfun(@(c) sum(sv == c{1}), vc);
-    keep = cn > 0;
-    vc   = vc(keep);
-    cn   = cn(keep);
+    % Show globally-selected categories present in this group, sorted desc
+    cn_k  = arrayfun(@(c) sum(sv == c{1}), global_cats);
+    keep  = cn_k > 0;
+    ls    = global_cats(keep);
+    cn    = cn_k(keep);
     [cs, ord] = sort(cn, 'descend');
-    ls = vc(ord);
-    ns = min(bars_k(k), numel(ls));
-    no = numel(ls) - ns;
-    if no > 0
-        cp      = [cs(1:ns); sum(cs(ns+1:end))];
-        lp      = [cellfun(@(s) ca_trunc(s,max_lbl), ls(1:ns), 'UniformOutput', false); ...
-                   {sprintf('Other (%d)', no)}];
-        full_lp = [ls(1:ns); {sprintf('Other (%d categories)', no)}];
+    ls    = ls(ord);
+    % Other = local observations outside the global top-MAX_B
+    sv_str    = string(sv);
+    in_global = ismember(sv_str, gc_str);
+    other_cnt = sum(~in_global);
+    other_n_t = numel(unique(sv_str(~in_global)));
+    if other_cnt > 0
+        cp      = [cs; other_cnt];
+        lp      = [cellfun(@(s) ca_trunc(s,max_lbl), ls, 'UniformOutput', false); ...
+                   {sprintf('Other (%d)', other_n_t)}];
+        full_lp = [ls; {sprintf('Other (%d categories)', other_n_t)}];
     else
-        cp      = cs(1:ns);
-        lp      = cellfun(@(s) ca_trunc(s,max_lbl), ls(1:ns), 'UniformOutput', false);
-        full_lp = ls(1:ns);
+        cp      = cs;
+        lp      = cellfun(@(s) ca_trunc(s,max_lbl), ls, 'UniformOutput', false);
+        full_lp = ls;
     end
     tot = sum(cp);
     cum = cumsum(100 * cp / tot);
