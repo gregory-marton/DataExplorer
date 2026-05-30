@@ -228,7 +228,13 @@ for k = 1:ng
     in_global = ismember(sv_str, gc_str);
     other_cnt = sum(~in_global);
     other_n_t = numel(unique(sv_str(~in_global)));
-    if other_cnt > 0
+    if other_cnt > 0 && other_n_t == 1
+        sole = char(unique(sv_str(~in_global)));
+        cp      = [cs; other_cnt];
+        lp      = [cellfun(@(s) ca_trunc(s,max_lbl), ls, 'UniformOutput', false); ...
+                   {ca_trunc(sole, max_lbl)}];
+        full_lp = [ls; {sole}];
+    elseif other_cnt > 0
         cp      = [cs; other_cnt];
         lp      = [cellfun(@(s) ca_trunc(s,max_lbl), ls, 'UniformOutput', false); ...
                    {sprintf('Other (%d)', other_n_t)}];
