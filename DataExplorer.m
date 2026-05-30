@@ -2834,8 +2834,9 @@ cat_idx  = find(cat_mask);
 if numel(cat_idx) < 2, return; end
 names = prof.name(cat_idx);
 nc    = numel(cat_idx);
-V_THRESH  = 0.10;
-MAX_PAIRS = 3;
+p         = de_cat_assoc_params();
+V_THRESH  = p.VThresh;
+MAX_PAIRS = p.MaxPairs;
 pairs = zeros(nc*(nc-1)/2, 3);
 np = 0;
 for i = 1:nc
