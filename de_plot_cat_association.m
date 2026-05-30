@@ -159,10 +159,18 @@ else
     val = x; vname = xname; vcats = cx;
 end
 ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl), V);
-fig    = figure('Name', ca_fig_name(ftitle, src));
 if strcmp(force_plot,'pareto') || (strcmp(force_plot,'auto') && ng <= pareto_max_grp)
-    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
+    plot_type = 'Pareto';
 elseif strcmp(force_plot,'stacked') || (strcmp(force_plot,'auto') && ng <= stacked_max_grp)
+    plot_type = 'Proportion';
+else
+    plot_type = 'Heatmap';
+end
+win_name = sprintf('%s: %s × %s', plot_type, ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
+fig = figure('Name', ca_fig_name(win_name, src));
+if strcmp(plot_type, 'Pareto')
+    ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
+elseif strcmp(plot_type, 'Proportion')
     ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl);
 else
     ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl);
