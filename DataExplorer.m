@@ -2848,10 +2848,25 @@ if ~isempty(pairs)
     [~, ord] = sort(pairs(:,3), 'descend');
     pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
     for k = 1:size(pairs,1)
+        ni = pairs(k,1); nj = pairs(k,2);
+        a = T.(names{ni}); b = T.(names{nj});
+        if ~iscategorical(a), a = categorical(a); end
+        if ~iscategorical(b), b = categorical(b); end
+        nu_i = numel(categories(a)); nu_j = numel(categories(b));
+        if nu_i <= nu_j
+            col_grp = names{ni}; col_val = names{nj}; ng_pair = nu_i;
+        else
+            col_grp = names{nj}; col_val = names{ni}; ng_pair = nu_j;
+        end
+        if ng_pair <= 6
+            fn = 'de_pareto_multiples';
+        elseif ng_pair <= 15
+            fn = 'de_stacked_bars';
+        else
+            fn = 'de_cond_heatmap';
+        end
         nl = nl + 1;
-        out{nl} = sprintf( ...
-            'de_plot_cat_association(T, prof, Figure="pair", Columns=["%s" "%s"]);  %% V=%.2f', ...
-            names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3));
+        out{nl} = sprintf('%s(T, "%s", "%s");  %% V=%.2f', fn, col_grp, col_val, pairs(k,3));
     end
 end
 lines = out(1:nl);

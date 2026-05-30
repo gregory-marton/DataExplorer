@@ -19,6 +19,7 @@ arguments
     options.VThresh   (1,1) double = 0.10
     options.Figure    (1,1) string = "all"
     options.Columns   (1,:) string = string([])
+    options.ForcePlot (1,1) string = "auto"
 end
 
 MAX_LABEL          = 25;
@@ -37,7 +38,7 @@ if options.Figure == "pair"
     col_a = options.Columns(1); col_b = options.Columns(2);
     v = de_cramer_v(T.(col_a), T.(col_b));
     ca_plot_pair(T.(col_a), T.(col_b), col_a, col_b, v, src, MAX_LABEL, ...
-        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS);
+        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS, char(options.ForcePlot));
     return
 end
 
@@ -55,15 +56,17 @@ end
 
 V_mat = zeros(nc, nc);
 P_mat = ones(nc, nc);
+U_mat = zeros(nc, nc);
 for i = 1:nc
     for j = i+1:nc
         [v, p] = de_cramer_v(T.(names{i}), T.(names{j}));
         V_mat(i,j) = v; V_mat(j,i) = v;
         P_mat(i,j) = p; P_mat(j,i) = p;
+        [U_mat(i,j), U_mat(j,i)] = ca_theil_u(T.(names{i}), T.(names{j}));
     end
 end
 
-ca_plot_v_matrix(V_mat, P_mat, col_coverage, names, src, MAX_LABEL, V_ANNOTATE_THRESH, GLYPH_MAX_COLS);
+ca_plot_v_matrix(V_mat, P_mat, U_mat, col_coverage, names, src, MAX_LABEL, V_ANNOTATE_THRESH, GLYPH_MAX_COLS);
 
 if options.Figure == "vmatrix", return; end
 
@@ -84,12 +87,13 @@ pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
 for k = 1:size(pairs,1)
     ca_plot_pair(T.(names{pairs(k,1)}), T.(names{pairs(k,2)}), ...
         names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL, ...
-        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS);
+        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS, 'auto');
 end
 end
 
 
-function ca_plot_v_matrix(V_mat, P_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
+function ca_plot_v_matrix(V_mat, P_mat, U_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
+FONT_BASE = 9;
 nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
@@ -101,10 +105,10 @@ cb.Label.String = "Cramer's V  (0=independent, 1=fully associated)";
 short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
-    'XTickLabelRotation', 40, 'FontSize', 8, 'TickLength', [0 0]);
+    'XTickLabelRotation', 40, 'FontSize', FONT_BASE-1, 'TickLength', [0 0]);
 sub = "Bias-Corrected Cramer's V";
 if ~isempty(src), sub = sub + "  |  " + src; end
-title(ax, {"Association Strength", sub}, 'FontSize', 10);
+title(ax, {"Association Strength", sub}, 'FontSize', FONT_BASE+1);
 draw_glyphs = nc <= glyph_max_cols;
 for i = 1:nc
     for j = 1:nc
@@ -112,19 +116,20 @@ for i = 1:nc
         if i < j
             if V_mat(i,j) >= v_annotate
                 text(ax, j, i, {sprintf('%.2f', V_mat(i,j)), ca_fmt_p(P_mat(i,j))}, ...
-                    'HorizontalAlignment', 'center', 'FontSize', 6, ...
+                    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, ...
                     'Color', ca_label_color(V_mat(i,j)));
             end
         elseif draw_glyphs
-            fh = col_cov(j);  % horizontal: coverage of column variable
-            fv = col_cov(i);  % vertical:   coverage of row variable
-            xl = j-0.5; xm = xl+fh; yt = i-0.5; ym = i+0.5-fv;
-            ca_fill_rect(ax, xm, yt, 1-fh, 1-fv, [0.85 0.85 0.85], 0.30);  % neither: faint gray, V shows through
-            ca_fill_rect(ax, xl, yt,   fh, 1-fv, [0.95 0.55 0.10], 0.65);  % col only: amber
-            ca_fill_rect(ax, xm, ym, 1-fh,   fv, [0.10 0.65 0.75], 0.65);  % row only: teal
-            ca_fill_rect(ax, xl, ym,   fh,   fv, [0.70 0.10 0.55], 0.85);  % both: magenta
+            fh = col_cov(j);
+            fv = col_cov(i);
+            xl = j-0.5; yt = i-0.5; ym = i+0.5-fv;
+            ca_fill_rect(ax, xl, yt, 1, 1, [0.75 0.75 0.75], 0.75);
+            if fh > 0 && fv > 0
+                ca_fill_rect(ax, xl, ym, fh, fv, [0.88 0.58 0.75], 0.60);
+            end
             patch(ax, [xl xl+1 xl+1 xl xl], [yt yt yt+1 yt+1 yt], 'w', ...
                 'FaceColor', 'none', 'EdgeColor', [0.20 0.20 0.20], 'LineWidth', 0.8);
+            ca_draw_arrow(ax, j, i, U_mat(j,i) - U_mat(i,j));
         end
     end
 end
@@ -139,7 +144,7 @@ dcm.UpdateFcn = @(~,ev) ca_vmat_tip(ev, nm_dc, vm_dc);
 end
 
 
-function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, pareto_max_grp, stacked_max_grp)
+function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, pareto_max_grp, stacked_max_grp, force_plot)
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -155,9 +160,9 @@ else
 end
 ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl), V);
 fig    = figure('Name', ca_fig_name(ftitle, src));
-if ng <= pareto_max_grp
+if strcmp(force_plot,'pareto') || (strcmp(force_plot,'auto') && ng <= pareto_max_grp)
     ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl);
-elseif ng <= stacked_max_grp
+elseif strcmp(force_plot,'stacked') || (strcmp(force_plot,'auto') && ng <= stacked_max_grp)
     ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl);
 else
     ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl);
@@ -166,17 +171,47 @@ end
 
 
 function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, max_lbl)
-MAX_B = 15;
-ng   = numel(gcats);
-ncol = min(ng, 3);
-nrow = ceil(ng / ncol);
+MAX_B     = 15;
+FONT_BASE = 9;
+ng     = numel(gcats);
+ncol   = min(ng, 3);
+nrow   = ceil(ng / ncol);
+
+% Layout constants
+PAD_L  = 0.09;
+PAD_R  = 0.04;
+PAD_T  = 0.12;
+PAD_B  = 0.14;
+GAP_H  = 0.08;
+GAP_V  = 0.16;
+plot_h = (1 - PAD_T - PAD_B - (nrow-1)*GAP_V) / nrow;
+
+% First pass: count bars per group (categories with >0 observations)
+% so variable-width layout gives degenerate groups a narrow column
+bars_k = ones(ng, 1);
+for k = 1:ng
+    sv   = val(grp == gcats{k});
+    vc   = categories(sv);
+    cn   = arrayfun(@(c) sum(sv == c{1}), vc);
+    bars_k(k) = max(1, min(MAX_B, sum(cn > 0)));
+end
+
 sgtitle(fig, ftitle, 'FontSize', 10, 'Interpreter', 'none');
+
+axs     = gobjects(ng, 1);
+cp_list = cell(ng, 1);
+ci_list = cell(ng, 1);
+max_cnt = 0;
+
 for k = 1:ng
     mask = (grp == gcats{k});
     sv   = val(mask);
     if isempty(sv), continue; end
-    vc = categories(sv);
-    cn = arrayfun(@(c) sum(sv == c{1}), vc);
+    vc   = categories(sv);
+    cn   = arrayfun(@(c) sum(sv == c{1}), vc);
+    keep = cn > 0;
+    vc   = vc(keep);
+    cn   = cn(keep);
     [cs, ord] = sort(cn, 'descend');
     ls = vc(ord);
     ns = min(MAX_B, numel(ls));
@@ -192,82 +227,213 @@ for k = 1:ng
         full_lp = ls(1:ns);
     end
     tot = sum(cp);
-    pct = 100 * cp / tot;
-    cum = cumsum(pct);
-    ax  = subplot(nrow, ncol, k, 'Parent', fig);
-    b   = bar(ax, 1:numel(cp), pct, 'FaceColor', [0.25 0.55 0.80], 'EdgeColor', 'none');
-    b.DataTipTemplate.DataTipRows(1).Label = 'Category';
-    b.DataTipTemplate.DataTipRows(1).Value = full_lp;
-    b.DataTipTemplate.DataTipRows(2).Label = '%';
+    cum = cumsum(100 * cp / tot);
+
+    % Variable-width position within row
+    ri      = floor((k-1) / ncol);
+    ci      = mod(k-1, ncol);
+    r_start = ri * ncol + 1;
+    r_end   = min((ri+1)*ncol, ng);
+    r_idxs  = r_start:r_end;
+    local_j = ci + 1;
+    frac_w  = bars_k(r_idxs) / sum(bars_k(r_idxs));
+    avail_w = 1 - PAD_L - PAD_R - (numel(r_idxs)-1)*GAP_H;
+    w_k     = frac_w(local_j) * avail_w;
+    left_k  = PAD_L + sum(frac_w(1:local_j-1)) * avail_w + (local_j-1)*GAP_H;
+    bot_k   = 1 - PAD_T - (ri+1)*plot_h - ri*GAP_V;
+    ax      = axes('Parent', fig, 'Position', [left_k, bot_k, w_k, plot_h]);
+
+    % Bars: raw counts
+    b = bar(ax, 1:numel(cp), cp, 'FaceColor', [0 0.4470 0.7410], 'EdgeColor', 'none');
+    b.DataTipTemplate.DataTipRows = [
+        dataTipTextRow('Category', full_lp)
+        dataTipTextRow('Count',    num2cell(double(cp)))
+    ];
+
+    % CI bars in count space (binomial SE); caps may exceed ylim — intentional
+    p_hat    = cp / tot;
+    ci_hw_ct = 1.96 * sqrt(tot .* p_hat .* (1 - p_hat));
     hold(ax, 'on');
+    errorbar(ax, 1:numel(cp), cp, ci_hw_ct, ci_hw_ct, ...
+        'LineStyle', 'none', 'Color', [0.25 0.25 0.25], ...
+        'CapSize', 3, 'LineWidth', 0.7);
+
+    % Right axis: cumulative %
     yyaxis(ax, 'right');
-    plot(ax, 1:numel(cum), cum, 'r-o', 'MarkerSize', 4);
+    plot(ax, 1:numel(cum), cum, '-o', 'Color', [0.55 0.10 0.20], 'MarkerSize', 4);
     ylim(ax, [0 100]);
-    ylabel(ax, 'Cumulative %', 'FontSize', 7);
+    ylabel(ax, 'Cumulative %', 'FontSize', FONT_BASE);
+    ax.YAxis(2).Color = [0.55 0.10 0.20];
+
+    % Left axis: count, bold
     yyaxis(ax, 'left');
-    ylabel(ax, '%', 'FontSize', 7);
     set(ax, 'XTick', 1:numel(cp), 'XTickLabel', lp, ...
-        'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
+        'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
+    ylabel(ax, 'Count', 'FontSize', FONT_BASE+2, 'FontWeight', 'bold');
+    ax.YAxis(1).FontSize   = FONT_BASE+1;
+    ax.YAxis(1).FontWeight = 'bold';
+
     title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot), ...
-        'FontSize', 8, 'Interpreter', 'none');
+        'FontSize', FONT_BASE+1, 'Interpreter', 'none');
     box(ax, 'off');
+
+    max_cnt    = max(max_cnt, max(cp));
+    axs(k)     = ax;
+    cp_list{k} = cp;
+    ci_list{k} = ci_hw_ct;
+end
+
+% Post-hoc A: shared count ylim across all subplots
+shared_ylim = max_cnt * 1.1;
+half_ylim   = shared_ylim / 2;
+for k = 1:ng
+    if ~isvalid(axs(k)), continue; end
+    yyaxis(axs(k), 'left');
+    ylim(axs(k), [0, shared_ylim]);
+end
+
+% Post-hoc B: count labels — inside (white) for tall bars, above CI cap for short
+for k = 1:ng
+    if ~isvalid(axs(k)) || isempty(cp_list{k}), continue; end
+    yyaxis(axs(k), 'left');
+    cp = cp_list{k};
+    ci = ci_list{k};
+    for bi = 1:numel(cp)
+        if cp(bi) >= half_ylim
+            text(axs(k), bi, cp(bi), ca_fmt_n(cp(bi)), ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
+                'FontSize', 9, 'Color', [1 1 1]);
+        else
+            text(axs(k), bi, cp(bi) + ci(bi), ca_fmt_n(cp(bi)), ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
+                'FontSize', 9, 'Color', [0.20 0.20 0.20]);
+        end
+    end
 end
 end
 
 
 function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl)
-MAX_S = 12;
+THRESH    = 0.03;   % include a val category if ≥3% of any major group
+MAX_S     = 15;
+FONT_BASE = 9;
 ng = numel(gcats);
-vn = arrayfun(@(c) sum(val == c{1}), vcats);
-[~, vord] = sort(vn, 'descend');
-top_v  = vcats(vord(1:min(MAX_S, numel(vord))));
-n_oth  = numel(vcats) - numel(top_v);
-nc_s   = numel(top_v) + (n_oth > 0);
-P      = zeros(ng, nc_s);
-for gi = 1:ng
-    mask  = (grp == gcats{gi});
-    n_grp = sum(mask);
-    if n_grp == 0, continue; end
-    sv = val(mask);
-    for vi = 1:numel(top_v)
-        P(gi,vi) = sum(sv == top_v{vi}) / n_grp;
-    end
-    if n_oth > 0
-        P(gi,end) = max(0, 1 - sum(P(gi,1:end-1)));
-    end
-end
-slabs = cellfun(@(s) ca_trunc(s,max_lbl), top_v, 'UniformOutput', false);
-if n_oth > 0, slabs{end+1} = sprintf('Other (%d)', n_oth); end
+
+% Global counts (for ordering the included set)
+global_cn  = arrayfun(@(c) sum(val == c{1}), vcats);
+[~, gvord] = sort(global_cn, 'descend');
+
+% Per-group n
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
-[~,gord] = sort(gn, 'descend');
-ax = axes(fig);
-bh = barh(ax, 1:ng, P(gord,:), 'stacked');
-colors = ca_qualitative_colors(numel(top_v));
-if n_oth > 0, colors(end+1,:) = [0.70 0.70 0.70]; end
-full_gcats_s = gcats(gord);
-full_slabs   = top_v;
-if n_oth > 0, full_slabs{end+1} = sprintf('Other (%d categories)', n_oth); end
-for vi = 1:numel(bh)
-    bh(vi).FaceColor = colors(vi,:);
-    bh(vi).EdgeColor = 'none';
-    bh(vi).DataTipTemplate.DataTipRows(1).Label = full_slabs{vi};
-    bh(vi).DataTipTemplate.DataTipRows(2).Label = 'Group';
-    bh(vi).DataTipTemplate.DataTipRows(2).Value = full_gcats_s;
+
+% Mark every val category that is ≥THRESH in at least one major group
+included = false(numel(vcats), 1);
+for gi = 1:ng
+    if gn(gi) == 0, continue; end
+    mask_gi = (grp == gcats{gi});
+    cn_gi   = arrayfun(@(c) sum(val(mask_gi) == c{1}), vcats);
+    included(cn_gi / gn(gi) >= THRESH) = true;
 end
-set(ax, 'YTick', 1:ng, ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), gcats(gord), 'UniformOutput', false), ...
-    'FontSize', 8, 'TickLength', [0 0]);
-ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', 9);
-xlabel(ax, 'Proportion', 'FontSize', 9);
-title(ax, ftitle, 'FontSize', 10, 'Interpreter', 'none');
-legend(ax, slabs, 'Location', 'eastoutside', 'FontSize', 7, 'Interpreter', 'none');
+if ~any(included)                         % fallback: global top-1
+    included(gvord(1)) = true;
+end
+
+% Order included by global frequency descending, cap at MAX_S
+inc_idx = gvord(included(gvord));
+inc_idx = inc_idx(1:min(MAX_S, numel(inc_idx)));
+top_v   = vcats(inc_idx);
+
+has_other = any(global_cn(~ismember(vcats, top_v)) > 0);
+nc_s      = numel(top_v) + has_other;
+
+% Count matrix C, proportion matrix P
+C = zeros(ng, nc_s);
+for gi = 1:ng
+    if gn(gi) == 0, continue; end
+    sv = val(grp == gcats{gi});
+    for vi = 1:numel(top_v)
+        C(gi, vi) = sum(sv == top_v{vi});
+    end
+    if has_other
+        C(gi, end) = gn(gi) - sum(C(gi, 1:end-1));
+    end
+end
+P = C ./ max(gn, 1);
+
+[~, gord] = sort(gn, 'descend');
+
+% Fixed colors per category; Other is always gray
+colors = ca_qualitative_colors(numel(top_v));
+if has_other, colors(end+1,:) = [0.70 0.70 0.70]; end
+
+ax = axes(fig);
+hold(ax, 'on');
+
+% Draw each row with segments sorted large→small; Other always last
+for row = 1:ng
+    gi = gord(row);
+    [~, named_ord] = sort(C(gi, 1:numel(top_v)), 'descend');
+    if has_other
+        seg_order = [named_ord, numel(top_v)+1];
+    else
+        seg_order = named_ord;
+    end
+
+    x = 0;
+    for si = 1:numel(seg_order)
+        vi    = seg_order(si);
+        seg_w = P(gi, vi);
+        if seg_w <= 0, x = x + seg_w; continue; end
+
+        patch(ax, x + [0 seg_w seg_w 0], row + [-0.4 -0.4 0.4 0.4], ...
+              colors(vi,:), 'EdgeColor', 'none');
+
+        max_ch = floor(seg_w * 75);
+        if max_ch >= 4
+            cat_name = 'Other';
+            if vi <= numel(top_v), cat_name = top_v{vi}; end
+            cnt_str  = sprintf(' (%d)', C(gi, vi));
+            full_lbl = [cat_name cnt_str];
+            if max_ch >= length(full_lbl)
+                lbl = full_lbl;
+            elseif max_ch >= length(cat_name)
+                lbl = cat_name;
+            else
+                lbl = ca_trunc(cat_name, max_ch);
+            end
+            lum     = 0.299*colors(vi,1) + 0.587*colors(vi,2) + 0.114*colors(vi,3);
+            txt_clr = [1 1 1] * double(lum < 0.5);
+            text(ax, x + seg_w/2, row, lbl, ...
+                'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+                'FontSize', FONT_BASE, 'Interpreter', 'none', 'Clipping', 'on', ...
+                'Color', txt_clr);
+        end
+        x = x + seg_w;
+    end
+end
+
+ylabels = cell(ng, 1);
+for yi = 1:ng
+    ylabels{yi} = sprintf('%s  (n=%d)', ca_trunc(gcats{gord(yi)}, max_lbl), gn(gord(yi)));
+end
+set(ax, 'YTick', 1:ng, 'YTickLabel', ylabels, ...
+    'FontSize', FONT_BASE+1, 'TickLength', [0 0]);
+ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', FONT_BASE+2);
+xlabel(ax, 'Proportion', 'FontSize', FONT_BASE+2);
+title(ax, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
 xlim(ax, [0 1]);
+ylim(ax, [0.5, ng + 0.5]);
 box(ax, 'off');
 end
 
 
 function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, max_lbl)
-MAX_S = 20;
+FONT_BASE  = 9;
+MAX_S      = 20;
+CLR_OTHER  = [0.82 0.82 0.82];
+CLR_MARG   = [1.00 0.97 0.75];
+CLR_CORNER = [0.72 0.72 0.72];
+
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
 [~,gord] = sort(gn,'descend');
 show_g = gcats(gord(1:min(MAX_S,numel(gord))));
@@ -275,51 +441,169 @@ vn = arrayfun(@(c) sum(val == c{1}), vcats);
 [~,vord] = sort(vn,'descend');
 show_v = vcats(vord(1:min(MAX_S,numel(vord))));
 nr = numel(show_g); nc = numel(show_v);
-P  = zeros(nr, nc);
-N  = zeros(nr, nc);
+
+P         = zeros(nr, nc);
+N         = zeros(nr, nc);
+nri_total = arrayfun(@(c) sum(grp == c{1}), show_g)';
+nci_total = arrayfun(@(c) sum(val == c{1}), show_v);
 for ci = 1:nc
     mc  = (val == show_v{ci});
     nci = sum(mc);
     if nci == 0, continue; end
     for ri = 1:nr
-        n_rc      = sum(grp(mc) == show_g{ri});
-        N(ri,ci)  = n_rc;
-        P(ri,ci)  = n_rc / nci;
+        n_rc     = sum(grp(mc) == show_g{ri});
+        N(ri,ci) = n_rc;
+        P(ri,ci) = n_rc / nci;
     end
 end
 if nr > 3
-    [U,~,~] = svd(P,'econ');
-    [~,rord] = sort(U(:,1));
-    P        = P(rord,:);
-    N        = N(rord,:);
-    show_g   = show_g(rord);
+    [U,~,~]   = svd(P,'econ');
+    [~,rord]  = sort(U(:,1));
+    P         = P(rord,:);
+    N         = N(rord,:);
+    show_g    = show_g(rord);
+    nri_total = nri_total(rord);
 end
+
+has_oth_row = numel(gcats) > MAX_S;
+has_oth_col = numel(vcats) > MAX_S;
+n_oth_g     = numel(gcats) - nr;
+n_oth_v     = numel(vcats) - nc;
+nc_full     = nc + has_oth_col + 1;
+nr_full     = nr + has_oth_row + 1;
+oth_col_x   = nc + 1;
+marg_col_x  = nc_full;
+oth_row_y   = nr + 1;
+marg_row_y  = nr_full;
+
+N_oth_val = nri_total - sum(N, 2);
+N_oth_grp = nci_total - sum(N, 1);
+N_valid   = numel(grp);
+
+P_full = NaN(nr_full, nc_full);
+P_full(1:nr, 1:nc) = P;
+
 ax = axes(fig);
-imagesc(ax, P, [0 1]);
+imagesc(ax, P_full, [0 1]);
 blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
-set(ax, 'XTick', 1:nc, 'YTick', 1:nr, ...
-    'XTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), show_v, 'UniformOutput', false), ...
-    'YTickLabel', cellfun(@(s) ca_trunc(s,max_lbl), show_g, 'UniformOutput', false), ...
-    'XTickLabelRotation', 40, 'FontSize', 7, 'TickLength', [0 0]);
+
+n_xticks = nc + has_oth_col + 1;
+n_yticks = nr + has_oth_row + 1;
+x_ticks  = zeros(1, n_xticks);
+x_labels = cell(1, n_xticks);
+y_ticks  = zeros(1, n_yticks);
+y_labels = cell(1, n_yticks);
+x_ticks(1:nc)  = 1:nc;
+x_labels(1:nc) = cellfun(@(s) ca_trunc(s,max_lbl), show_v, 'UniformOutput', false);
+y_ticks(1:nr)  = 1:nr;
+y_labels(1:nr) = cellfun(@(s) ca_trunc(s,max_lbl), show_g, 'UniformOutput', false);
+xi = nc + 1;
+if has_oth_col
+    x_ticks(xi)  = oth_col_x;
+    x_labels{xi} = sprintf('Other (%d)', n_oth_v);
+    xi = xi + 1;
+end
+x_ticks(xi)  = marg_col_x;
+x_labels{xi} = 'Total';
+yi = nr + 1;
+if has_oth_row
+    y_ticks(yi)  = oth_row_y;
+    y_labels{yi} = sprintf('Other (%d)', n_oth_g);
+    yi = yi + 1;
+end
+y_ticks(yi)  = marg_row_y;
+y_labels{yi} = 'Total';
+
+set(ax, 'XTick', x_ticks, 'YTick', y_ticks, ...
+    'XTickLabel', x_labels, 'YTickLabel', y_labels, ...
+    'XTickLabelRotation', 40, 'FontSize', FONT_BASE-2, 'TickLength', [0 0]);
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
 else
     sub = '';
 end
-title(ax, {ftitle, sub}, 'FontSize', 9, 'Interpreter', 'none');
+title(ax, {ftitle, sub}, 'FontSize', FONT_BASE, 'Interpreter', 'none');
 box(ax, 'off');
+
+dark_txt = [0.15 0.15 0.15];
+
+if has_oth_col
+    for ri = 1:nr
+        patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], ri+[-0.5 -0.5 0.5 0.5 -0.5], ...
+            CLR_OTHER, 'EdgeColor', 'none');
+        if N_oth_val(ri) > 0
+            text(ax, oth_col_x, ri, ca_fmt_n(N_oth_val(ri)), ...
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        end
+    end
+end
+
+if has_oth_row
+    for ci = 1:nc
+        patch(ax, ci+[-0.5 0.5 0.5 -0.5 -0.5], oth_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+            CLR_OTHER, 'EdgeColor', 'none');
+        if N_oth_grp(ci) > 0
+            text(ax, ci, oth_row_y, ca_fmt_n(N_oth_grp(ci)), ...
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        end
+    end
+end
+
+for ri = 1:nr
+    patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], ri+[-0.5 -0.5 0.5 0.5 -0.5], ...
+        CLR_MARG, 'EdgeColor', 'none');
+    text(ax, marg_col_x, ri, ca_fmt_n(nri_total(ri)), ...
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+end
+
+for ci = 1:nc
+    patch(ax, ci+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+        CLR_MARG, 'EdgeColor', 'none');
+    text(ax, ci, marg_row_y, ca_fmt_n(nci_total(ci)), ...
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+end
+
+if has_oth_col && has_oth_row
+    N_oth_oth = N_valid - sum(nri_total) - sum(nci_total) + sum(N(:));
+    patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], oth_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+        CLR_CORNER, 'EdgeColor', 'none');
+    if N_oth_oth > 0
+        text(ax, oth_col_x, oth_row_y, ca_fmt_n(N_oth_oth), ...
+            'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+    end
+end
+if has_oth_col
+    N_val_oth_total = N_valid - sum(nci_total);
+    patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+        CLR_CORNER, 'EdgeColor', 'none');
+    text(ax, oth_col_x, marg_row_y, ca_fmt_n(N_val_oth_total), ...
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+end
+if has_oth_row
+    N_grp_oth_total = N_valid - sum(nri_total);
+    patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], oth_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+        CLR_CORNER, 'EdgeColor', 'none');
+    text(ax, marg_col_x, oth_row_y, ca_fmt_n(N_grp_oth_total), ...
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+end
+patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
+    CLR_CORNER, 'EdgeColor', 'none');
+text(ax, marg_col_x, marg_row_y, ca_fmt_n(N_valid), ...
+    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+
 for ri = 1:nr
     for ci = 1:nc
         if N(ri,ci) > 0
             text(ax, ci, ri, ca_fmt_count(N(ri,ci)), ...
-                'HorizontalAlignment', 'center', 'FontSize', 6, ...
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, ...
                 'Color', ca_label_color(P(ri,ci)));
         end
     end
 end
+
 sg_dc = show_g; sv_dc = show_v; p_dc = P;
 dcm = datacursormode(fig);
 dcm.UpdateFcn = @(~,ev) ca_heatmap_tip(ev, sg_dc, sv_dc, p_dc);
@@ -390,4 +674,103 @@ tab10 = [
     0.090 0.745 0.812
 ];
 colors = tab10(mod((0:n-1)', 10) + 1, :);
+end
+
+
+function [u_ba, u_ab] = ca_theil_u(x, y)
+% u_ba = U(y|x): fraction of y's entropy explained by x
+% u_ab = U(x|y): fraction of x's entropy explained by y
+if ~iscategorical(x), x = categorical(x); end
+if ~iscategorical(y), y = categorical(y); end
+valid = ~isundefined(x) & ~isundefined(y);
+x = x(valid); y = y(valid);
+N = numel(x);
+cx = categories(x); rx = numel(cx);
+cy = categories(y); ry = numel(cy);
+if N < 2 || rx < 2 || ry < 2
+    u_ba = 0; u_ab = 0; return
+end
+xi = zeros(N, 1);
+for ri = 1:rx, xi(x == cx{ri}) = ri; end
+yi = zeros(N, 1);
+for ci = 1:ry, yi(y == cy{ci}) = ci; end
+O  = accumarray([xi yi], 1, [rx ry]);
+hy = ca_entropy(sum(O, 1) / N);
+hx = ca_entropy(sum(O, 2)' / N);
+if hy < eps
+    u_ba = 0;
+else
+    hyx = 0;
+    for ri = 1:rx
+        rs = sum(O(ri,:));
+        if rs == 0, continue; end
+        hyx = hyx + (rs/N) * ca_entropy(O(ri,:) / rs);
+    end
+    u_ba = max(0, (hy - hyx) / hy);
+end
+if hx < eps
+    u_ab = 0;
+else
+    hxy = 0;
+    for ci = 1:ry
+        cs = sum(O(:,ci));
+        if cs == 0, continue; end
+        hxy = hxy + (cs/N) * ca_entropy(O(:,ci)' / cs);
+    end
+    u_ab = max(0, (hx - hxy) / hx);
+end
+end
+
+
+function s = ca_fmt_n(n)
+if n < 1000
+    s = sprintf('%d', round(n));
+else
+    s = regexprep(sprintf('%.1e', n), 'e\+0*(\d+)', 'e$1');
+end
+end
+
+
+function h = ca_entropy(p)
+p = p(p > 0);
+h = -sum(p .* log2(p));
+end
+
+
+function ca_draw_arrow(ax, cx, cy, u_diff)
+% Arrow in lower-triangle cell (cx,cy).
+% u_diff > 0: col (x-axis) predicts row (y-axis) → arrow toward top-left
+% u_diff < 0: row (y-axis) predicts col (x-axis) → arrow toward bottom-right
+% |u_diff| < 0.05: small square (near-symmetric)
+THRESH_SQ   = 0.05;
+THRESH_HEAD = 0.15;
+HEAD_W      = 0.09;
+HEAD_H      = 0.11;
+MAX_MAG     = 0.30;
+CLR = [0.20 0.20 0.20];
+
+if abs(u_diff) < THRESH_SQ
+    sq = 0.07;
+    patch(ax, cx+sq*[-1 1 1 -1 -1], cy+sq*[-1 -1 1 1 -1], CLR, 'EdgeColor', 'none');
+    return
+end
+
+if u_diff > 0
+    dir = [-1 -1] / sqrt(2);
+else
+    dir = [1 1] / sqrt(2);
+end
+perp = [-dir(2), dir(1)];
+mag  = min(MAX_MAG, abs(u_diff) * 0.6);
+
+tip = [cx + dir(1)*mag,                          cy + dir(2)*mag];
+bl  = [cx + dir(1)*(mag-HEAD_H) + perp(1)*HEAD_W, cy + dir(2)*(mag-HEAD_H) + perp(2)*HEAD_W];
+br  = [cx + dir(1)*(mag-HEAD_H) - perp(1)*HEAD_W, cy + dir(2)*(mag-HEAD_H) - perp(2)*HEAD_W];
+patch(ax, [tip(1) bl(1) br(1) tip(1)], [tip(2) bl(2) br(2) tip(2)], CLR, 'EdgeColor', 'none');
+
+if abs(u_diff) >= THRESH_HEAD
+    tail = [cx - dir(1)*0.04, cy - dir(2)*0.04];
+    base = [(bl(1)+br(1))/2, (bl(2)+br(2))/2];
+    line(ax, [tail(1) base(1)], [tail(2) base(2)], 'Color', CLR, 'LineWidth', 1.0);
+end
 end

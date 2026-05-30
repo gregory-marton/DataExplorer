@@ -15,9 +15,9 @@ to console for how to reproduce those results yourself.
 
 % Add the folder to your path, then:
 T = DataExplorer('mydata.csv')
-T = DataExplorer('survey.xlsx')
+T = DataExplorer('survey.xlsx')  % prompts to pick a sheet.
 T = DataExplorer('climate.nc')
-T = DataExplorer('archive.zip')   % prompts to pick a file if the ZIP contains several
+T = DataExplorer('archive.zip')   % prompts to pick a file.
 
 % Or explore a table you already have:
 T = DataExplorer(T_existing)
@@ -36,15 +36,14 @@ save_recipe('my_analysis.m')
 
 ## What it does
 
-DataExplorer runs a five-step pipeline:
+DataExplorer runs a four-step pipeline:
 
 | Step | What happens |
 |------|-------------|
 | **Load** | Auto-detects CSV/TSV/TXT, Excel (multi-sheet), ZIP, NetCDF, ASC fixed-width |
 | **Profile** | Classifies columns, converts strings to numbers where ≥ 70% parse, flags IDs and mostly-missing columns |
 | **Echo** | Prints a self-contained MATLAB script to the console |
-| **Report** | Compact variable-summary table |
-| **Plot** | Overview tiles, time series, geographic maps, pairplot / scatter matrix |
+| **Show** | Overview tiles, time series, geographic maps, pairplot / scatter matrix |
 
 Plots produced include:
 
