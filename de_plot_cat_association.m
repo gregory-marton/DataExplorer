@@ -327,84 +327,61 @@ end
 
 function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, max_lbl)
 THRESH    = 0.03;   % include a val category if ≥3% of any major group
-MAX_S     = 15;
 FONT_BASE = 9;
 ng = numel(gcats);
 
-% Global counts (for ordering the included set)
-global_cn  = arrayfun(@(c) sum(val == c{1}), vcats);
-[~, gvord] = sort(global_cn, 'descend');
-
-% Per-group n
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
-
-% Mark every val category that is ≥THRESH in at least one major group
-included = false(numel(vcats), 1);
-for gi = 1:ng
-    if gn(gi) == 0, continue; end
-    mask_gi = (grp == gcats{gi});
-    cn_gi   = arrayfun(@(c) sum(val(mask_gi) == c{1}), vcats);
-    included(cn_gi / gn(gi) >= THRESH) = true;
-end
-if ~any(included)                         % fallback: global top-1
-    included(gvord(1)) = true;
-end
-
-% Order included by global frequency descending, cap at MAX_S
-inc_idx = gvord(included(gvord));
-inc_idx = inc_idx(1:min(MAX_S, numel(inc_idx)));
-top_v   = vcats(inc_idx);
-
-has_other = any(global_cn(~ismember(vcats, top_v)) > 0);
-nc_s      = numel(top_v) + has_other;
-
-% Count matrix C, proportion matrix P
-C = zeros(ng, nc_s);
-for gi = 1:ng
-    if gn(gi) == 0, continue; end
-    sv = val(grp == gcats{gi});
-    for vi = 1:numel(top_v)
-        C(gi, vi) = sum(sv == top_v{vi});
-    end
-    if has_other
-        C(gi, end) = gn(gi) - sum(C(gi, 1:end-1));
-    end
-end
-P = C ./ max(gn, 1);
-
 [~, gord] = sort(gn, 'descend');
-
-% Fixed colors per category; Other is always gray
-colors = ca_qualitative_colors(numel(top_v));
-if has_other, colors(end+1,:) = [0.70 0.70 0.70]; end
 
 ax = axes(fig);
 hold(ax, 'on');
 
-% Draw each row with segments sorted large→small; Other always last
+% Each row independently: show val categories ≥THRESH of that row's n;
+% the rest become "Other" for that row. Colors are assigned per-row.
 for row = 1:ng
     gi = gord(row);
-    [~, named_ord] = sort(C(gi, 1:numel(top_v)), 'descend');
-    if has_other
-        seg_order = [named_ord, numel(top_v)+1];
+    if gn(gi) == 0, continue; end
+    sv = val(grp == gcats{gi});
+
+    cn   = arrayfun(@(c) sum(sv == c{1}), vcats);
+    show = cn / gn(gi) >= THRESH;
+    if ~any(show), show(cn == max(cn)) = true; end  % fallback: show top-1
+    ls   = vcats(show);
+    cs   = cn(show);
+    [cs, ord] = sort(cs, 'descend');
+    ls   = ls(ord);
+
+    other_cnt = gn(gi) - sum(cs);
+    other_n_t = sum(~show & cn > 0);
+    n_named = numel(ls);
+    if n_named > 0
+        named_clrs = ca_qualitative_colors(n_named);
     else
-        seg_order = named_ord;
+        named_clrs = zeros(0, 3);
+    end
+    if other_cnt > 0
+        cp        = [cs; other_cnt];
+        cat_names = [ls; {sprintf('Other (%d)', other_n_t)}];
+        clrs      = [named_clrs; 0.70 0.70 0.70];
+    else
+        cp        = cs;
+        cat_names = ls;
+        clrs      = named_clrs;
     end
 
+    P_row = cp / gn(gi);
     x = 0;
-    for si = 1:numel(seg_order)
-        vi    = seg_order(si);
-        seg_w = P(gi, vi);
+    for si = 1:numel(cp)
+        seg_w = P_row(si);
         if seg_w <= 0, x = x + seg_w; continue; end
 
         patch(ax, x + [0 seg_w seg_w 0], row + [-0.4 -0.4 0.4 0.4], ...
-              colors(vi,:), 'EdgeColor', 'none');
+              clrs(si,:), 'EdgeColor', 'none');
 
         max_ch = floor(seg_w * 75);
         if max_ch >= 4
-            cat_name = 'Other';
-            if vi <= numel(top_v), cat_name = top_v{vi}; end
-            cnt_str  = sprintf(' (%d)', C(gi, vi));
+            cat_name = cat_names{si};
+            cnt_str  = sprintf(' (%d)', cp(si));
             full_lbl = [cat_name cnt_str];
             if max_ch >= length(full_lbl)
                 lbl = full_lbl;
@@ -413,7 +390,7 @@ for row = 1:ng
             else
                 lbl = ca_trunc(cat_name, max_ch);
             end
-            lum     = 0.299*colors(vi,1) + 0.587*colors(vi,2) + 0.114*colors(vi,3);
+            lum     = 0.299*clrs(si,1) + 0.587*clrs(si,2) + 0.114*clrs(si,3);
             txt_clr = [1 1 1] * double(lum < 0.5);
             text(ax, x + seg_w/2, row, lbl, ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
