@@ -18,11 +18,14 @@ function de_plot_pairplot(T, prof, sel)
 
 if isempty(sel), return; end
 
+BG_GRAY   = [0.97 0.97 0.97];
+FSZ_TINY  = 6;   FSZ_LABEL = 8;   FSZ_TITLE = 11;
+
 np = numel(sel);
 
 src = char(prof.source_name);
 fig = figure('Name', pp_fig_name('Pairplot', src), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 pp_stamp_source(fig, src);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
@@ -87,14 +90,14 @@ for r = 1:np
             else
                 col_title = pp_wrapped(xname);
             end
-            title(ax, col_title, 'FontSize', 8, 'FontWeight', 'bold', 'Interpreter', 'tex');
+            title(ax, col_title, 'FontSize', FSZ_LABEL, 'FontWeight', 'bold', 'Interpreter', 'tex');
         end
         if r == c && r > 1
-            title(ax, pp_wrapped(yname), 'FontSize', 8, 'FontWeight', 'bold', ...
+            title(ax, pp_wrapped(yname), 'FontSize', FSZ_LABEL, 'FontWeight', 'bold', ...
                 'Interpreter', 'none');
         end
         if c == 1
-            yl = ylabel(ax, pp_wrapped(yname), 'FontSize', 6, 'Interpreter', 'none');
+            yl = ylabel(ax, pp_wrapped(yname), 'FontSize', FSZ_TINY, 'Interpreter', 'none');
             set(yl, 'Rotation', 0, 'HorizontalAlignment', 'right');
         end
     end
@@ -105,13 +108,17 @@ if n == 0
 else
     title_str = sprintf('n = %d', n);
 end
-title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
+title(tl, title_str, 'FontSize', FSZ_TITLE, 'Interpreter', 'none');
 end
 
 
 % ── Diagonal helpers ─────────────────────────────────────────────────────────
 
 function pp_num_diag(ax, x, varname, nmissing, n)
+DATA_BLUE = [0.35 0.55 0.75];
+MISS_RED  = [0.6 0.3 0.3];
+FSZ_SMALL = 6.5;
+FSZ_BASE  = 7;
 x = double(x);
 valid = x(~isnan(x));
 if isempty(valid)
@@ -120,25 +127,28 @@ if isempty(valid)
         'Units', 'normalized', 'Color', [0.6 0.6 0.6]);
     return
 end
-h = histogram(ax, valid, 'FaceColor', [0.35 0.55 0.75], 'EdgeColor', 'none', 'FaceAlpha', 0.8);
+h = histogram(ax, valid, 'FaceColor', DATA_BLUE, 'EdgeColor', 'none', 'FaceAlpha', 0.8);
 h.DataTipTemplate.DataTipRows(1).Label = char(varname);
 lo = min(valid); hi = max(valid);
 mu = mean(valid); sg = std(valid); md = median(valid);
 text(ax, 0.98, 0.97, ...
     sprintf('μ = %.3g\nσ = %.3g\nm = %.3g\n[%.3g, %.3g]', mu, sg, md, lo, hi), ...
     'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', ...
-    'FontSize', 6.5, 'Color', [0.2 0.2 0.2]);
+    'FontSize', FSZ_SMALL, 'Color', [0.2 0.2 0.2]);
 if nmissing > 0
     text(ax, 0.02, 0.97, sprintf('%d missing (%.0f%%)', nmissing, 100*nmissing/n), ...
         'Units', 'normalized', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontSize', 6.5, 'Color', [0.6 0.3 0.3]);
+        'FontSize', FSZ_SMALL, 'Color', MISS_RED);
 end
-set(ax, 'FontSize', 7); box(ax, 'off');
+set(ax, 'FontSize', FSZ_BASE); box(ax, 'off');
 end
 
 
 function pp_cat_diag(ax, x, varname, nmissing, n)
-MAX_K = 15;
+MAX_K     = 15;
+CAT_GREEN = [0.45 0.70 0.55];
+MISS_RED  = [0.6 0.3 0.3];
+FSZ_SMALL = 6.5;
 if iscategorical(x)
     cats   = categories(x);
     counts = histcounts(x);
@@ -158,7 +168,7 @@ if nc > MAX_K
     cats_s   = [cats_s(1:n_top); {sprintf('Other (%d, n=%d)', nc-n_top, rest_cnt)}];
 end
 n_shown = numel(counts_s);
-b = barh(ax, n_shown:-1:1, counts_s, 'FaceColor', [0.45 0.70 0.55], 'EdgeColor', 'none');
+b = barh(ax, n_shown:-1:1, counts_s, 'FaceColor', CAT_GREEN, 'EdgeColor', 'none');
 b.DataTipTemplate.DataTipRows(1).Label = 'Count';
 b.DataTipTemplate.DataTipRows(2).Label = 'Category';
 b.DataTipTemplate.DataTipRows(2).Value = cats_s;
@@ -172,34 +182,38 @@ for ki = 1:n_shown
 end
 yticks(ax, 1:n_shown);
 yticklabels(ax, flip(cats_lbl));
-set(ax, 'XTick', [], 'FontSize', 6.5, 'TickDir', 'out');
+set(ax, 'XTick', [], 'FontSize', FSZ_SMALL, 'TickDir', 'out');
 if nmissing > 0
     text(ax, 0.98, 0.97, sprintf('%d undef. (%.0f%%)', nmissing, 100*nmissing/n), ...
         'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', ...
-        'FontSize', 6.5, 'Color', [0.6 0.3 0.3]);
+        'FontSize', FSZ_SMALL, 'Color', MISS_RED);
 end
 box(ax, 'off');
 end
 
 
 function pp_time_diag(ax, x, varname)
+TIME_PURPLE = [0.65 0.50 0.75];
+CLR_DARK    = [0.2 0.2 0.2];
+FSZ_SMALL   = 6.5;
+FSZ_BASE    = 7;
 if isduration(x), x = datetime(0,0,0) + x; end
 valid = x(~isnat(x));
 if isempty(valid), axis(ax,'off'); return; end
 span_yrs = years(max(valid) - min(valid));
 if span_yrs < 2
-    h = histogram(ax, month(valid), 1:13, 'FaceColor', [0.65 0.50 0.75], 'EdgeColor', 'none');
+    h = histogram(ax, month(valid), 1:13, 'FaceColor', TIME_PURPLE, 'EdgeColor', 'none');
     text(ax, 0.98, 0.97, sprintf('%d months', round(span_yrs*12)), ...
         'Units','normalized','HorizontalAlignment','right', ...
-        'VerticalAlignment','top','FontSize',6.5,'Color',[0.2 0.2 0.2]);
+        'VerticalAlignment','top','FontSize',FSZ_SMALL,'Color',CLR_DARK);
 else
-    h = histogram(ax, year(valid), 'FaceColor', [0.65 0.50 0.75], 'EdgeColor', 'none');
+    h = histogram(ax, year(valid), 'FaceColor', TIME_PURPLE, 'EdgeColor', 'none');
     text(ax, 0.98, 0.97, sprintf('%d–%d', year(min(valid)), year(max(valid))), ...
         'Units','normalized','HorizontalAlignment','right', ...
-        'VerticalAlignment','top','FontSize',6.5,'Color',[0.2 0.2 0.2]);
+        'VerticalAlignment','top','FontSize',FSZ_SMALL,'Color',CLR_DARK);
 end
 h.DataTipTemplate.DataTipRows(1).Label = char(varname);
-set(ax, 'YTick', [], 'FontSize', 7); box(ax, 'off');
+set(ax, 'YTick', [], 'FontSize', FSZ_BASE); box(ax, 'off');
 end
 
 
@@ -217,12 +231,14 @@ elseif pp_is_discrete(yv) && ~pp_is_discrete(xv)
     pp_boxchart(ax, yv, xv); return
 end
 
-MAX_PTS = 5000;
+MAX_PTS     = 5000;
+DATA_BLUE_D = [0.25 0.45 0.70];
+FSZ_MID     = 7.5;
 if numel(xv) > MAX_PTS
     idx = randperm(numel(xv), MAX_PTS);
     xv = xv(idx); yv = yv(idx);
 end
-scatter(ax, xv, yv, 8, [0.25 0.45 0.70], 'filled', ...
+scatter(ax, xv, yv, 8, DATA_BLUE_D, 'filled', ...
     'MarkerFaceAlpha', min(1, 500/numel(xv)));
 hold(ax, 'on');
 prev_warn = warning('off', 'MATLAB:polyfit:RepeatedPointsOrRescale');
@@ -237,14 +253,19 @@ end
 r = corr(xv, yv, 'rows', 'complete');
 if isnan(r), r_str = 'r = ?'; else, r_str = sprintf('r = %.2f', r); end
 text(ax, 0.03, 0.97, r_str, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-    'FontSize', 7.5, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7], 'Margin', 1);
+    'FontSize', FSZ_MID, 'FontWeight', 'bold', 'BackgroundColor', [1 1 1 0.7], 'Margin', 1);
 hold(ax, 'off'); box(ax, 'off');
 end
 
 
 function pp_num_cat(ax, catdata, numdata)
-MAX_BOX  = 5;
-MAX_DOTS = 15;
+MAX_BOX     = 5;
+MAX_DOTS    = 15;
+IQR_MULT    = 1.5;
+DATA_BLUE   = [0.35 0.55 0.75];
+DATA_BLUE_D = [0.22 0.44 0.69];
+OTHER_LINE  = [0.72 0.72 0.72];
+OTHER_DOT   = [0.55 0.55 0.55];
 if iscategorical(catdata)
     cats  = categories(catdata);
     valid = ~isundefined(catdata) & ~isnan(numdata);
@@ -268,10 +289,10 @@ if numel(cats) <= MAX_BOX
         vals = numdata(mask);
         q    = quantile(vals, [0.25 0.5 0.75]);
         iqr_ = q(3) - q(1);
-        wlo  = max(min(vals), q(1) - 1.5*iqr_);
-        whi  = min(max(vals), q(3) + 1.5*iqr_);
+        wlo  = max(min(vals), q(1) - IQR_MULT*iqr_);
+        whi  = min(max(vals), q(3) + IQR_MULT*iqr_);
         patch(ax, ki + [-0.3 0.3 0.3 -0.3], [q(1) q(1) q(3) q(3)], ...
-            [0.35 0.55 0.75], 'EdgeColor', [0.2 0.2 0.2], 'LineWidth', 0.8);
+            DATA_BLUE, 'EdgeColor', [0.2 0.2 0.2], 'LineWidth', 0.8);
         plot(ax, ki + [-0.3 0.3], [q(2) q(2)], '-', 'Color', [0.1 0.1 0.1], 'LineWidth', 1.5);
         plot(ax, [ki ki], [wlo q(1)], '-', 'Color', [0.2 0.2 0.2]);
         plot(ax, [ki ki], [q(3) whi], '-', 'Color', [0.2 0.2 0.2]);
@@ -313,12 +334,12 @@ else
         if isnan(med), continue; end
         half_iqr = iqr_vals(oi)/2;
         plot(ax, [med-half_iqr, med+half_iqr], [ki ki], '-', 'Color', [0.6 0.7 0.8], 'LineWidth', 1.5);
-        plot(ax, med, ki, 'o', 'MarkerSize', 5, 'MarkerFaceColor', [0.22 0.44 0.69], 'MarkerEdgeColor', 'none');
+        plot(ax, med, ki, 'o', 'MarkerSize', 5, 'MarkerFaceColor', DATA_BLUE_D, 'MarkerEdgeColor', 'none');
     end
     if ~isnan(other_med)
         y_oth = numel(sel)+1; half_iqr = other_iqr/2;
-        plot(ax, [other_med-half_iqr, other_med+half_iqr], [y_oth y_oth], '-', 'Color', [0.72 0.72 0.72], 'LineWidth', 1.5);
-        plot(ax, other_med, y_oth, 'o', 'MarkerSize', 5, 'MarkerFaceColor', [0.55 0.55 0.55], 'MarkerEdgeColor', 'none');
+        plot(ax, [other_med-half_iqr, other_med+half_iqr], [y_oth y_oth], '-', 'Color', OTHER_LINE, 'LineWidth', 1.5);
+        plot(ax, other_med, y_oth, 'o', 'MarkerSize', 5, 'MarkerFaceColor', OTHER_DOT, 'MarkerEdgeColor', 'none');
     end
     hold(ax, 'off');
 end
@@ -328,6 +349,8 @@ end
 
 function pp_cat_cat(ax, x, y)
 MAX_CATS = 10;
+CMAP_N   = 64;
+FSZ_TINY = 6;
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -345,20 +368,21 @@ for ri = 1:numel(cy)
     end
 end
 imagesc(ax, M);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
+blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
 colormap(ax, blues);
 set(ax, 'XTick', [], 'YTick', []);
 if numel(cx) <= 2 && numel(cy) <= 2
     set(ax, 'XTick', 1:numel(cx), 'YTick', 1:numel(cy), ...
         'XTickLabel', cellfun(@(s) pp_trunc(s,6), cx, 'UniformOutput', false), ...
         'YTickLabel', cellfun(@(s) pp_trunc(s,6), cy, 'UniformOutput', false), ...
-        'FontSize', 6, 'TickLength', [0 0]);
+        'FontSize', FSZ_TINY, 'TickLength', [0 0]);
 end
 box(ax, 'off');
 end
 
 
 function pp_time_pair(ax, x, y, rtype, ctype)
+DATA_BLUE = [0.35 0.55 0.75];
 if rtype == "datetime" && ctype == "numeric"
     tdata = x; ndata = y;
 elseif ctype == "datetime" && rtype == "numeric"
@@ -370,7 +394,7 @@ valid = ~isnat(tdata) & ~isnan(ndata);
 if ~any(valid), axis(ax,'off'); return; end
 [ts, ord] = sort(tdata(valid));
 ns = ndata(valid); ns = ns(ord);
-plot(ax, ts, ns, '.', 'Color', [0.35 0.55 0.75], 'MarkerSize', 4);
+plot(ax, ts, ns, '.', 'Color', DATA_BLUE, 'MarkerSize', 4);
 box(ax, 'off');
 end
 
@@ -383,15 +407,17 @@ end
 
 
 function pp_boxchart(ax, grp, vals)
+DATA_BLUE_D = [0.25 0.45 0.70];
+FSZ_TINY    = 6;
 grp_cat = categorical(grp);
 try
-    boxchart(ax, grp_cat, vals, 'BoxFaceColor', [0.25 0.45 0.70], ...
-        'WhiskerLineColor', [0.25 0.45 0.70], 'MarkerColor', [0.25 0.45 0.70], ...
+    boxchart(ax, grp_cat, vals, 'BoxFaceColor', DATA_BLUE_D, ...
+        'WhiskerLineColor', DATA_BLUE_D, 'MarkerColor', DATA_BLUE_D, ...
         'MarkerStyle', '.', 'BoxWidth', 0.6);
     xtickangle(ax, 45);
-    ax.XAxis.FontSize = 6;
+    ax.XAxis.FontSize = FSZ_TINY;
 catch
-    scatter(ax, double(grp_cat), vals, 8, [0.25 0.45 0.70], 'filled', ...
+    scatter(ax, double(grp_cat), vals, 8, DATA_BLUE_D, 'filled', ...
         'MarkerFaceAlpha', min(1, 500/numel(vals)));
 end
 box(ax, 'off');

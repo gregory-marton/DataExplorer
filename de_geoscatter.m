@@ -59,6 +59,12 @@ end
 
 standalone = isempty(options.Parent);
 
+ALPHA_MKR    = 0.5;
+LEGEND_Y     = [2.6, 1.6, 0.6];
+LEGEND_MKR_X = 0.35;
+LEGEND_TXT_X = 0.70;
+CLR_LEGEND   = [0.45 0.45 0.45];
+
 %% ── Normalise size_data to [MinSize, MaxSize] ─────────────────────────────────
 s_lo = min(size_data, [], 'omitnan');
 s_hi = max(size_data, [], 'omitnan');
@@ -89,7 +95,7 @@ else
 end
 
 %% ── Main scatter ──────────────────────────────────────────────────────────────
-sc = scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', 0.5);
+sc = scatter(ax, lon, lat, sz_pts, color_data, 'filled', 'MarkerFaceAlpha', ALPHA_MKR);
 sc.DataTipTemplate.DataTipRows(1).Label = 'Longitude';
 sc.DataTipTemplate.DataTipRows(2).Label = 'Latitude';
 sc.DataTipTemplate.DataTipRows = [
@@ -128,11 +134,11 @@ if standalone
 
     rep_vals = [s_lo, (s_lo + s_hi) / 2, s_hi];
     rep_sz   = [options.MinSize, (options.MinSize + options.MaxSize) / 2, options.MaxSize];
-    y_pos    = [2.6, 1.6, 0.6];
+    y_pos    = LEGEND_Y;
     for ki = 1:3
-        scatter(leg_ax, 0.35, y_pos(ki), rep_sz(ki), [0.45 0.45 0.45], ...
+        scatter(leg_ax, LEGEND_MKR_X, y_pos(ki), rep_sz(ki), CLR_LEGEND, ...
             'filled', 'MarkerFaceAlpha', 0.6);
-        text(leg_ax, 0.70, y_pos(ki), sprintf('%.3g', rep_vals(ki)), ...
+        text(leg_ax, LEGEND_TXT_X, y_pos(ki), sprintf('%.3g', rep_vals(ki)), ...
             'VerticalAlignment', 'middle', 'FontSize', 7);
     end
     text(leg_ax, 0.35, 3.4, char(options.SizeLabel), ...

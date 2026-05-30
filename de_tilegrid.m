@@ -52,6 +52,18 @@ arguments
     options.CLim              (1,2) double  = [NaN NaN]
 end
 
+TILE_PX           = 36;
+FIG_W_MIN         = 500;   FIG_W_MAX = 1600;
+FIG_H_MIN         = 380;   FIG_H_MAX = 1000;
+CBAR_X            = 0.86;  CBAR_W   = 0.03;
+FSZ_OVERFLOW      = 9;     FSZ_CBAR = 8;
+FSZ_TITLE         = 11;    FSZ_LEGEND = 6.5;
+FSZ_CATLEGEND     = 5.5;
+LBL_Y_SPARK       = 0.28;  LBL_Y_CAT = 0.10;
+CLR_LEGEND_BG     = [0.91 0.91 0.91];
+CLR_LEGEND_BORDER = [0.55 0.55 0.55];
+BG_GRAY           = [0.97 0.97 0.97];
+
 fig = []; ax = []; %#ok<NASGU>
 
 CODES       = grid.codes(:);
@@ -209,15 +221,13 @@ end
 
 %% ── Figure and axes ──────────────────────────────────────────────────────────
 has_spark = has_time && n_t > 1;
-BG = [0.97 0.97 0.97];
 
 max_col = max(COLS);
 max_row = max(ROWS);
-tile_px = 36;
 needs_cbar = has_choro || is_heatmap_cat;
-fig_w   = min(1600, max(500, round((max_col + 2) * tile_px) + 100 * double(needs_cbar)));
-fig_h   = min(1000, max(380, round((max_row + 2) * tile_px)));
-fig = figure('Color', BG, 'NumberTitle', 'off');
+fig_w   = min(FIG_W_MAX, max(FIG_W_MIN, round((max_col + 2) * TILE_PX) + 100 * double(needs_cbar)));
+fig_h   = min(FIG_H_MAX, max(FIG_H_MIN, round((max_row + 2) * TILE_PX)));
+fig = figure('Color', BG_GRAY, 'NumberTitle', 'off');
 if ~strcmp(fig.WindowStyle, 'docked')
     fig.Position(3:4) = [fig_w, fig_h];
 end
@@ -226,7 +236,7 @@ if options.Title ~= "", fig.Name = char(options.Title); end
 ax_right = 0.82 + 0.10 * double(~needs_cbar);
 ax = axes(fig, 'Units', 'normalized', ...
     'Position', [0.02, 0.04, ax_right, 0.92], ...
-    'Color', BG, 'XColor', 'none', 'YColor', 'none', 'Box', 'off');
+    'Color', BG_GRAY, 'XColor', 'none', 'YColor', 'none', 'Box', 'off');
 hold(ax, 'on');
 
 MARGIN = 0.5;
@@ -246,8 +256,8 @@ else
     Heat_bg = Heat(:, 1);
 end
 lbl_y_frac = 0.50;
-if has_spark, lbl_y_frac = 0.28; end
-if is_heatmap_cat, lbl_y_frac = 0.10; end
+if has_spark, lbl_y_frac = LBL_Y_SPARK; end
+if is_heatmap_cat, lbl_y_frac = LBL_Y_CAT; end
 
 for ti = 1:n_tiles
     r  = ROWS(ti);  c = COLS(ti);
@@ -278,7 +288,7 @@ end
 n_ov = sum(IS_OVERFLOW);
 if n_ov > 0
     ov_row = min(ROWS(IS_OVERFLOW));
-    text(ax, -0.3, ov_row+0.5, '?', 'FontSize', 9, 'FontWeight', 'bold', ...
+    text(ax, -0.3, ov_row+0.5, '?', 'FontSize', FSZ_OVERFLOW, 'FontWeight', 'bold', ...
         'Color', options.OverflowEdgeColor, ...
         'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
 end
@@ -287,7 +297,7 @@ end
 if has_choro
     colormap(ax, cmap_ch);
     clim(ax, [vmin vmax]);
-    cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
+    cb = colorbar(ax, 'Position', [CBAR_X, 0.04, CBAR_W, 0.92]);
     lbl = strrep(char(options.ColorCol), '_', ' ');
     if has_spark
         t1s_cb = tg_yr_str(t_vals, 1, is_year_axis);
@@ -295,13 +305,13 @@ if has_choro
         lbl = sprintf('mean(%s, %s – %s)', lbl, t1s_cb, tns_cb);
     end
     cb.Label.String = lbl;
-    cb.FontSize = 8;
+    cb.FontSize = FSZ_CBAR;
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
 title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
-    'FontSize', 11, 'Interpreter', 'none');
+    'FontSize', FSZ_TITLE, 'Interpreter', 'none');
 
 %% ── Sparklines (per-tile time series) ───────────────────────────────────────
 if has_spark && has_choro && ~is_heatmap_cat
@@ -335,8 +345,8 @@ if has_spark && has_choro && ~is_heatmap_cat
     key_str = ['color: mean  |  spark: ' t1s char(8594) tns];
     text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
         'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontSize', 6.5, 'Interpreter', 'none', 'Tag', 'legend_key', ...
-        'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+        'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
+        'BackgroundColor', CLR_LEGEND_BG, 'EdgeColor', CLR_LEGEND_BORDER, ...
         'Margin', 3, 'LineWidth', 0.5);
 end
 
@@ -372,7 +382,7 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
             'EdgeColor','none', 'FaceColor','flat', 'Tag','cat_heat');
         colormap(ax, cmap_ch);
         clim(ax, [sh_lo sh_hi]);
-        cb = colorbar(ax, 'Position', [0.86, 0.04, 0.03, 0.92]);
+        cb = colorbar(ax, 'Position', [CBAR_X, 0.04, CBAR_W, 0.92]);
         val_lbl = strrep(char(options.ColorCol), '_', ' ');
         if n_t > 1
             cb.Label.String = sprintf('mean(%s, %s%s%s)', val_lbl, ...
@@ -381,14 +391,14 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
         else
             cb.Label.String = val_lbl;
         end
-        cb.FontSize = 8;
+        cb.FontSize = FSZ_CBAR;
         key_lines = [{'rows:'}, arrayfun(@(k) sprintf('%d  %s', k, top_cat_levels{k}), ...
             (1:K)', 'UniformOutput', false)'];
         cat_key = strjoin(key_lines, newline);
         text(ax, -MARGIN+0.05, -MARGIN+0.1, cat_key, ...
             'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-            'FontSize', 5.5, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
-            'BackgroundColor', [0.91 0.91 0.91], 'EdgeColor', [0.55 0.55 0.55], ...
+            'FontSize', FSZ_CATLEGEND, 'Interpreter', 'none', 'Tag', 'cat_legend', ...
+            'BackgroundColor', CLR_LEGEND_BG, 'EdgeColor', CLR_LEGEND_BORDER, ...
             'Margin', 3, 'LineWidth', 0.5);
     end
 end
@@ -439,13 +449,15 @@ end % de_tilegrid
 %% ── Local helpers ────────────────────────────────────────────────────────────
 
 function cmap = tg_cmap(spec)
-if ischar(spec) || isstring(spec), cmap = feval(char(spec), 256);
+CMAP_N = 256;
+if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
 end
 
 function fc = tg_val2color(val, vmin, vmax, cmap, has_choro)
+CLR_NODATA = [0.88 0.88 0.88];
 if ~has_choro || isnan(val)
-    fc = [0.88 0.88 0.88];
+    fc = CLR_NODATA;
 else
     norm = max(0, min(1, (val-vmin)/(vmax-vmin)));
     ci   = max(1, min(size(cmap,1), floor(norm*size(cmap,1))+1));
@@ -454,8 +466,10 @@ end
 end
 
 function tc = tg_text_color(bgc)
-if 0.299*bgc(1)+0.587*bgc(2)+0.114*bgc(3) < 0.45, tc=[1 1 1];
-else, tc=[0.08 0.08 0.08]; end
+LUM_THRESH = 0.45;
+lum = 0.299*bgc(1) + 0.587*bgc(2) + 0.114*bgc(3);
+if lum < LUM_THRESH, tc = [1 1 1];
+else, tc = [0.08 0.08 0.08]; end
 end
 
 function s = tg_label(code, val, has_choro)

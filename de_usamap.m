@@ -141,10 +141,12 @@ vmax = max(Heat(:),[],'omitnan');
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 
 %% ── Figure ───────────────────────────────────────────────────────────────────
-sldr_lift = 0.07 * double(has_slider);
-BG = [0.97 0.97 0.97];
+sldr_lift  = 0.07 * double(has_slider);
+BG_GRAY    = [0.97 0.97 0.97];
+CLR_BORDER = [0.45 0.45 0.45];
+CBAR_X     = 0.86;  CBAR_W = 0.03;
 
-fig = figure('Color',BG,'NumberTitle','off', ...
+fig = figure('Color',BG_GRAY,'NumberTitle','off', ...
     'Units','normalized','Position',[0.05 0.08 0.88 0.85]);
 if options.Title ~= "", fig.Name = char(options.Title); end
 
@@ -216,7 +218,7 @@ for i = 1:numel(states)
     end
 
     ph = patch(x, y, fc, 'Parent', ax, ...
-        'EdgeColor', [0.45 0.45 0.45], 'LineWidth', 0.5, ...
+        'EdgeColor', CLR_BORDER, 'LineWidth', 0.5, ...
         'UserData', scode);
     patch_h(scode) = ph;
 end
@@ -225,7 +227,7 @@ end
 if has_choro
     colormap(ax, cmap_ch);
     clim(ax, [vmin vmax]);
-    cb = colorbar(ax,'Position',[0.86, 0.05+sldr_lift, 0.03, 0.90-sldr_lift]);
+    cb = colorbar(ax,'Position',[CBAR_X, 0.05+sldr_lift, CBAR_W, 0.90-sldr_lift]);
     cb.Label.String = strrep(char(options.ColorCol),'_',' ');
     cb.FontSize = 8;
 end
@@ -244,7 +246,7 @@ if has_slider
     lbl_ctrl = uicontrol(fig,'Style','text','Units','normalized', ...
         'Position',[0.85 0.01 0.13 0.04], ...
         'String', um_yr_str(t_vals,1,is_year_axis), ...
-        'FontSize',10,'BackgroundColor',BG,'HorizontalAlignment','left');
+        'FontSize',10,'BackgroundColor',BG_GRAY,'HorizontalAlignment','left');
 
     ph_c=patch_h; Heat_c=Heat; vmin_c=vmin; vmax_c=vmax; cmap_c=cmap_ch;
     tvals_c=t_vals; iyr_c=is_year_axis; th_c=ax.Title; cc_c=options.ColorCol;
@@ -284,14 +286,16 @@ end
 
 
 function cmap = um_cmap(spec)
-if ischar(spec) || isstring(spec), cmap = feval(char(spec), 256);
+CMAP_N = 256;
+if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
 end
 
 
 function fc = um_val2color(val, vmin, vmax, cmap, has_choro)
+CLR_NODATA = [0.88 0.88 0.88];
 if ~has_choro || isnan(val)
-    fc = [0.88 0.88 0.88];
+    fc = CLR_NODATA;
 else
     norm = max(0, min(1, (val-vmin)/(vmax-vmin)));
     ci   = max(1, min(size(cmap,1), floor(norm*size(cmap,1))+1));

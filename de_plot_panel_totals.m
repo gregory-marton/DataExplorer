@@ -41,7 +41,12 @@ end
 % ── Local helpers ─────────────────────────────────────────────────────────────
 
 function plot_pct_area_by_cat(T, prof, cat_idx, yr_idxs, yr_vals)
-TOP_AREA = 20;
+TOP_AREA  = 20;
+BG_GRAY   = [0.97 0.97 0.97];
+FSZ_TINY  = 5;
+FSZ_LABEL = 8;
+FSZ_BASE  = 9;
+YLIM_MAX  = 105;
 
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
@@ -89,33 +94,33 @@ cmap    = lines(n_shown);
 
 fig1 = figure('Name', fig_title( ...
     sprintf('Total by %s over time', catname), prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 ax1 = axes(fig1);
 hold(ax1, 'on');
 ax1.ColorOrder = cmap;
 area(ax1, yr_sorted(:), abs_mat');
 hold(ax1, 'off');
-legend(ax1, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
-xlabel(ax1, 'Year', 'FontSize', 9);
-ylabel(ax1, 'Total', 'FontSize', 8);
+legend(ax1, levels, 'Location', 'eastoutside', 'FontSize', FSZ_TINY, 'Interpreter', 'none');
+xlabel(ax1, 'Year', 'FontSize', FSZ_BASE);
+ylabel(ax1, 'Total', 'FontSize', FSZ_LABEL);
 title(ax1, src_prefix(prof.source_name, sprintf('Total over time by %s', catname)), ...
-    'FontSize', 9, 'Interpreter', 'none');
+    'FontSize', FSZ_BASE, 'Interpreter', 'none');
 box(ax1, 'off');
 
 fig2 = figure('Name', fig_title( ...
     sprintf('Share by %s over time', catname), prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 ax2 = axes(fig2);
 hold(ax2, 'on');
 ax2.ColorOrder = cmap;
 area(ax2, yr_sorted(:), pct_mat');
 hold(ax2, 'off');
-legend(ax2, levels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', 'none');
-xlabel(ax2, 'Year', 'FontSize', 9);
-ylabel(ax2, '% share', 'FontSize', 8);
-ylim(ax2, [0 105]);
+legend(ax2, levels, 'Location', 'eastoutside', 'FontSize', FSZ_TINY, 'Interpreter', 'none');
+xlabel(ax2, 'Year', 'FontSize', FSZ_BASE);
+ylabel(ax2, '% share', 'FontSize', FSZ_LABEL);
+ylim(ax2, [0 YLIM_MAX]);
 title(ax2, src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
-    'FontSize', 9, 'Interpreter', 'none');
+    'FontSize', FSZ_BASE, 'Interpreter', 'none');
 box(ax2, 'off');
 end
 

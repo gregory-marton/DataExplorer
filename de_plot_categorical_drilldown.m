@@ -128,6 +128,10 @@ end
 % ─────────────────────────────────────────────────────────────────────────────
 
 function plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_year_axis)
+BG_GRAY  = [0.97 0.97 0.97];
+ALPHA_LO = 0.025;   ALPHA_HI = 0.975;
+ALPHA_CI = 0.15;
+FSZ_SMALL = 6;   FSZ_BASE = 7;   FSZ_LABEL = 8;   FSZ_TITLE = 10;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
@@ -144,7 +148,7 @@ n_num  = numel(num_idxs);
 
 fig = figure( ...
     'Name',        fig_title(sprintf('By %s', catname), prof.source_name), ...
-    'Color',       [0.97 0.97 0.97], ...
+    'Color',       BG_GRAY, ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -183,8 +187,8 @@ for j = 1:n_num
             if nv >= 2
                 bm = mean(vals(randi(nv, nv, B_CI)), 1);
                 bm = sort(bm);
-                y_lo(tt) = bm(max(1, round(0.025*B_CI)));
-                y_hi(tt) = bm(min(B_CI, round(0.975*B_CI)));
+                y_lo(tt) = bm(max(1, round(ALPHA_LO*B_CI)));
+                y_hi(tt) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
             else
                 y_lo(tt) = vals; y_hi(tt) = vals;
             end
@@ -195,7 +199,7 @@ for j = 1:n_num
             hold(ax, 'on');
             t_ci = t_u(ok_ci);
             fill(ax, [t_ci; flipud(t_ci)], [y_hi(ok_ci); flipud(y_lo(ok_ci))], ...
-                colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', ...
+                colors(lk,:), 'FaceAlpha', ALPHA_CI, 'EdgeColor', 'none', ...
                 'HandleVisibility', 'off');
         end
 
@@ -213,21 +217,24 @@ for j = 1:n_num
     end
 
     if j == n_num
-        xlabel(ax, prof.name{time_idx}, 'FontSize', 8, 'Interpreter', 'none');
+        xlabel(ax, prof.name{time_idx}, 'FontSize', FSZ_LABEL, 'Interpreter', 'none');
     end
-    ylabel(ax, ncn, 'FontSize', 7, 'Interpreter', 'none');
-    legend(ax, 'Location', 'bestoutside', 'FontSize', 6, 'Interpreter', 'none');
+    ylabel(ax, ncn, 'FontSize', FSZ_BASE, 'Interpreter', 'none');
+    legend(ax, 'Location', 'bestoutside', 'FontSize', FSZ_SMALL, 'Interpreter', 'none');
     box(ax, 'off');
 end
 
 title(tl, src_prefix(prof.source_name, sprintf('by %s', catname)), ...
-    'FontSize', 10, 'Interpreter', 'none');
+    'FontSize', FSZ_TITLE, 'Interpreter', 'none');
 end
 
 
 function plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
-TOP_K = 20;
-B_CI  = 500;
+TOP_K    = 20;
+B_CI     = 500;
+BG_GRAY  = [0.97 0.97 0.97];
+ALPHA_LO = 0.025;   ALPHA_HI = 0.975;
+ALPHA_CI = 0.15;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 
@@ -275,7 +282,7 @@ n_rows_show = n_rows_all(top_idx);
 [colors, plot_order] = level_colors(levels_show);
 
 fig = figure('Name', fig_title(sprintf('By %s over time', catname), prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 ax = axes(fig);
 hold(ax, 'on');
 
@@ -293,8 +300,8 @@ if has_other
         y_o(yi) = mean(v);
         if nv >= 2
             bm = sort(mean(v(randi(nv,nv,B_CI)),1));
-            lo_o(yi) = bm(max(1, round(0.025*B_CI)));
-            hi_o(yi) = bm(min(B_CI, round(0.975*B_CI)));
+            lo_o(yi) = bm(max(1, round(ALPHA_LO*B_CI)));
+            hi_o(yi) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
         else
             lo_o(yi) = v;  hi_o(yi) = v;
         end
@@ -324,8 +331,8 @@ for lk = plot_order
         y_k(yi) = mean(v);
         if nv >= 2
             bm = sort(mean(v(randi(nv,nv,B_CI)),1));
-            lo_k(yi) = bm(max(1, round(0.025*B_CI)));
-            hi_k(yi) = bm(min(B_CI, round(0.975*B_CI)));
+            lo_k(yi) = bm(max(1, round(ALPHA_LO*B_CI)));
+            hi_k(yi) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
         else
             lo_k(yi) = v;  hi_k(yi) = v;
         end
@@ -334,7 +341,7 @@ for lk = plot_order
     if sum(ok_ci) >= 2
         t_ci = yr_sorted(ok_ci);
         fill(ax, [t_ci; flipud(t_ci)], [hi_k(ok_ci); flipud(lo_k(ok_ci))], ...
-            colors(lk,:), 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+            colors(lk,:), 'FaceAlpha', ALPHA_CI, 'EdgeColor', 'none', 'HandleVisibility', 'off');
     end
     h_k = plot(ax, yr_sorted, y_k, '-', 'Color', colors(lk,:), ...
         'LineWidth', 1.2, 'DisplayName', disp_lbl);
@@ -360,6 +367,7 @@ end
 
 
 function plot_scatter_by_cat(T, prof, cat_idx, sel_num)
+BG_GRAY = [0.97 0.97 0.97];
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
@@ -372,7 +380,7 @@ np = numel(sel_num);
 
 fig = figure( ...
     'Name',        fig_title(catname, prof.source_name), ...
-    'Color',       [0.97 0.97 0.97], ...
+    'Color',       BG_GRAY, ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
@@ -513,6 +521,7 @@ end
 
 
 function plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis, grid_name)
+BG_GRAY = [0.97 0.97 0.97];
 if nargin < 8 || isempty(grid_name), grid_name = 'us-states'; end
 
 catname = prof.name{cat_idx};
@@ -540,7 +549,7 @@ n_cols = min(n_num, 3);
 n_rows = ceil(n_num / n_cols);
 
 fig = figure('Name', fig_title(sprintf('By %s', catname), prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 tl = tiledlayout(fig, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 for j = 1:n_num
@@ -588,7 +597,7 @@ if ~isempty(wide_yr_idxs)
     n_t = numel(t_vals);
 
     fig2 = figure('Name', fig_title(sprintf('%s × year', catname), prof.source_name), ...
-        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+        'Color', BG_GRAY, 'NumberTitle', 'off');
     ax = axes(fig2);
 
     Heat = NaN(n_st_plot, n_t);
@@ -622,7 +631,7 @@ else
     if n_t < 2, return; end
 
     fig2 = figure('Name', fig_title(sprintf('%s × time', catname), prof.source_name), ...
-        'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+        'Color', BG_GRAY, 'NumberTitle', 'off');
     tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     for j = 1:n_num
@@ -713,6 +722,7 @@ end
 
 
 function plot_state_pct_area(T, prof, cat_idx, total_code, states_plot, yr_idxs, yr_vals)
+BG_GRAY = [0.97 0.97 0.97];
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 
@@ -745,7 +755,7 @@ pct_mat(isnan(pct_mat)) = 0;
 
 fig = figure('Name', fig_title( ...
     sprintf('%% of %s total by %s', total_code, catname), prof.source_name), ...
-    'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
+    'Color', BG_GRAY, 'NumberTitle', 'off');
 ax = axes(fig);
 n_shown = size(pct_mat, 1);
 hold(ax, 'on');
@@ -787,6 +797,7 @@ end
 % ─────────────────────────────────────────────────────────────────────────────
 
 function mask = total_mask(levels, means)
+AGG_RATIO = 0.30;
 n = numel(levels);
 mask = false(n, 1);
 for li = 1:n
@@ -799,7 +810,7 @@ for li = 1:n
     if mask(li) || isnan(means(li)) || means(li) <= 0, continue; end
     others = valid;  others(li) = false;
     sum_oth = sum(means(others));
-    if sum_oth > 0 && abs(means(li)/sum_oth - 1) < 0.30
+    if sum_oth > 0 && abs(means(li)/sum_oth - 1) < AGG_RATIO
         mask(li) = true;
     end
 end
@@ -812,11 +823,12 @@ end
 
 
 function [colors, plot_order] = level_colors(levels)
+OTHER_FILL = [0.78 0.78 0.78];
 n = numel(levels);
 colors = lines(n);
 is_other = n > 0 && strncmp(levels{n}, 'Other (', 7);
 if is_other
-    colors(n, :) = [0.78 0.78 0.78];
+    colors(n, :) = OTHER_FILL;
     plot_order = [n, 1:n-1];
 else
     plot_order = 1:n;
