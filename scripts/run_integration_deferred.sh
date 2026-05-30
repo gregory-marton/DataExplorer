@@ -4,7 +4,7 @@
 # Launched by conftest.py after a successful smoke run. Sleeps 15 minutes,
 # then checks that the sentinel UUID still matches before running the full suite.
 # On failure: appends output to .cache/last_full_run.txt, leaves sentinel.
-# On success: deletes sentinel and .cache/last_full_run.txt.
+# On success: moves output to .cache/last_full_run_passed_<timestamp>.txt, deletes sentinel.
 
 set -uo pipefail
 
@@ -23,6 +23,8 @@ fi
 cd "$ROOT"
 TMPOUT=$(mktemp)
 if python3 -m pytest tests/ --tb=short > "$TMPOUT" 2>&1; then
+    TS=$(date +%Y%m%d_%H%M%S)
+    { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } > "$ROOT/.cache/last_full_run_passed_${TS}.txt"
     rm -f "$SENTINEL" "$LAST_RUN"
 else
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } >> "$LAST_RUN"

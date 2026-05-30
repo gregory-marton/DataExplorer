@@ -148,7 +148,8 @@ function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, pareto_max_grp, stack
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
-x = x(valid); y = y(valid);
+x = removecats(x(valid));
+y = removecats(y(valid));
 cx = categories(x); nx = numel(cx);
 cy = categories(y); ny = numel(cy);
 if nx <= ny
@@ -188,7 +189,7 @@ nrow   = ceil(ng / ncol);
 % Layout constants
 PAD_L  = 0.09;
 PAD_R  = 0.04;
-PAD_T  = 0.12;
+PAD_T  = 0.16;
 PAD_B  = 0.14;
 GAP_H  = 0.08;
 GAP_V  = 0.16;
@@ -303,8 +304,10 @@ for k = 1:ng
     ax.YAxis(1).FontSize   = FONT_BASE+1;
     ax.YAxis(1).FontWeight = 'bold';
 
-    title(ax, {' ', sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot)}, ...
+    th = title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot), ...
         'FontSize', FONT_BASE+1, 'Interpreter', 'none');
+    th.Units = 'normalized';
+    th.Position(2) = th.Position(2) + 0.03;
     box(ax, 'off');
 
     max_cnt    = max(max_cnt, max(cp));
