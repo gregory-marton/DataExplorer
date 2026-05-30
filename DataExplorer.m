@@ -1104,8 +1104,9 @@ function T = se_fix_names(T, filepath, ext, sheet)
         % (e.g. "Data_Status, StateCode, MSN, 1960, 1961, …, 2023").
         % Require ≥3 year-like integers to avoid false positives on data rows
         % that happen to include one year value (e.g. survey year).
+        YEAR_MIN  = 1900;  YEAR_MAX = 2100;
         year_vals = cellfun(@(v) isnumeric(v) && isscalar(v) && ~isnan(v) && ...
-            v >= 1900 && v <= 2100 && v == floor(v), firstrow);
+            v >= YEAR_MIN && v <= YEAR_MAX && v == floor(v), firstrow);
         looks_like_mixed_header = any(is_text) && sum(year_vals) >= 3 && ~looks_like_header;
 
         if looks_like_header || looks_like_mixed_header
@@ -1539,7 +1540,9 @@ else
 end
 fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 se_stamp_source(fig, prof.source_name);
-BASE_SZ = 20;   % default marker area in points²
+BASE_SZ  = 20;
+MKR_MIN  = 4;
+MKR_SPAN = 76;
 
 if has_mapping
     ax = geoaxes(fig);
@@ -1563,7 +1566,7 @@ if has_mapping
             % Scale to [4, 80] point² range
             lo = min(sdata); hi = max(sdata);
             if hi > lo
-                sz = 4 + 76 * (sdata - lo) / (hi - lo);
+                sz = MKR_MIN + MKR_SPAN * (sdata - lo) / (hi - lo);
             else
                 sz = repmat(BASE_SZ, size(sdata));
             end
@@ -1619,7 +1622,7 @@ else
             sdata = sdata(valid);
             lo = min(sdata); hi = max(sdata);
             if hi > lo
-                sz = 4 + 76 * (sdata - lo) / (hi - lo);
+                sz = MKR_MIN + MKR_SPAN * (sdata - lo) / (hi - lo);
             else
                 sz = repmat(BASE_SZ, size(sdata));
             end
@@ -1694,7 +1697,9 @@ n_u    = numel(tdata_u);
 Y_mean = NaN(n_u, n_series);
 Y_lo   = NaN(n_u, n_series);
 Y_hi   = NaN(n_u, n_series);
-B = 500;
+B        = 500;
+ALPHA_LO = 0.025;
+ALPHA_HI = 0.975;
 for k = 1:n_series
     for t = 1:n_u
         vals = Y(tidx == t, k);
@@ -1705,8 +1710,8 @@ for k = 1:n_series
         if n_v >= 2
             bm = mean(vals(randi(n_v, n_v, B)), 1);
             bm_s = sort(bm);
-            Y_lo(t, k) = bm_s(max(1, round(0.025*B)));
-            Y_hi(t, k) = bm_s(min(B, round(0.975*B)));
+            Y_lo(t, k) = bm_s(max(1, round(ALPHA_LO*B)));
+            Y_hi(t, k) = bm_s(min(B, round(ALPHA_HI*B)));
         end
     end
 end
@@ -1847,10 +1852,12 @@ if n_u < 2
         prof.name{year_idx});
     return
 end
-Y_mean = NaN(n_u, n_series);
-Y_lo   = NaN(n_u, n_series);
-Y_hi   = NaN(n_u, n_series);
-B = 500;
+Y_mean   = NaN(n_u, n_series);
+Y_lo     = NaN(n_u, n_series);
+Y_hi     = NaN(n_u, n_series);
+B        = 500;
+ALPHA_LO = 0.025;
+ALPHA_HI = 0.975;
 for k = 1:n_series
     for t = 1:n_u
         vals = Y(xidx == t, k);
@@ -1861,8 +1868,8 @@ for k = 1:n_series
         if n_v >= 2
             bm = mean(vals(randi(n_v, n_v, B)), 1);
             bm_s = sort(bm);
-            Y_lo(t, k) = bm_s(max(1, round(0.025*B)));
-            Y_hi(t, k) = bm_s(min(B, round(0.975*B)));
+            Y_lo(t, k) = bm_s(max(1, round(ALPHA_LO*B)));
+            Y_hi(t, k) = bm_s(min(B, round(ALPHA_HI*B)));
         end
     end
 end
@@ -3436,7 +3443,9 @@ fig = figure( ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-B_CI = 500;
+B_CI     = 500;
+ALPHA_LO = 0.025;
+ALPHA_HI = 0.975;
 for j = 1:n_num
     ax = nexttile(tl);
     ncn   = prof.name{num_idxs(j)};
@@ -3472,8 +3481,8 @@ for j = 1:n_num
             if nv >= 2
                 bm = mean(vals(randi(nv, nv, B_CI)), 1);
                 bm = sort(bm);
-                y_lo(tt) = bm(max(1, round(0.025*B_CI)));
-                y_hi(tt) = bm(min(B_CI, round(0.975*B_CI)));
+                y_lo(tt) = bm(max(1, round(ALPHA_LO*B_CI)));
+                y_hi(tt) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
             else
                 y_lo(tt) = vals; y_hi(tt) = vals;
             end
@@ -4227,6 +4236,7 @@ end
 function [yr_idxs, yr_vals] = se_detect_wide_years(prof)
 %SE_DETECT_WIDE_YEARS  Find non-skip numeric columns named x#### (year 1900–2100).
 %   Returns empty arrays if fewer than 3 such columns exist.
+YEAR_MIN = 1900;  YEAR_MAX = 2100;
 n_cols = numel(prof.name);
 yr_idxs = zeros(1, n_cols);
 yr_vals = zeros(1, n_cols);
@@ -4236,7 +4246,7 @@ for i = 1:n_cols
     tok = regexp(prof.name{i}, '^x(\d{4})$', 'tokens', 'once');
     if isempty(tok), continue; end
     yr = str2double(tok{1});
-    if yr >= 1900 && yr <= 2100
+    if yr >= YEAR_MIN && yr <= YEAR_MAX
         ny = ny + 1;
         yr_idxs(ny) = i;
         yr_vals(ny) = yr;
@@ -4253,8 +4263,10 @@ function se_plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
 %SE_PLOT_GROUPED_TIMESERIES_WIDE  Trend lines per category using wide-format year columns.
 %   Shows top-K levels by overall mean + aggregated "Other" for the rest.
 %   Bootstrap 95% CI shading on every line.
-TOP_K = 20;
-B_CI  = 500;
+TOP_K    = 20;
+B_CI     = 500;
+ALPHA_LO = 0.025;
+ALPHA_HI = 0.975;
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 
@@ -4324,8 +4336,8 @@ if has_other
         y_o(yi) = mean(v);
         if nv >= 2
             bm = sort(mean(v(randi(nv,nv,B_CI)),1));
-            lo_o(yi) = bm(max(1, round(0.025*B_CI)));
-            hi_o(yi) = bm(min(B_CI, round(0.975*B_CI)));
+            lo_o(yi) = bm(max(1, round(ALPHA_LO*B_CI)));
+            hi_o(yi) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
         else
             lo_o(yi) = v;  hi_o(yi) = v;
         end
@@ -4356,8 +4368,8 @@ for lk = plot_order
         y_k(yi) = mean(v);
         if nv >= 2
             bm = sort(mean(v(randi(nv,nv,B_CI)),1));
-            lo_k(yi) = bm(max(1, round(0.025*B_CI)));
-            hi_k(yi) = bm(min(B_CI, round(0.975*B_CI)));
+            lo_k(yi) = bm(max(1, round(ALPHA_LO*B_CI)));
+            hi_k(yi) = bm(min(B_CI, round(ALPHA_HI*B_CI)));
         else
             lo_k(yi) = v;  hi_k(yi) = v;
         end
