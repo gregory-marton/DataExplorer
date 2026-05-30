@@ -2852,18 +2852,17 @@ if ~isempty(pairs)
         a = T.(names{ni}); b = T.(names{nj});
         if ~iscategorical(a), a = categorical(a); end
         if ~iscategorical(b), b = categorical(b); end
-        nu_i = numel(categories(a)); nu_j = numel(categories(b));
+        nu_i = numel(categories(removecats(a)));
+        nu_j = numel(categories(removecats(b)));
         if nu_i <= nu_j
             col_grp = names{ni}; col_val = names{nj}; ng_pair = nu_i;
         else
             col_grp = names{nj}; col_val = names{ni}; ng_pair = nu_j;
         end
-        if ng_pair <= 6
-            fn = 'de_pareto_multiples';
-        elseif ng_pair <= 15
-            fn = 'de_stacked_bars';
-        else
-            fn = 'de_cond_heatmap';
+        switch de_cat_routing(ng_pair)
+            case 'pareto',  fn = 'de_pareto_multiples';
+            case 'stacked', fn = 'de_stacked_bars';
+            otherwise,      fn = 'de_cond_heatmap';
         end
         nl = nl + 1;
         out{nl} = sprintf('%s(T, "%s", "%s");  %% V=%.2f', fn, col_grp, col_val, pairs(k,3));

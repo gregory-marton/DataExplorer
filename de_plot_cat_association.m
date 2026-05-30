@@ -25,8 +25,6 @@ end
 MAX_LABEL          = 25;
 MAX_PAIRS          = options.MaxPairs;
 V_THRESH           = options.VThresh;
-PARETO_MAX_GROUPS  = 6;
-STACKED_MAX_GROUPS = 40;  % proportion scales naturally to many rows; heatmap only when truly both-axis high-cardinality
 V_ANNOTATE_THRESH  = 0.05;
 GLYPH_MAX_COLS     = 10;
 src = ca_source_prefix(prof);
@@ -38,7 +36,7 @@ if options.Figure == "pair"
     col_a = options.Columns(1); col_b = options.Columns(2);
     v = de_cramer_v(T.(col_a), T.(col_b));
     ca_plot_pair(T.(col_a), T.(col_b), col_a, col_b, v, src, MAX_LABEL, ...
-        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS, char(options.ForcePlot));
+        char(options.ForcePlot));
     return
 end
 
@@ -86,8 +84,7 @@ if isempty(pairs), return; end
 pairs = pairs(ord(1:min(MAX_PAIRS,end)), :);
 for k = 1:size(pairs,1)
     ca_plot_pair(T.(names{pairs(k,1)}), T.(names{pairs(k,2)}), ...
-        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL, ...
-        PARETO_MAX_GROUPS, STACKED_MAX_GROUPS, 'auto');
+        names{pairs(k,1)}, names{pairs(k,2)}, pairs(k,3), src, MAX_LABEL, 'auto');
 end
 end
 
@@ -144,7 +141,7 @@ dcm.UpdateFcn = @(~,ev) ca_vmat_tip(ev, nm_dc, vm_dc);
 end
 
 
-function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, pareto_max_grp, stacked_max_grp, force_plot)
+function ca_plot_pair(x, y, xname, yname, V, src, max_lbl, force_plot)
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -160,9 +157,10 @@ else
     val = x; vname = xname; vcats = cx;
 end
 ftitle = sprintf('%s x %s  (V = %.2f)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl), V);
-if strcmp(force_plot,'pareto') || (strcmp(force_plot,'auto') && ng <= pareto_max_grp)
+if strcmp(force_plot, 'auto'), force_plot = de_cat_routing(ng); end
+if strcmp(force_plot, 'pareto')
     plot_type = 'Pareto';
-elseif strcmp(force_plot,'stacked') || (strcmp(force_plot,'auto') && ng <= stacked_max_grp)
+elseif strcmp(force_plot, 'stacked')
     plot_type = 'Proportion';
 else
     plot_type = 'Heatmap';
