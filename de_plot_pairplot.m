@@ -1,7 +1,8 @@
-function de_plot_pairplot(T, prof, sel)
+function de_plot_pairplot(T, prof, sel, options)
 %DE_PLOT_PAIRPLOT  Scatter matrix with type-aware dispatch per cell.
 %
 %   de_plot_pairplot(T, prof, sel)
+%   de_plot_pairplot(T, prof, sel, FontSize=sz)
 %
 %   T    — table (already profiled)
 %   prof — struct from de_profile(T)
@@ -16,17 +17,25 @@ function de_plot_pairplot(T, prof, sel)
 %     diagonal            → histogram (numeric), bar chart (categorical), or
 %                           datetime histogram
 
+arguments
+    T       table
+    prof    struct
+    sel     double
+    options.FontSize (1,1) double {mustBePositive} = 7
+end
+
 if isempty(sel), return; end
 
 BG_GRAY   = [0.97 0.97 0.97];
-FSZ_TINY  = 6;   FSZ_LABEL = 8;   FSZ_TITLE = 11;
+F         = dex_font_sizes(options.FontSize);
+fsz       = F.base;
 
 np = numel(sel);
 
 src = char(prof.source_name);
 fig = figure('Name', pp_fig_name('Pairplot', src), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
-pp_stamp_source(fig, src);
+pp_stamp_source(fig, src, fsz);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
 n = height(T);
@@ -48,11 +57,11 @@ for r = 1:np
         if r == c
             switch rtype
                 case "numeric"
-                    pp_num_diag(ax, xdata, xname, prof.nmissing(ci), n);
+                    pp_num_diag(ax, xdata, xname, prof.nmissing(ci), n, fsz);
                 case {"categorical", "logical"}
-                    pp_cat_diag(ax, xdata, xname, prof.nmissing(ci), n);
+                    pp_cat_diag(ax, xdata, xname, prof.nmissing(ci), n, fsz);
                 case "datetime"
-                    pp_time_diag(ax, xdata, xname);
+                    pp_time_diag(ax, xdata, xname, fsz);
                 otherwise
                     axis(ax, 'off');
                     text(ax, 0.5, 0.5, char(rtype), ...
@@ -60,7 +69,7 @@ for r = 1:np
             end
 
         elseif rtype == "numeric" && ctype == "numeric"
-            pp_num_num(ax, xdata, ydata);
+            pp_num_num(ax, xdata, ydata, fsz);
 
         elseif rtype == "numeric" && ismember(ctype, ["categorical","logical"])
             pp_num_cat(ax, xdata, ydata);
@@ -70,7 +79,7 @@ for r = 1:np
 
         elseif ismember(rtype, ["categorical","logical"]) && ...
                ismember(ctype, ["categorical","logical"])
-            pp_cat_cat(ax, xdata, ydata);
+            pp_cat_cat(ax, xdata, ydata, fsz);
 
         elseif rtype == "datetime" || ctype == "datetime"
             pp_time_pair(ax, xdata, ydata, rtype, ctype);
@@ -90,14 +99,14 @@ for r = 1:np
             else
                 col_title = pp_wrapped(xname);
             end
-            title(ax, col_title, 'FontSize', FSZ_LABEL, 'FontWeight', 'bold', 'Interpreter', 'tex');
+            title(ax, col_title, 'FontSize', F.subtitle, 'FontWeight', 'bold', 'Interpreter', 'tex');
         end
         if r == c && r > 1
-            title(ax, pp_wrapped(yname), 'FontSize', FSZ_LABEL, 'FontWeight', 'bold', ...
+            title(ax, pp_wrapped(yname), 'FontSize', F.subtitle, 'FontWeight', 'bold', ...
                 'Interpreter', 'none');
         end
         if c == 1
-            yl = ylabel(ax, pp_wrapped(yname), 'FontSize', FSZ_TINY, 'Interpreter', 'none');
+            yl = ylabel(ax, pp_wrapped(yname), 'FontSize', F.tiny, 'Interpreter', 'none');
             set(yl, 'Rotation', 0, 'HorizontalAlignment', 'right');
         end
     end
@@ -108,17 +117,16 @@ if n == 0
 else
     title_str = sprintf('n = %d', n);
 end
-title(tl, title_str, 'FontSize', FSZ_TITLE, 'Interpreter', 'none');
+title(tl, title_str, 'FontSize', F.page, 'Interpreter', 'none');
 end
 
 
 % ── Diagonal helpers ─────────────────────────────────────────────────────────
 
-function pp_num_diag(ax, x, varname, nmissing, n)
+function pp_num_diag(ax, x, varname, nmissing, n, fsz)
 DATA_BLUE = [0.35 0.55 0.75];
 MISS_RED  = [0.6 0.3 0.3];
-FSZ_SMALL = 6.5;
-FSZ_BASE  = 7;
+FSZ_SMALL = fsz - 0.5;
 x = double(x);
 valid = x(~isnan(x));
 if isempty(valid)
@@ -140,15 +148,13 @@ if nmissing > 0
         'Units', 'normalized', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
         'FontSize', FSZ_SMALL, 'Color', MISS_RED);
 end
-set(ax, 'FontSize', FSZ_BASE); box(ax, 'off');
+set(ax, 'FontSize', fsz); box(ax, 'off');
 end
 
 
-function pp_cat_diag(ax, x, varname, nmissing, n)
+function pp_cat_diag(ax, x, varname, nmissing, n, fsz)
 MAX_K     = 15;
 CAT_GREEN = [0.45 0.70 0.55];
-MISS_RED  = [0.6 0.3 0.3];
-FSZ_SMALL = 6.5;
 if iscategorical(x)
     cats   = categories(x);
     counts = histcounts(x);
@@ -158,6 +164,8 @@ elseif islogical(x)
 else
     axis(ax, 'off'); return
 end
+MISS_RED  = [0.6 0.3 0.3];
+FSZ_SMALL = fsz - 0.5;
 [counts_s, ord] = sort(counts(:), 'descend');
 cats_s = cats(ord);
 nc = numel(cats_s);
@@ -192,11 +200,10 @@ box(ax, 'off');
 end
 
 
-function pp_time_diag(ax, x, varname)
+function pp_time_diag(ax, x, varname, fsz)
 TIME_PURPLE = [0.65 0.50 0.75];
 CLR_DARK    = [0.2 0.2 0.2];
-FSZ_SMALL   = 6.5;
-FSZ_BASE    = 7;
+FSZ_SMALL   = fsz - 0.5;
 if isduration(x), x = datetime(0,0,0) + x; end
 valid = x(~isnat(x));
 if isempty(valid), axis(ax,'off'); return; end
@@ -213,27 +220,27 @@ else
         'VerticalAlignment','top','FontSize',FSZ_SMALL,'Color',CLR_DARK);
 end
 h.DataTipTemplate.DataTipRows(1).Label = char(varname);
-set(ax, 'YTick', [], 'FontSize', FSZ_BASE); box(ax, 'off');
+set(ax, 'YTick', [], 'FontSize', fsz); box(ax, 'off');
 end
 
 
 % ── Off-diagonal helpers ─────────────────────────────────────────────────────
 
-function pp_num_num(ax, x, y)
+function pp_num_num(ax, x, y, fsz)
 valid = ~isnan(x) & ~isnan(y);
 xv = double(x(valid));
 yv = double(y(valid));
 if isempty(xv), axis(ax,'off'); return; end
 
 if pp_is_discrete(xv) && ~pp_is_discrete(yv)
-    pp_boxchart(ax, xv, yv); return
+    pp_boxchart(ax, xv, yv, fsz); return
 elseif pp_is_discrete(yv) && ~pp_is_discrete(xv)
-    pp_boxchart(ax, yv, xv); return
+    pp_boxchart(ax, yv, xv, fsz); return
 end
 
 MAX_PTS     = 5000;
 DATA_BLUE_D = [0.25 0.45 0.70];
-FSZ_MID     = 7.5;
+FSZ_MID     = fsz + 0.5;
 if numel(xv) > MAX_PTS
     idx = randperm(numel(xv), MAX_PTS);
     xv = xv(idx); yv = yv(idx);
@@ -347,10 +354,10 @@ set(ax, 'XTick', [], 'YTick', []); box(ax, 'off');
 end
 
 
-function pp_cat_cat(ax, x, y)
+function pp_cat_cat(ax, x, y, fsz)
 MAX_CATS = 10;
 CMAP_N   = 64;
-FSZ_TINY = 6;
+FSZ_TINY = fsz - 1;
 if ~iscategorical(x), x = categorical(x); end
 if ~iscategorical(y), y = categorical(y); end
 valid = ~isundefined(x) & ~isundefined(y);
@@ -368,7 +375,7 @@ for ri = 1:numel(cy)
     end
 end
 imagesc(ax, M);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
+blues = dex_blues_cmap(CMAP_N);
 colormap(ax, blues);
 set(ax, 'XTick', [], 'YTick', []);
 if numel(cx) <= 2 && numel(cy) <= 2
@@ -406,16 +413,15 @@ tf = numel(unique(v)) <= 25 && max(abs(v - round(v))) < 0.01;
 end
 
 
-function pp_boxchart(ax, grp, vals)
+function pp_boxchart(ax, grp, vals, fsz)
 DATA_BLUE_D = [0.25 0.45 0.70];
-FSZ_TINY    = 6;
 grp_cat = categorical(grp);
 try
     boxchart(ax, grp_cat, vals, 'BoxFaceColor', DATA_BLUE_D, ...
         'WhiskerLineColor', DATA_BLUE_D, 'MarkerColor', DATA_BLUE_D, ...
         'MarkerStyle', '.', 'BoxWidth', 0.6);
     xtickangle(ax, 45);
-    ax.XAxis.FontSize = FSZ_TINY;
+    ax.XAxis.FontSize = fsz - 1;
 catch
     scatter(ax, double(grp_cat), vals, 8, DATA_BLUE_D, 'filled', ...
         'MarkerFaceAlpha', min(1, 500/numel(vals)));
@@ -472,9 +478,9 @@ end
 end
 
 
-function pp_stamp_source(fig, source_name)
+function pp_stamp_source(fig, source_name, fsz)
 if isempty(source_name) || strcmp(source_name, 'table input'), return; end
 annotation(fig, 'textbox', [0.0, 0.0, 1.0, 0.022], 'String', source_name, ...
     'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-    'FontSize', 7, 'Color', [0.55 0.55 0.55], 'Interpreter', 'none', 'FitBoxToText', 'off');
+    'FontSize', fsz, 'Color', [0.55 0.55 0.55], 'Interpreter', 'none', 'FitBoxToText', 'off');
 end

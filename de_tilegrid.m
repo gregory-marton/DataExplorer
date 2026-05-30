@@ -52,13 +52,12 @@ arguments
     options.CLim              (1,2) double  = [NaN NaN]
 end
 
+F                 = dex_font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
 TILE_PX           = 36;
 FIG_W_MIN         = 500;   FIG_W_MAX = 1600;
 FIG_H_MIN         = 380;   FIG_H_MAX = 1000;
 CBAR_X            = 0.86;  CBAR_W   = 0.03;
-FSZ_OVERFLOW      = 9;     FSZ_CBAR = 8;
-FSZ_TITLE         = 11;    FSZ_LEGEND = 6.5;
-FSZ_CATLEGEND     = 5.5;
+FSZ_LEGEND        = 6.5;   FSZ_CATLEGEND = 5.5;  % non-integer; stay local
 LBL_Y_SPARK       = 0.28;  LBL_Y_CAT = 0.10;
 CLR_LEGEND_BG     = [0.91 0.91 0.91];
 CLR_LEGEND_BORDER = [0.55 0.55 0.55];
@@ -244,8 +243,8 @@ set(ax, 'XLim', [-MARGIN, double(max_col)+1+MARGIN], ...
         'YLim', [-MARGIN, double(max_row)+1+MARGIN], 'YDir', 'reverse');
 
 %% ── Draw tiles ───────────────────────────────────────────────────────────────
-GAP     = 0.06;
-fs      = options.FontSize;
+GAP = 0.06;
+fs  = F.base;
 patch_h = cell(n_tiles, 1);
 label_h = cell(n_tiles, 1);
 
@@ -288,7 +287,7 @@ end
 n_ov = sum(IS_OVERFLOW);
 if n_ov > 0
     ov_row = min(ROWS(IS_OVERFLOW));
-    text(ax, -0.3, ov_row+0.5, '?', 'FontSize', FSZ_OVERFLOW, 'FontWeight', 'bold', ...
+    text(ax, -0.3, ov_row+0.5, '?', 'FontSize', F.axlabel, 'FontWeight', 'bold', ...
         'Color', options.OverflowEdgeColor, ...
         'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
 end
@@ -305,13 +304,13 @@ if has_choro
         lbl = sprintf('mean(%s, %s – %s)', lbl, t1s_cb, tns_cb);
     end
     cb.Label.String = lbl;
-    cb.FontSize = FSZ_CBAR;
+    cb.FontSize = F.subtitle;
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
 title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
-    'FontSize', FSZ_TITLE, 'Interpreter', 'none');
+    'FontSize', F.page, 'Interpreter', 'none');
 
 %% ── Sparklines (per-tile time series) ───────────────────────────────────────
 if has_spark && has_choro && ~is_heatmap_cat
@@ -391,7 +390,7 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
         else
             cb.Label.String = val_lbl;
         end
-        cb.FontSize = FSZ_CBAR;
+        cb.FontSize = F.subtitle;
         key_lines = [{'rows:'}, arrayfun(@(k) sprintf('%d  %s', k, top_cat_levels{k}), ...
             (1:K)', 'UniformOutput', false)'];
         cat_key = strjoin(key_lines, newline);
@@ -435,7 +434,7 @@ if is_scatter_cat && K2 > 0 && ~isnan(sh_lo2) && sh_lo2 < sh_hi2 && ...
             'DisplayName', top_cat_levels2{ki}, ...
             'LineStyle','none', 'Marker','.');
     end
-    legend(leg_h2, 'Location','southeast', 'FontSize',6, 'Interpreter','none');
+    legend(leg_h2, 'Location','southeast', 'FontSize', F.tiny, 'Interpreter','none');
 end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────

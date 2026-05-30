@@ -1,7 +1,7 @@
-function p = de_cat_assoc_params()
-%DE_CAT_ASSOC_PARAMS  Default thresholds for categorical association figures.
+function p = dex_cat_assoc_params()
+%DEX_CAT_ASSOC_PARAMS  Default thresholds for categorical association figures.
 %
-%   p = de_cat_assoc_params()
+%   p = dex_cat_assoc_params()
 %
 %   Returns a struct with fields:
 %     VThresh   — min Cramer's V to qualify a pair for a figure  (0.10)

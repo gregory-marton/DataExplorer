@@ -90,7 +90,7 @@ end
 
 
 function ca_plot_v_matrix(V_mat, P_mat, U_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
-FONT_BASE    = 9;
+F            = dex_font_sizes();
 CLR_FILL     = [0.75 0.75 0.75];  % gray background rectangle per cell
 ALPHA_FILL   = 0.75;
 CLR_GLYPH    = [0.88 0.58 0.75];  % coverage glyph (mauve)
@@ -102,17 +102,17 @@ nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
 imagesc(ax, V_mat, [0 1]);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
+blues = dex_blues_cmap(CMAP_N);
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = "Cramer's V  (0=independent, 1=fully associated)";
 short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
-    'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
+    'XTickLabelRotation', 40, 'FontSize', F.base, 'TickLength', [0 0]);
 sub = "Bias-Corrected Cramer's V";
 if ~isempty(src), sub = sub + "  |  " + src; end
-title(ax, {"Association Strength", sub}, 'FontSize', FONT_BASE+1);
+title(ax, {"Association Strength", sub}, 'FontSize', F.subtitle);
 draw_glyphs = nc <= glyph_max_cols;
 for i = 1:nc
     for j = 1:nc
@@ -120,7 +120,7 @@ for i = 1:nc
         if i < j
             if V_mat(i,j) >= v_annotate
                 text(ax, j, i, {sprintf('%.2f', V_mat(i,j)), ca_fmt_p(P_mat(i,j))}, ...
-                    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, ...
+                    'HorizontalAlignment', 'center', 'FontSize', F.base, ...
                     'Color', ca_label_color(V_mat(i,j)));
             end
         elseif draw_glyphs
@@ -184,8 +184,8 @@ end
 
 
 function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, src, max_lbl)
-MAX_B     = 15;
-FONT_BASE = 9;
+MAX_B = 15;
+F     = dex_font_sizes();
 
 CLR_BAR   = [0 0.4470 0.7410];   % bar fill (MATLAB default blue)
 Z_95      = 1.96;                  % Z for 95% binomial CI
@@ -230,9 +230,9 @@ for k = 1:ng
 end
 
 if isempty(src)
-    sgtitle(fig, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+    sgtitle(fig, ftitle, 'FontSize', F.title, 'Interpreter', 'none');
 else
-    sgtitle(fig, {ftitle, src}, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+    sgtitle(fig, {ftitle, src}, 'FontSize', F.title, 'Interpreter', 'none');
 end
 
 axs     = gobjects(ng, 1);
@@ -308,19 +308,19 @@ for k = 1:ng
     yyaxis(ax, 'right');
     plot(ax, 1:numel(cum), cum, '-o', 'Color', CLR_CUM, 'MarkerSize', MKR_SZ);
     ylim(ax, [0 100]);
-    ylabel(ax, 'Cumulative %', 'FontSize', FONT_BASE);
+    ylabel(ax, 'Cumulative %', 'FontSize', F.base);
     ax.YAxis(2).Color = [0.55 0.10 0.20];
 
     % Left axis: count, bold
     yyaxis(ax, 'left');
     set(ax, 'XTick', 1:numel(cp), 'XTickLabel', lp, ...
-        'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
-    ylabel(ax, 'Count', 'FontSize', FONT_BASE+2, 'FontWeight', 'bold');
-    ax.YAxis(1).FontSize   = FONT_BASE+1;
+        'XTickLabelRotation', 40, 'FontSize', F.base, 'TickLength', [0 0]);
+    ylabel(ax, 'Count', 'FontSize', F.axlabel, 'FontWeight', 'bold');
+    ax.YAxis(1).FontSize   = F.subtitle;
     ax.YAxis(1).FontWeight = 'bold';
 
     th = title(ax, sprintf('%s = %s  (n=%d)', ca_trunc(gname,max_lbl), ca_trunc(gcats{k},max_lbl), tot), ...
-        'FontSize', FONT_BASE+1, 'Interpreter', 'none');
+        'FontSize', F.subtitle, 'Interpreter', 'none');
     th.Units = 'normalized';
     th.Position(2) = th.Position(2) + 0.03;
     box(ax, 'off');
@@ -350,11 +350,11 @@ for k = 1:ng
         if cp(bi) >= half_ylim
             text(axs(k), bi, cp(bi), ca_fmt_n(cp(bi)), ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
-                'FontSize', FONT_BASE, 'Color', CLR_WHITE);
+                'FontSize', F.base, 'Color', CLR_WHITE);
         else
             text(axs(k), bi, cp(bi) + ci(bi), ca_fmt_n(cp(bi)), ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-                'FontSize', FONT_BASE, 'Color', CLR_DARK);
+                'FontSize', F.base, 'Color', CLR_DARK);
         end
     end
 end
@@ -362,8 +362,8 @@ end
 
 
 function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, src, max_lbl)
-THRESH        = 0.03;             % include a val category if ≥3% of any major group
-FONT_BASE     = 9;
+THRESH = 0.03;             % include a val category if ≥3% of any major group
+F      = dex_font_sizes();
 CLR_OTHER     = [0.70 0.70 0.70]; % "Other" bar fill
 CHAR_DENSITY  = 75;               % max characters per unit segment width
 MIN_CHARS     = 4;                % minimum characters to bother rendering a label
@@ -433,11 +433,10 @@ for row = 1:ng
             else
                 lbl = ca_trunc(cat_name, max_ch);
             end
-            lum     = 0.299*clrs(si,1) + 0.587*clrs(si,2) + 0.114*clrs(si,3);
-            txt_clr = [1 1 1] * double(lum < 0.5);
+            txt_clr = dex_text_color(clrs(si,:), 0.5);
             text(ax, x + seg_w/2, row, lbl, ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-                'FontSize', FONT_BASE, 'Interpreter', 'none', 'Clipping', 'on', ...
+                'FontSize', F.base, 'Interpreter', 'none', 'Clipping', 'on', ...
                 'Color', txt_clr);
         end
         x = x + seg_w;
@@ -449,13 +448,13 @@ for yi = 1:ng
     ylabels{yi} = sprintf('%s  (n=%d)', ca_trunc(gcats{gord(yi)}, max_lbl), gn(gord(yi)));
 end
 set(ax, 'YTick', 1:ng, 'YTickLabel', ylabels, ...
-    'FontSize', FONT_BASE+1, 'TickLength', [0 0]);
-ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', FONT_BASE+2);
-xlabel(ax, 'Proportion', 'FontSize', FONT_BASE+2);
+    'FontSize', F.subtitle, 'TickLength', [0 0]);
+ylabel(ax, ca_trunc(gname, max_lbl), 'FontSize', F.axlabel);
+xlabel(ax, 'Proportion', 'FontSize', F.axlabel);
 if isempty(src)
-    title(ax, ftitle, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+    title(ax, ftitle, 'FontSize', F.title, 'Interpreter', 'none');
 else
-    title(ax, {ftitle, src}, 'FontSize', FONT_BASE+3, 'Interpreter', 'none');
+    title(ax, {ftitle, src}, 'FontSize', F.title, 'Interpreter', 'none');
 end
 xlim(ax, [0 1]);
 ylim(ax, [0.5, ng + 0.5]);
@@ -466,8 +465,8 @@ end
 
 
 function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, src, max_lbl)
-FONT_BASE  = 9;
-MAX_S      = 20;
+F      = dex_font_sizes();
+MAX_S  = 20;
 CLR_OTHER  = [0.82 0.82 0.82];   % "Other" overflow cells
 CLR_MARG   = [1.00 0.97 0.75];   % marginal totals cells (pale yellow)
 CLR_CORNER = [0.72 0.72 0.72];   % grand total corner cell
@@ -527,7 +526,7 @@ P_full(1:nr, 1:nc) = P;
 
 ax = axes(fig);
 imagesc(ax, P_full, [0 1]);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
+blues = dex_blues_cmap(CMAP_N);
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
@@ -561,7 +560,7 @@ y_labels{yi} = 'Total';
 
 set(ax, 'XTick', x_ticks, 'YTick', y_ticks, ...
     'XTickLabel', x_labels, 'YTickLabel', y_labels, ...
-    'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
+    'XTickLabelRotation', 40, 'FontSize', F.base, 'TickLength', [0 0]);
 sub = '';
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
@@ -570,9 +569,9 @@ if ~isempty(src)
     if isempty(sub), sub = src; else, sub = [sub '  |  ' src]; end
 end
 if isempty(sub)
-    title(ax, ftitle, 'FontSize', FONT_BASE, 'Interpreter', 'none');
+    title(ax, ftitle, 'FontSize', F.base, 'Interpreter', 'none');
 else
-    title(ax, {ftitle, sub}, 'FontSize', FONT_BASE, 'Interpreter', 'none');
+    title(ax, {ftitle, sub}, 'FontSize', F.base, 'Interpreter', 'none');
 end
 box(ax, 'off');
 
@@ -582,7 +581,7 @@ if has_oth_col
             CLR_OTHER, 'EdgeColor', 'none');
         if N_oth_val(ri) > 0
             text(ax, oth_col_x, ri, ca_fmt_n(N_oth_val(ri)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+                'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
         end
     end
 end
@@ -593,7 +592,7 @@ if has_oth_row
             CLR_OTHER, 'EdgeColor', 'none');
         if N_oth_grp(ci) > 0
             text(ax, ci, oth_row_y, ca_fmt_n(N_oth_grp(ci)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+                'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
         end
     end
 end
@@ -602,14 +601,14 @@ for ri = 1:nr
     patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], ri+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_MARG, 'EdgeColor', 'none');
     text(ax, marg_col_x, ri, ca_fmt_n(nri_total(ri)), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+        'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
 end
 
 for ci = 1:nc
     patch(ax, ci+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_MARG, 'EdgeColor', 'none');
     text(ax, ci, marg_row_y, ca_fmt_n(nci_total(ci)), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+        'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
 end
 
 if has_oth_col && has_oth_row
@@ -618,7 +617,7 @@ if has_oth_col && has_oth_row
         CLR_CORNER, 'EdgeColor', 'none');
     if N_oth_oth > 0
         text(ax, oth_col_x, oth_row_y, ca_fmt_n(N_oth_oth), ...
-            'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+            'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
     end
 end
 if has_oth_col
@@ -626,25 +625,25 @@ if has_oth_col
     patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_CORNER, 'EdgeColor', 'none');
     text(ax, oth_col_x, marg_row_y, ca_fmt_n(N_val_oth_total), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+        'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
 end
 if has_oth_row
     N_grp_oth_total = N_valid - sum(nri_total);
     patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], oth_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_CORNER, 'EdgeColor', 'none');
     text(ax, marg_col_x, oth_row_y, ca_fmt_n(N_grp_oth_total), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+        'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
 end
 patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
     CLR_CORNER, 'EdgeColor', 'none');
 text(ax, marg_col_x, marg_row_y, ca_fmt_n(N_valid), ...
-    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
+    'HorizontalAlignment', 'center', 'FontSize', F.base, 'Color', CLR_DARK);
 
 for ri = 1:nr
     for ci = 1:nc
         if N(ri,ci) > 0
             text(ax, ci, ri, ca_fmt_count(N(ri,ci)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, ...
+                'HorizontalAlignment', 'center', 'FontSize', F.base, ...
                 'Color', ca_label_color(P(ri,ci)));
         end
     end

@@ -22,13 +22,10 @@ end
 NCOLS    = 5;
 NROWS    = 3;
 PER_PAGE = NCOLS * NROWS;
-fsz      = options.FontSize;
-
-BG_GRAY      = [0.97 0.97 0.97];
-FSZ_TITLE    = fsz + 4;   % page-level sgtitle
-FSZ_SUBTITLE = fsz - 1;   % sampling-note subtitle
-FSZ_SRC      = 6;          % source annotation at figure bottom
-CLR_SRC      = [0.55 0.55 0.55];
+F       = dex_font_sizes(options.FontSize);
+fsz     = F.base;       % passed to per-tile helpers
+BG_GRAY = [0.97 0.97 0.97];
+CLR_SRC = [0.55 0.55 0.55];
 
 all_idx = 1:numel(prof.name);
 if isfinite(options.MaxVars)
@@ -64,17 +61,17 @@ for pg = 1:n_pages
         body = sprintf('variables %d–%d of %d  (page %d/%d)', ...
             idx_range(1), idx_range(end), nv, pg, n_pages);
     end
-    title(tl, body, 'FontSize', FSZ_TITLE, 'Interpreter', 'none');
+    title(tl, body, 'FontSize', F.page, 'Interpreter', 'none');
 
     if isfield(prof, 'sampling_note') && strlength(string(prof.sampling_note)) > 0
-        subtitle(tl, char(prof.sampling_note), 'FontSize', FSZ_SUBTITLE, ...
+        subtitle(tl, char(prof.sampling_note), 'FontSize', F.tiny, ...
             'FontWeight', 'bold', 'Color', 'k', 'Interpreter', 'none');
     end
 
     if ~is_anon
         annotation(fig, 'textbox', [0, 0, 1, 0.022], 'String', src, ...
             'EdgeColor', 'none', 'HorizontalAlignment', 'center', ...
-            'VerticalAlignment', 'bottom', 'FontSize', FSZ_SRC, ...
+            'VerticalAlignment', 'bottom', 'FontSize', F.tiny, ...
             'Color', CLR_SRC, 'Interpreter', 'none', ...
             'FitBoxToText', 'off');
     end
