@@ -1,4 +1,15 @@
 % T = DataExplorer("examples/2026_daygenbyfuel.xlsx", Sheet=2);
+% TODO: add 2026_energy_peak_by_source.xlsx ?
+
+T = de_load("examples/311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx", ...
+    Sheet="All Agencies Complaint<>Details");
+% Replace "Department of" with "D." in Agency categorical labels (case-sensitive)
+% Convert categories to cellstr, perform replace on category names
+cats = strrep(string(categories(T.Agency)), "Department of", "D.");
+T.Agency = categorical(T.Agency, categories(T.Agency), cats);
+DataExplorer(T);
+DataExplorer("examples/311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx", ...
+    Sheet="HPD Complaint<>Details");
 
 %{ 
 T = de_load("examples/State_Tobacco_Related_Disparities_Dashboard_Data.csv"); 
@@ -29,6 +40,7 @@ de_geoscatter(T_agg.longitude, T_agg.latitude, T_agg.mean_tavg, T_agg.std_tavg, 
     Title='tavg', Source='Climate Data January 2025');
 %}
 
+%{
 T = de_load('examples/Prod_dataset.xlsx', 'Sheet', 'Data');
 is_production_in_billions_of_btus = ...
     (extractBetween(string(T.MSN),3,5) == "PRB");
@@ -47,3 +59,17 @@ T.MSN(T.MSN == "REPRB") = "Renbl";
 T.MSN(T.MSN == "WDPRB") = "Wood";
 T.MSN(T.MSN == "WWPRB") = "Waste";
 DataExplorer(T);
+% Caption: We have traded Coal for Oil.
+%}
+
+% TODOs:
+% DataExplorer("examples/City_of_Flint_Distribution_System_Monitoring_Data_(Expanded)_20260417.csv");
+% FIADB_URBAN_ENTIRE_CSV.zip
+% LLCP2024ASC.zip
+% MA-2024.zip
+% State_Tobacco_Related_Disparities_Dashboard_Data.csv
+
+% annual_aqi_by_county_2025.zip and annual_conc_by_monitor_2025.zip
+% are together?
+
+% minerals.pdf 	minerals.zip
