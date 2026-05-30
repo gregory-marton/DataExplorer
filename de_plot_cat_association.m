@@ -361,7 +361,7 @@ for row = 1:ng
     end
     if other_cnt > 0
         cp        = [cs; other_cnt];
-        cat_names = [ls; {sprintf('Other (%d)', other_n_t)}];
+        cat_names = [ls; {sprintf('Other (%d cats, n=%d)', other_n_t, other_cnt)}];
         clrs      = [named_clrs; 0.70 0.70 0.70];
     else
         cp        = cs;
@@ -381,8 +381,11 @@ for row = 1:ng
         max_ch = floor(seg_w * 75);
         if max_ch >= 4
             cat_name = cat_names{si};
-            cnt_str  = sprintf(' (%d)', cp(si));
-            full_lbl = [cat_name cnt_str];
+            if startsWith(cat_name, 'Other')
+                full_lbl = cat_name;
+            else
+                full_lbl = [cat_name sprintf(' (%d)', cp(si))];
+            end
             if max_ch >= length(full_lbl)
                 lbl = full_lbl;
             elseif max_ch >= length(cat_name)
