@@ -29,6 +29,9 @@ if nargin < 2
     missingStrings = DEFAULT_MISSING;
 end
 
+NUMERIC_FRAC   = 0.70;  % convert string col to numeric if ≥ this fraction parses
+SKIP_MISS_FRAC = 0.80;  % flag col as skippable if > this fraction is missing
+
 n    = height(T);
 ncol = width(T);
 
@@ -59,7 +62,7 @@ for k = 1:ncol
         col(ismember(col, missingStrings)) = missing;
         numvals     = str2double(col);
         pct_numeric = sum(~isnan(numvals)) / n;
-        if pct_numeric >= 0.70
+        if pct_numeric >= NUMERIC_FRAC
             col = numvals;
         else
             col = categorical(col);
@@ -108,7 +111,7 @@ for k = 1:ncol
     end
 
     % Flag columns >80% missing
-    if prof.nmissing(k) / n > 0.80
+    if prof.nmissing(k) / n > SKIP_MISS_FRAC
         prof.skip(k)        = true;
         prof.skip_reason(k) = "mostly missing";
     end

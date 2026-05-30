@@ -90,19 +90,26 @@ end
 
 
 function ca_plot_v_matrix(V_mat, P_mat, U_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
-FONT_BASE = 9;
+FONT_BASE    = 9;
+CLR_FILL     = [0.75 0.75 0.75];  % gray background rectangle per cell
+ALPHA_FILL   = 0.75;
+CLR_GLYPH    = [0.88 0.58 0.75];  % coverage glyph (mauve)
+ALPHA_GLYPH  = 0.60;
+CLR_GRID     = [0.20 0.20 0.20];  % cell borders and grid lines
+LW_BORDER    = 0.8;
+CMAP_N       = 64;                % blues colormap resolution
 nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
 imagesc(ax, V_mat, [0 1]);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
+blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = "Cramer's V  (0=independent, 1=fully associated)";
 short = cellfun(@(s) ca_trunc(s,max_lbl), names, 'UniformOutput', false);
 set(ax, 'XTick', 1:nc, 'YTick', 1:nc, ...
     'XTickLabel', short, 'YTickLabel', short, ...
-    'XTickLabelRotation', 40, 'FontSize', FONT_BASE-1, 'TickLength', [0 0]);
+    'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
 sub = "Bias-Corrected Cramer's V";
 if ~isempty(src), sub = sub + "  |  " + src; end
 title(ax, {"Association Strength", sub}, 'FontSize', FONT_BASE+1);
@@ -120,20 +127,19 @@ for i = 1:nc
             fh = col_cov(j);
             fv = col_cov(i);
             xl = j-0.5; yt = i-0.5; ym = i+0.5-fv;
-            ca_fill_rect(ax, xl, yt, 1, 1, [0.75 0.75 0.75], 0.75);
+            ca_fill_rect(ax, xl, yt, 1, 1, CLR_FILL, ALPHA_FILL);
             if fh > 0 && fv > 0
-                ca_fill_rect(ax, xl, ym, fh, fv, [0.88 0.58 0.75], 0.60);
+                ca_fill_rect(ax, xl, ym, fh, fv, CLR_GLYPH, ALPHA_GLYPH);
             end
             patch(ax, [xl xl+1 xl+1 xl xl], [yt yt yt+1 yt+1 yt], 'w', ...
-                'FaceColor', 'none', 'EdgeColor', [0.20 0.20 0.20], 'LineWidth', 0.8);
+                'FaceColor', 'none', 'EdgeColor', CLR_GRID, 'LineWidth', LW_BORDER);
             ca_draw_arrow(ax, j, i, U_mat(j,i) - U_mat(i,j));
         end
     end
 end
-gclr = [0.20 0.20 0.20];
 for k = 0.5:nc+0.5
-    line(ax, [0.5 nc+0.5], [k k], 'Color', gclr, 'LineWidth', 0.5);
-    line(ax, [k k], [0.5 nc+0.5], 'Color', gclr, 'LineWidth', 0.5);
+    line(ax, [0.5 nc+0.5], [k k], 'Color', CLR_GRID, 'LineWidth', 0.5);
+    line(ax, [k k], [0.5 nc+0.5], 'Color', CLR_GRID, 'LineWidth', 0.5);
 end
 nm_dc = names; vm_dc = V_mat;
 dcm = datacursormode(fig);
@@ -180,6 +186,17 @@ end
 function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, src, max_lbl)
 MAX_B     = 15;
 FONT_BASE = 9;
+
+CLR_BAR   = [0 0.4470 0.7410];   % bar fill (MATLAB default blue)
+Z_95      = 1.96;                  % Z for 95% binomial CI
+CLR_ERR   = [0.25 0.25 0.25];     % error bar color
+CAP_SZ    = 3;                     % error bar cap size (pt)
+LW_ERR    = 0.7;                   % error bar line width
+CLR_CUM   = [0.55 0.10 0.20];     % cumulative % line (dark red)
+MKR_SZ    = 4;                     % cumulative % marker size (pt)
+YLIM_PAD  = 1.1;                   % shared y-axis scale factor (10% headroom)
+CLR_WHITE = [1 1 1];               % count label on tall bars
+CLR_DARK  = [0.20 0.20 0.20];     % count label on short bars
 ng     = numel(gcats);
 ncol   = min(ng, 3);
 nrow   = ceil(ng / ncol);
@@ -273,7 +290,7 @@ for k = 1:ng
     ax      = axes('Parent', fig, 'Position', [left_k, bot_k, w_k, plot_h]);
 
     % Bars: raw counts
-    b = bar(ax, 1:numel(cp), cp, 'FaceColor', [0 0.4470 0.7410], 'EdgeColor', 'none');
+    b = bar(ax, 1:numel(cp), cp, 'FaceColor', CLR_BAR, 'EdgeColor', 'none');
     b.DataTipTemplate.DataTipRows = [
         dataTipTextRow('Category', full_lp)
         dataTipTextRow('Count',    num2cell(double(cp)))
@@ -281,15 +298,15 @@ for k = 1:ng
 
     % CI bars in count space (binomial SE); caps may exceed ylim — intentional
     p_hat    = cp / tot;
-    ci_hw_ct = 1.96 * sqrt(tot .* p_hat .* (1 - p_hat));
+    ci_hw_ct = Z_95 * sqrt(tot .* p_hat .* (1 - p_hat));
     hold(ax, 'on');
     errorbar(ax, 1:numel(cp), cp, ci_hw_ct, ci_hw_ct, ...
-        'LineStyle', 'none', 'Color', [0.25 0.25 0.25], ...
-        'CapSize', 3, 'LineWidth', 0.7);
+        'LineStyle', 'none', 'Color', CLR_ERR, ...
+        'CapSize', CAP_SZ, 'LineWidth', LW_ERR);
 
     % Right axis: cumulative %
     yyaxis(ax, 'right');
-    plot(ax, 1:numel(cum), cum, '-o', 'Color', [0.55 0.10 0.20], 'MarkerSize', 4);
+    plot(ax, 1:numel(cum), cum, '-o', 'Color', CLR_CUM, 'MarkerSize', MKR_SZ);
     ylim(ax, [0 100]);
     ylabel(ax, 'Cumulative %', 'FontSize', FONT_BASE);
     ax.YAxis(2).Color = [0.55 0.10 0.20];
@@ -315,7 +332,7 @@ for k = 1:ng
 end
 
 % Post-hoc A: shared count ylim across all subplots
-shared_ylim = max_cnt * 1.1;
+shared_ylim = max_cnt * YLIM_PAD;
 half_ylim   = shared_ylim / 2;
 for k = 1:ng
     if ~isvalid(axs(k)), continue; end
@@ -333,11 +350,11 @@ for k = 1:ng
         if cp(bi) >= half_ylim
             text(axs(k), bi, cp(bi), ca_fmt_n(cp(bi)), ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
-                'FontSize', 9, 'Color', [1 1 1]);
+                'FontSize', FONT_BASE, 'Color', CLR_WHITE);
         else
             text(axs(k), bi, cp(bi) + ci(bi), ca_fmt_n(cp(bi)), ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-                'FontSize', 9, 'Color', [0.20 0.20 0.20]);
+                'FontSize', FONT_BASE, 'Color', CLR_DARK);
         end
     end
 end
@@ -345,8 +362,11 @@ end
 
 
 function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, src, max_lbl)
-THRESH    = 0.03;   % include a val category if ≥3% of any major group
-FONT_BASE = 9;
+THRESH        = 0.03;             % include a val category if ≥3% of any major group
+FONT_BASE     = 9;
+CLR_OTHER     = [0.70 0.70 0.70]; % "Other" bar fill
+CHAR_DENSITY  = 75;               % max characters per unit segment width
+MIN_CHARS     = 4;                % minimum characters to bother rendering a label
 ng = numel(gcats);
 
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
@@ -381,7 +401,7 @@ for row = 1:ng
     if other_cnt > 0
         cp        = [cs; other_cnt];
         cat_names = [ls; {sprintf('Other (%d cats, n=%d)', other_n_t, other_cnt)}];
-        clrs      = [named_clrs; 0.70 0.70 0.70];
+        clrs      = [named_clrs; CLR_OTHER];
     else
         cp        = cs;
         cat_names = ls;
@@ -398,8 +418,8 @@ for row = 1:ng
               clrs(si,:), 'EdgeColor', 'none');
         ph.UserData = {cat_names{si}, cp(si), gcats{gi}};
 
-        max_ch = floor(seg_w * 75);
-        if max_ch >= 4
+        max_ch = floor(seg_w * CHAR_DENSITY);
+        if max_ch >= MIN_CHARS
             cat_name = cat_names{si};
             if startsWith(cat_name, 'Other')
                 full_lbl = cat_name;
@@ -448,9 +468,13 @@ end
 function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, src, max_lbl)
 FONT_BASE  = 9;
 MAX_S      = 20;
-CLR_OTHER  = [0.82 0.82 0.82];
-CLR_MARG   = [1.00 0.97 0.75];
-CLR_CORNER = [0.72 0.72 0.72];
+CLR_OTHER  = [0.82 0.82 0.82];   % "Other" overflow cells
+CLR_MARG   = [1.00 0.97 0.75];   % marginal totals cells (pale yellow)
+CLR_CORNER = [0.72 0.72 0.72];   % grand total corner cell
+CLR_DARK   = [0.15 0.15 0.15];   % cell annotation text
+CLR_GRID   = [0.35 0.35 0.35];   % grid line color
+LW_GRID    = 0.4;                 % grid line width
+CMAP_N     = 64;                  % blues colormap resolution
 
 gn = arrayfun(@(c) sum(grp == c{1}), gcats);
 [~,gord] = sort(gn,'descend');
@@ -503,7 +527,7 @@ P_full(1:nr, 1:nc) = P;
 
 ax = axes(fig);
 imagesc(ax, P_full, [0 1]);
-blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,64));
+blues = interp1([0 1], [1 1 1; 0.13 0.44 0.71], linspace(0,1,CMAP_N));
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));
@@ -537,7 +561,7 @@ y_labels{yi} = 'Total';
 
 set(ax, 'XTick', x_ticks, 'YTick', y_ticks, ...
     'XTickLabel', x_labels, 'YTickLabel', y_labels, ...
-    'XTickLabelRotation', 40, 'FontSize', FONT_BASE-2, 'TickLength', [0 0]);
+    'XTickLabelRotation', 40, 'FontSize', FONT_BASE, 'TickLength', [0 0]);
 sub = '';
 if numel(gcats) > MAX_S || numel(vcats) > MAX_S
     sub = sprintf('(top %d of %d x top %d of %d)', nr,numel(gcats),nc,numel(vcats));
@@ -552,15 +576,13 @@ else
 end
 box(ax, 'off');
 
-dark_txt = [0.15 0.15 0.15];
-
 if has_oth_col
     for ri = 1:nr
         patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], ri+[-0.5 -0.5 0.5 0.5 -0.5], ...
             CLR_OTHER, 'EdgeColor', 'none');
         if N_oth_val(ri) > 0
             text(ax, oth_col_x, ri, ca_fmt_n(N_oth_val(ri)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
         end
     end
 end
@@ -571,7 +593,7 @@ if has_oth_row
             CLR_OTHER, 'EdgeColor', 'none');
         if N_oth_grp(ci) > 0
             text(ax, ci, oth_row_y, ca_fmt_n(N_oth_grp(ci)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
         end
     end
 end
@@ -580,14 +602,14 @@ for ri = 1:nr
     patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], ri+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_MARG, 'EdgeColor', 'none');
     text(ax, marg_col_x, ri, ca_fmt_n(nri_total(ri)), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
 end
 
 for ci = 1:nc
     patch(ax, ci+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_MARG, 'EdgeColor', 'none');
     text(ax, ci, marg_row_y, ca_fmt_n(nci_total(ci)), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
 end
 
 if has_oth_col && has_oth_row
@@ -596,7 +618,7 @@ if has_oth_col && has_oth_row
         CLR_CORNER, 'EdgeColor', 'none');
     if N_oth_oth > 0
         text(ax, oth_col_x, oth_row_y, ca_fmt_n(N_oth_oth), ...
-            'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+            'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
     end
 end
 if has_oth_col
@@ -604,36 +626,35 @@ if has_oth_col
     patch(ax, oth_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_CORNER, 'EdgeColor', 'none');
     text(ax, oth_col_x, marg_row_y, ca_fmt_n(N_val_oth_total), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
 end
 if has_oth_row
     N_grp_oth_total = N_valid - sum(nri_total);
     patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], oth_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
         CLR_CORNER, 'EdgeColor', 'none');
     text(ax, marg_col_x, oth_row_y, ca_fmt_n(N_grp_oth_total), ...
-        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+        'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
 end
 patch(ax, marg_col_x+[-0.5 0.5 0.5 -0.5 -0.5], marg_row_y+[-0.5 -0.5 0.5 0.5 -0.5], ...
     CLR_CORNER, 'EdgeColor', 'none');
 text(ax, marg_col_x, marg_row_y, ca_fmt_n(N_valid), ...
-    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, 'Color', dark_txt);
+    'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, 'Color', CLR_DARK);
 
 for ri = 1:nr
     for ci = 1:nc
         if N(ri,ci) > 0
             text(ax, ci, ri, ca_fmt_count(N(ri,ci)), ...
-                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE-2, ...
+                'HorizontalAlignment', 'center', 'FontSize', FONT_BASE, ...
                 'Color', ca_label_color(P(ri,ci)));
         end
     end
 end
 
-gclr = [0.35 0.35 0.35];
 for ry = 0.5 : nr_full + 0.5
-    line(ax, [0.5 nc_full+0.5], [ry ry], 'Color', gclr, 'LineWidth', 0.4);
+    line(ax, [0.5 nc_full+0.5], [ry ry], 'Color', CLR_GRID, 'LineWidth', LW_GRID);
 end
 for cx = 0.5 : nc_full + 0.5
-    line(ax, [cx cx], [0.5 nr_full+0.5], 'Color', gclr, 'LineWidth', 0.4);
+    line(ax, [cx cx], [0.5 nr_full+0.5], 'Color', CLR_GRID, 'LineWidth', LW_GRID);
 end
 
 sg_dc = show_g; sv_dc = show_v; p_dc = P;
@@ -670,11 +691,13 @@ txt = {col_names{ci}, row_names{ri}, sprintf('P = %.3f', P(ri,ci))};
 end
 
 function s = ca_fmt_count(n)
-if n >= 1000, s = sprintf('%.3gk', n/1000); else, s = sprintf('%d', n); end
+K_THRESH = 1000;
+if n >= K_THRESH, s = sprintf('%.3gk', n/K_THRESH); else, s = sprintf('%d', n); end
 end
 
 function s = ca_fmt_p(p)
-if p < 0.001
+P_SMALL = 0.001;
+if p < P_SMALL
     s = 'p<.001';
 else
     s = strrep(sprintf('p=%.3f', p), '0.', '.');
@@ -788,11 +811,14 @@ THRESH_HEAD = 0.15;
 HEAD_W      = 0.09;
 HEAD_H      = 0.11;
 MAX_MAG     = 0.30;
+MAG_SCALE   = 0.6;    % scales u_diff to visual arrow length
+TAIL_OFFSET = 0.04;   % how far the tail starts from cell center
+LW_ARROW    = 1.0;    % arrow shaft line width
 CLR = [0.20 0.20 0.20];
 
+SQ_SIZE = 0.07;  % half-width of the small square drawn for near-symmetric pairs
 if abs(u_diff) < THRESH_SQ
-    sq = 0.07;
-    patch(ax, cx+sq*[-1 1 1 -1 -1], cy+sq*[-1 -1 1 1 -1], CLR, 'EdgeColor', 'none');
+    patch(ax, cx+SQ_SIZE*[-1 1 1 -1 -1], cy+SQ_SIZE*[-1 -1 1 1 -1], CLR, 'EdgeColor', 'none');
     return
 end
 
@@ -802,7 +828,7 @@ else
     dir = [1 1] / sqrt(2);
 end
 perp = [-dir(2), dir(1)];
-mag  = min(MAX_MAG, abs(u_diff) * 0.6);
+mag  = min(MAX_MAG, abs(u_diff) * MAG_SCALE);
 
 tip = [cx + dir(1)*mag,                          cy + dir(2)*mag];
 bl  = [cx + dir(1)*(mag-HEAD_H) + perp(1)*HEAD_W, cy + dir(2)*(mag-HEAD_H) + perp(2)*HEAD_W];
@@ -810,8 +836,8 @@ br  = [cx + dir(1)*(mag-HEAD_H) - perp(1)*HEAD_W, cy + dir(2)*(mag-HEAD_H) - per
 patch(ax, [tip(1) bl(1) br(1) tip(1)], [tip(2) bl(2) br(2) tip(2)], CLR, 'EdgeColor', 'none');
 
 if abs(u_diff) >= THRESH_HEAD
-    tail = [cx - dir(1)*0.04, cy - dir(2)*0.04];
+    tail = [cx - dir(1)*TAIL_OFFSET, cy - dir(2)*TAIL_OFFSET];
     base = [(bl(1)+br(1))/2, (bl(2)+br(2))/2];
-    line(ax, [tail(1) base(1)], [tail(2) base(2)], 'Color', CLR, 'LineWidth', 1.0);
+    line(ax, [tail(1) base(1)], [tail(2) base(2)], 'Color', CLR, 'LineWidth', LW_ARROW);
 end
 end

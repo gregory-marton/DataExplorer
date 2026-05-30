@@ -44,14 +44,18 @@ if new_fig
     ax = axes(fig);
 end
 
+BIN_MIN   = 10;
+BIN_MAX   = 50;
+DATA_BLUE = [0.35 0.55 0.75];
+
 x      = double(x(:));
 n_tot  = numel(x);
 x_ok   = x(~isnan(x));
 n_miss = n_tot - numel(x_ok);
-nbins  = min(50, max(10, round(sqrt(max(numel(x_ok), 1)))));
+nbins  = min(BIN_MAX, max(BIN_MIN, round(sqrt(max(numel(x_ok), 1)))));
 label  = strrep(name, '_', ' ');
 
-histogram(ax, x_ok, nbins, 'FaceColor', [0.35 0.55 0.75], 'EdgeColor', 'none');
+histogram(ax, x_ok, nbins, 'FaceColor', DATA_BLUE, 'EdgeColor', 'none');
 xlabel(ax, label, 'Interpreter', 'none');
 ylabel(ax, 'Count');
 if n_miss > 0

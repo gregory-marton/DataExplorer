@@ -10,6 +10,7 @@ function sel = de_select_columns(T, prof, maxv)
 
 CORR_THRESH  = 0.92;
 MAX_NUM_FRAC = 0.75;
+MIN_CORR_N   = 10;   % min valid rows needed to compute correlation
 
 not_skip = find(~prof.skip);
 
@@ -54,7 +55,7 @@ for k = 1:numel(num_ranked)
             valid = valid & ~isnan(T.(prof.name{s}));
         end
 
-        if sum(valid) < 10
+        if sum(valid) < MIN_CORR_N
             nsel = nsel + 1;
             num_sel(nsel) = candidate;
         else
