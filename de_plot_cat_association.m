@@ -186,17 +186,13 @@ GAP_H  = 0.08;
 GAP_V  = 0.16;
 plot_h = (1 - PAD_T - PAD_B - (nrow-1)*GAP_V) / nrow;
 
-% First pass: count bars per group (categories with >0 observations)
-% so variable-width layout gives degenerate groups a narrow column
-bars_k = ones(ng, 1);
-for k = 1:ng
-    sv   = val(grp == gcats{k});
-    vc   = categories(sv);
-    cn   = arrayfun(@(c) sum(sv == c{1}), vc);
-    bars_k(k) = max(1, min(MAX_B, sum(cn > 0)));
-end
+% Group sizes drive layout widths AND per-subplot bar count.
+% bars_k(k) = round(MAX_B * gn(k)/max(gn)) so the largest group gets MAX_B
+% bars and physical bar width is consistent across all subplots.
+gn     = arrayfun(@(c) sum(grp == c{1}), gcats);
+bars_k = max(1, round(MAX_B * gn / max(gn)));
 
-sgtitle(fig, ftitle, 'FontSize', 10, 'Interpreter', 'none');
+sgtitle(fig, ftitle, 'FontSize', FONT_BASE+1, 'Interpreter', 'none');
 
 axs     = gobjects(ng, 1);
 cp_list = cell(ng, 1);
@@ -214,7 +210,7 @@ for k = 1:ng
     cn   = cn(keep);
     [cs, ord] = sort(cn, 'descend');
     ls = vc(ord);
-    ns = min(MAX_B, numel(ls));
+    ns = min(bars_k(k), numel(ls));
     no = numel(ls) - ns;
     if no > 0
         cp      = [cs(1:ns); sum(cs(ns+1:end))];
