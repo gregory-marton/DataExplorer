@@ -22,7 +22,7 @@ fi
 
 cd "$ROOT"
 TMPOUT=$(mktemp)
-if python3 -m pytest tests/ --tb=short > "$TMPOUT" 2>&1; then
+if python3 -m pytest tests/ --tb=short --override-ini="addopts=" > "$TMPOUT" 2>&1; then
     TS=$(date +%Y%m%d_%H%M%S)
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } > "$ROOT/.cache/last_full_run_passed_${TS}.txt"
     rm -f "$SENTINEL" "$LAST_RUN"
