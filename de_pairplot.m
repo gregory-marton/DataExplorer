@@ -1,8 +1,8 @@
-function de_plot_pairplot(T, prof, sel, options)
-%DE_PLOT_PAIRPLOT  Scatter matrix with type-aware dispatch per cell.
+function de_pairplot(T, prof, sel, options)
+%DE_PAIRPLOT  Scatter matrix with type-aware dispatch per cell.
 %
-%   de_plot_pairplot(T, prof, sel)
-%   de_plot_pairplot(T, prof, sel, FontSize=sz)
+%   de_pairplot(T, prof, sel)
+%   de_pairplot(T, prof, sel, FontSize=sz)
 %
 %   T    — table (already profiled)
 %   prof — struct from de_profile(T)
