@@ -1,5 +1,8 @@
 .claude_session
 .cache/
+__pycache__/
+*.pyc
+*.pyo
 
 # Example datasets too large for git (download via download_examples.sh)
 examples/LLCP2024.ASC
