@@ -214,7 +214,8 @@ end % ── DataExplorer ──────────────────
 
 
 %% ═══════════════════════════════════════════════════════════════════════════
-%  LOCAL FUNCTIONS
+%  LOCAL FUNCTIONS  (se_ prefix = private to DataExplorer.m)
+%  Shared internal utilities live in de__*.m files on the path.
 %% ═══════════════════════════════════════════════════════════════════════════
 
 % ── se_load ─────────────────────────────────────────────────────────────────

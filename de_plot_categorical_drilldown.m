@@ -46,12 +46,12 @@ if ~isempty(cat_useful)
     for k = 1:numel(cat_useful)
         ci = cat_useful(k);
         if ~isempty(time_idx) && ~isempty(ts_num)
-            plot_grouped_timeseries(T, prof, ci, time_idx, ts_num, is_year_axis);
+            cd_grouped_timeseries(T, prof, ci, time_idx, ts_num, is_year_axis);
         elseif ~isempty(wide_yr_idxs)
-            plot_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
+            cd_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
         end
         if numel(sel_num) >= 2
-            plot_scatter_by_cat(T, prof, ci, sel_num);
+            cd_scatter_by_cat(T, prof, ci, sel_num);
         end
     end
 end
@@ -66,13 +66,13 @@ for k = 1:numel(cat_big)
         geo_grid = prof.geo_grid{ci};
     end
     if ~isempty(geo_grid)
-        plot_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis, geo_grid);
+        cd_state_summary(T, prof, ci, sel_num, ts_num, time_idx, is_year_axis, geo_grid);
     else
         catname_k  = prof.name{ci};
         cat_col_k  = T.(catname_k);
         all_levels = cellstr(categories(cat_col_k));
         cnt        = countcats(cat_col_k);
-        keep_k     = ~total_mask(all_levels);
+        keep_k     = ~cd_total_mask(all_levels);
         all_levels = all_levels(keep_k);
         cnt        = cnt(keep_k);
         if isempty(all_levels), continue; end
@@ -109,12 +109,12 @@ for k = 1:numel(cat_big)
         end
 
         if ~isempty(time_idx) && ~isempty(ts_num)
-            plot_grouped_timeseries(T_sub, prof, ci, time_idx, ts_num, is_year_axis);
+            cd_grouped_timeseries(T_sub, prof, ci, time_idx, ts_num, is_year_axis);
         elseif ~isempty(wide_yr_idxs)
-            plot_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
+            cd_grouped_timeseries_wide(T, prof, ci, wide_yr_idxs, wide_yr_vals);
         end
         if numel(sel_num) >= 2
-            plot_scatter_by_cat(T_sub, prof, ci, sel_num);
+            cd_scatter_by_cat(T_sub, prof, ci, sel_num);
         end
     end
 end
@@ -127,7 +127,7 @@ end
 % Local plot functions
 % ─────────────────────────────────────────────────────────────────────────────
 
-function plot_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_year_axis)
+function cd_grouped_timeseries(T, prof, cat_idx, time_idx, num_idxs, is_year_axis)
 BG_GRAY  = [0.97 0.97 0.97];
 ALPHA_LO = 0.025;   ALPHA_HI = 0.975;
 ALPHA_CI = 0.15;
@@ -137,9 +137,9 @@ cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
 present = cellfun(@(lv) sum(cat_col == lv) > 0, levels);
 levels  = levels(present);
-levels  = levels(~total_mask(levels));
+levels  = levels(~cd_total_mask(levels));
 if isempty(levels), return; end
-[colors, plot_order] = level_colors(levels);
+[colors, plot_order] = cd_level_colors(levels);
 tdata   = T.(prof.name{time_idx});
 
 lev_counts = arrayfun(@(lk) sum(cat_col == levels{lk}), 1:numel(levels));
@@ -224,12 +224,12 @@ for j = 1:n_num
     box(ax, 'off');
 end
 
-title(tl, src_prefix(prof.source_name, sprintf('by %s', catname)), ...
+title(tl, cd_src_prefix(prof.source_name, sprintf('by %s', catname)), ...
     'FontSize', FSZ_TITLE, 'Interpreter', 'none');
 end
 
 
-function plot_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
+function cd_grouped_timeseries_wide(T, prof, cat_idx, yr_idxs, yr_vals)
 TOP_K    = 20;
 B_CI     = 500;
 BG_GRAY  = [0.97 0.97 0.97];
@@ -265,7 +265,7 @@ n_rows_all   = n_rows_all(has_rows);
 overall_mean = overall_mean(has_rows);
 if isempty(levels_all), return; end
 
-keep = ~total_mask(levels_all, overall_mean);
+keep = ~cd_total_mask(levels_all, overall_mean);
 levels_all   = levels_all(keep);
 n_rows_all   = n_rows_all(keep);
 overall_mean = overall_mean(keep);
@@ -279,7 +279,7 @@ has_other = ~isempty(other_idx);
 
 levels_show = levels_all(top_idx);
 n_rows_show = n_rows_all(top_idx);
-[colors, plot_order] = level_colors(levels_show);
+[colors, plot_order] = cd_level_colors(levels_show);
 
 fig = figure('Name', de__fig_title(sprintf('By %s over time', catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
@@ -360,19 +360,19 @@ if has_other
 else
     title_suf = '';
 end
-title(ax, src_prefix(prof.source_name, sprintf('Trend by %s%s', catname, title_suf)), ...
+title(ax, cd_src_prefix(prof.source_name, sprintf('Trend by %s%s', catname, title_suf)), ...
     'FontSize', 10, 'Interpreter', 'none');
 box(ax, 'off');
 end
 
 
-function plot_scatter_by_cat(T, prof, cat_idx, sel_num)
+function cd_scatter_by_cat(T, prof, cat_idx, sel_num)
 BG_GRAY = [0.97 0.97 0.97];
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
 levels  = cellstr(categories(cat_col));
 n_lev   = numel(levels);
-[colors, plot_order] = level_colors(levels);
+[colors, plot_order] = cd_level_colors(levels);
 
 MAX_NP = 6;
 sel_num = sel_num(1:min(end, MAX_NP));
@@ -490,7 +490,7 @@ for r = 1:np
         end
         box(ax, 'off');
 
-        name_fn = @(s) label_name(s, np >= 6);
+        name_fn = @(s) cd_label_name(s, np >= 6);
         if r == 1
             title(ax, name_fn(xname), 'FontSize', 7, ...
                 'FontWeight', 'bold', 'Interpreter', 'none');
@@ -515,12 +515,12 @@ if ~isempty(valid_h)
     lgd.Layout.Tile = 'east';
 end
 
-title(tl, src_prefix(prof.source_name, sprintf('colored by %s', catname)), ...
+title(tl, cd_src_prefix(prof.source_name, sprintf('colored by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 end
 
 
-function plot_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis, grid_name)
+function cd_state_summary(T, prof, cat_idx, sel_num, ts_num, time_idx, is_year_axis, grid_name)
 BG_GRAY = [0.97 0.97 0.97];
 if nargin < 8 || isempty(grid_name), grid_name = 'us-states'; end
 
@@ -567,13 +567,13 @@ for j = 1:n_num
     barh(ax, 1:n_st_plot, means_s, 'FaceColor', [0.3 0.5 0.8], 'EdgeColor', 'none');
     set(ax, 'YTick', 1:n_st_plot, 'YTickLabel', states_s, 'FontSize', 5, ...
         'YDir', 'reverse');
-    title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+    title(ax, cd_wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
     box(ax, 'off');
 end
-title(tl, src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
+title(tl, cd_src_prefix(prof.source_name, sprintf('mean by %s', catname)), ...
     'FontSize', 10, 'Interpreter', 'none');
 
-plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name);
+cd_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, is_year_axis, grid_name);
 
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 TOTAL_CODES_ST = {'US', 'ALL', 'TOTAL', 'GRAND TOTAL'};
@@ -585,7 +585,7 @@ for tc__ = TOTAL_CODES_ST
     end
 end
 if ~isempty(total_code_found) && ~isempty(wide_yr_idxs)
-    plot_state_pct_area(T, prof, cat_idx, total_code_found, states_plot, ...
+    cd_state_pct_area(T, prof, cat_idx, total_code_found, states_plot, ...
         wide_yr_idxs, wide_yr_vals);
 end
 
@@ -616,7 +616,7 @@ if ~isempty(wide_yr_idxs)
         'XTickLabelRotation', 45, 'YTick', 1:n_st_plot, ...
         'YTickLabel', states_plot, 'FontSize', 5);
     xlabel(ax, 'Year', 'FontSize', 8);
-    title(ax, src_prefix(prof.source_name, sprintf('by %s over time', catname)), ...
+    title(ax, cd_src_prefix(prof.source_name, sprintf('by %s over time', catname)), ...
         'FontSize', 9, 'Interpreter', 'none');
     box(ax, 'off');
 else
@@ -659,16 +659,16 @@ else
             set(ax, 'XTick', []);
         end
         set(ax, 'YTick', 1:n_st_plot, 'YTickLabel', states_plot, 'FontSize', 5);
-        title(ax, wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
+        title(ax, cd_wrapped_name(ncn), 'FontSize', 8, 'Interpreter', 'none');
         box(ax, 'off');
     end
-    title(tl2, src_prefix(prof.source_name, sprintf('Time %s %s', char(215), catname)), ...
+    title(tl2, cd_src_prefix(prof.source_name, sprintf('Time %s %s', char(215), catname)), ...
         'FontSize', 10, 'Interpreter', 'none');
 end
 end
 
 
-function plot_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, ~, grid_name)
+function cd_state_choropleth(T, prof, cat_idx, num_idxs, time_idx, ~, grid_name)
 if nargin < 7 || isempty(grid_name), grid_name = 'us-states'; end
 catname = prof.name{cat_idx};
 tcn     = '';
@@ -677,7 +677,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
     fig_title_str = de__fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
-    T_long = pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
+    T_long = cd_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title_str);
     num_idxs = num_idxs(~ismember(num_idxs, wide_yr_idxs));
@@ -721,7 +721,7 @@ end
 end
 
 
-function plot_state_pct_area(T, prof, cat_idx, total_code, states_plot, yr_idxs, yr_vals)
+function cd_state_pct_area(T, prof, cat_idx, total_code, states_plot, yr_idxs, yr_vals)
 BG_GRAY = [0.97 0.97 0.97];
 catname = prof.name{cat_idx};
 cat_col = T.(catname);
@@ -766,14 +766,14 @@ legend(ax, st_labels, 'Location', 'eastoutside', 'FontSize', 5, 'Interpreter', '
 xlabel(ax, 'Year', 'FontSize', 9);
 ylabel(ax, sprintf('%% of %s total', total_code), 'FontSize', 8);
 ylim(ax, [0 max(sum(pct_mat, 1), [], 'omitnan') * 1.05]);
-title(ax, src_prefix(prof.source_name, ...
+title(ax, cd_src_prefix(prof.source_name, ...
     sprintf('State share of %s total (sum across energy types)', total_code)), ...
     'FontSize', 9, 'Interpreter', 'none');
 box(ax, 'off');
 end
 
 
-function T_long = pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals)
+function T_long = cd_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals)
 yr_names  = string(prof.name(wide_yr_idxs));
 all_cols  = string(T.Properties.VariableNames);
 keep_cols = cellstr(all_cols(~ismember(all_cols, yr_names)));
@@ -796,7 +796,7 @@ end
 % Small utilities
 % ─────────────────────────────────────────────────────────────────────────────
 
-function mask = total_mask(levels, means)
+function mask = cd_total_mask(levels, means)
 AGG_RATIO = 0.30;
 n = numel(levels);
 mask = false(n, 1);
@@ -819,7 +819,7 @@ end
 
 
 
-function [colors, plot_order] = level_colors(levels)
+function [colors, plot_order] = cd_level_colors(levels)
 OTHER_FILL = [0.78 0.78 0.78];
 n = numel(levels);
 colors = lines(n);
@@ -833,21 +833,21 @@ end
 end
 
 
-function s = src_prefix(~, rest)
+function s = cd_src_prefix(~, rest)
 s = rest;
 end
 
 
-function s = label_name(name, compact)
+function s = cd_label_name(name, compact)
 if compact
-    s = short_name(name);
+    s = cd_short_name(name);
 else
-    s = wrapped_name(name);
+    s = cd_wrapped_name(name);
 end
 end
 
 
-function s = short_name(name)
+function s = cd_short_name(name)
 MAX = 18;
 if numel(name) > MAX
     s = [name(1:MAX-1) '…'];
@@ -857,7 +857,7 @@ end
 end
 
 
-function s = wrapped_name(name)
+function s = cd_wrapped_name(name)
 MAX_LINE = 16;
 if numel(name) <= MAX_LINE
     s = name;

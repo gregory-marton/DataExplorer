@@ -32,7 +32,7 @@ end
 
 % 100% stacked area by each grouping categorical (state share, MSN share, …)
 for k = 1:numel(panel.grouping_idxs)
-    plot_pct_area_by_cat(T_notot, prof, panel.grouping_idxs(k), ...
+    pt_pct_area_by_cat(T_notot, prof, panel.grouping_idxs(k), ...
         wide_yr_idxs, wide_yr_vals);
 end
 end
@@ -40,7 +40,7 @@ end
 
 % ── Local helpers ─────────────────────────────────────────────────────────────
 
-function plot_pct_area_by_cat(T, prof, cat_idx, yr_idxs, yr_vals)
+function pt_pct_area_by_cat(T, prof, cat_idx, yr_idxs, yr_vals)
 TOP_AREA  = 20;
 BG_GRAY   = [0.97 0.97 0.97];
 FSZ_TINY  = 5;
@@ -103,7 +103,7 @@ hold(ax1, 'off');
 legend(ax1, levels, 'Location', 'eastoutside', 'FontSize', FSZ_TINY, 'Interpreter', 'none');
 xlabel(ax1, 'Year', 'FontSize', FSZ_BASE);
 ylabel(ax1, 'Total', 'FontSize', FSZ_LABEL);
-title(ax1, src_prefix(prof.source_name, sprintf('Total over time by %s', catname)), ...
+title(ax1, pt_src_prefix(prof.source_name, sprintf('Total over time by %s', catname)), ...
     'FontSize', FSZ_BASE, 'Interpreter', 'none');
 box(ax1, 'off');
 
@@ -119,7 +119,7 @@ legend(ax2, levels, 'Location', 'eastoutside', 'FontSize', FSZ_TINY, 'Interprete
 xlabel(ax2, 'Year', 'FontSize', FSZ_BASE);
 ylabel(ax2, '% share', 'FontSize', FSZ_LABEL);
 ylim(ax2, [0 YLIM_MAX]);
-title(ax2, src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
+title(ax2, pt_src_prefix(prof.source_name, sprintf('Share over time by %s', catname)), ...
     'FontSize', FSZ_BASE, 'Interpreter', 'none');
 box(ax2, 'off');
 end
@@ -127,6 +127,6 @@ end
 
 
 
-function s = src_prefix(~, rest)
+function s = pt_src_prefix(~, rest)
 s = rest;
 end
