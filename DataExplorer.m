@@ -1695,6 +1695,7 @@ end
 % Aggregate by unique datetime: mean + bootstrap 95% CI
 [tdata_u, ~, tidx] = unique(tdata_s);
 n_u    = numel(tdata_u);
+if n_u < 2, return; end
 Y_mean = NaN(n_u, n_series);
 Y_lo   = NaN(n_u, n_series);
 Y_hi   = NaN(n_u, n_series);
@@ -2720,6 +2721,9 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     end
     [~, ~, xidx_g] = unique(xdata_g(valid_g));
     n_ug = max(xidx_g);
+    if isempty(n_ug)
+        is_compositional = false;
+    else
     Y_g  = NaN(n_ug, n_ts);
     for kk = 1:n_ts
         col_g = double(T.(ncn_list{kk})); col_g = col_g(valid_g);
@@ -2729,6 +2733,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
         end
     end
     is_compositional = se_is_compositional(Y_g, T, prof);
+    end
 
     col_args  = strjoin(cellfun(@(s) sprintf('T.%s', s), ncn_list, 'UniformOutput', false), ' ');
     lbl_items = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ncn_list, 'UniformOutput', false), ', ');
@@ -3980,7 +3985,7 @@ for kk = 1:numel(cat_search)
     end
 end
 Y_comp     = Y_mean(all(~isnan(Y_mean), 2), :);
-all_nonneg = ~isempty(Y_comp) && size(Y_comp, 2) > 1 && all(Y_comp(:) >= 0);
+all_nonneg = ~isempty(Y_comp) && size(Y_comp, 1) > 1 && size(Y_comp, 2) > 1 && all(Y_comp(:) >= 0);
 if has_total_label && all_nonneg
     tf = true;
 elseif all_nonneg
