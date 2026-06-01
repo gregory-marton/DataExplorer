@@ -35,7 +35,7 @@ np = numel(sel);
 src = char(prof.source_name);
 fig = figure('Name', de__fig_title('Pairplot', src), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
-de__stamp_source(fig, src, fsz);
+de__stamp_source(fig, src);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
 n = height(T);
