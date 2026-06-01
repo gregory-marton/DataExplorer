@@ -1296,10 +1296,10 @@ end
 np = numel(sel);   % number of columns in the plot grid
 
 % ── Build figure ────────────────────────────────────────────────────────────
-fig = figure('Name', se_fig_title('Pairplot', prof.source_name), ...
+fig = figure('Name', de__fig_title('Pairplot', prof.source_name), ...
     'Color', [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
-se_stamp_source(fig, prof.source_name);
+de__stamp_source(fig, prof.source_name);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
 n = height(T);
@@ -1417,14 +1417,14 @@ for pg = 1:n_pages
     n_this    = numel(idx_range);
 
     if n_pages == 1
-        fig_name = se_fig_title('Overview', prof.source_name);
+        fig_name = de__fig_title('Overview', prof.source_name);
     else
-        fig_name = se_fig_title(sprintf('Overview %d/%d', pg, n_pages), prof.source_name);
+        fig_name = de__fig_title(sprintf('Overview %d/%d', pg, n_pages), prof.source_name);
     end
 
     fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], ...
         'NumberTitle', 'off');
-    se_stamp_source(fig, prof.source_name);
+    de__stamp_source(fig, prof.source_name);
     tl = tiledlayout(fig, NROWS, NCOLS, 'TileSpacing', 'tight', 'Padding', 'compact');
 
     if n_pages == 1
@@ -1536,10 +1536,10 @@ end
 if ~isempty(enc_col)
     fig_name = sprintf('Map: %s', prof.name{enc_col});
 else
-    fig_name = se_fig_title('Map', prof.source_name);
+    fig_name = de__fig_title('Map', prof.source_name);
 end
 fig = figure('Name', fig_name, 'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-se_stamp_source(fig, prof.source_name);
+de__stamp_source(fig, prof.source_name);
 BASE_SZ  = 20;
 MKR_MIN  = 4;
 MKR_SPAN = 76;
@@ -1722,9 +1722,9 @@ colors_ts = lines(n_series);
 
 if use_stacked
     % Compositional data: stacked area figure first, then overlaid + Total.
-    fig_s = figure('Name', se_fig_title('Time series (stacked)', prof.source_name), ...
+    fig_s = figure('Name', de__fig_title('Time series (stacked)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-    se_stamp_source(fig_s, prof.source_name);
+    de__stamp_source(fig_s, prof.source_name);
     ax_s = axes(fig_s);
     Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
     [~, sord] = sort(mean(Y_plot, 1), 'descend');
@@ -1741,9 +1741,9 @@ if use_stacked
         sprintf('time series, stacked area  (n = %d, %d series)', height(T), n_series)), ...
         'FontSize', 11, 'Interpreter', 'none');
 
-    fig_o = figure('Name', se_fig_title('Time series (overlaid)', prof.source_name), ...
+    fig_o = figure('Name', de__fig_title('Time series (overlaid)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
-    se_stamp_source(fig_o, prof.source_name);
+    de__stamp_source(fig_o, prof.source_name);
     ax_o = axes(fig_o);
     hold(ax_o, 'on');
     for k = 1:n_series
@@ -1769,7 +1769,7 @@ if use_stacked
         sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
         'FontSize', 11, 'Interpreter', 'none');
 else
-    fig = figure('Name', se_fig_title('Time series', prof.source_name), ...
+    fig = figure('Name', de__fig_title('Time series', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     ax = axes(fig);
     hold(ax, 'on');
@@ -1859,7 +1859,7 @@ x_lbl     = prof.name{year_idx};
 
 if use_stacked
     % Compositional: stacked area first, then overlaid + Total.
-    fig_s = figure('Name', se_fig_title('Time series (stacked)', prof.source_name), ...
+    fig_s = figure('Name', de__fig_title('Time series (stacked)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     ax_s = axes(fig_s);
     Y_plot = Y_mean; Y_plot(isnan(Y_plot)) = 0;
@@ -1878,7 +1878,7 @@ if use_stacked
         sprintf('time series, stacked area  (n = %d, %d series)', height(T), n_series)), ...
         'FontSize', 11, 'Interpreter', 'none');
 
-    fig_o = figure('Name', se_fig_title('Time series (overlaid)', prof.source_name), ...
+    fig_o = figure('Name', de__fig_title('Time series (overlaid)', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     ax_o = axes(fig_o);
     hold(ax_o, 'on');
@@ -1906,7 +1906,7 @@ if use_stacked
         sprintf('time series, overlaid lines  (n = %d, %d series)', height(T), n_series)), ...
         'FontSize', 11, 'Interpreter', 'none');
 else
-    fig = figure('Name', se_fig_title('Time series', prof.source_name), ...
+    fig = figure('Name', de__fig_title('Time series', prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     ax = axes(fig);
     hold(ax, 'on');
@@ -3405,7 +3405,7 @@ lev_counts = arrayfun(@(lk) sum(cat_col == levels{lk}), 1:numel(levels));
 n_num  = numel(num_idxs);
 
 fig = figure( ...
-    'Name',        se_fig_title(sprintf('By %s', catname), prof.source_name), ...
+    'Name',        de__fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color',       [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -3508,7 +3508,7 @@ sel_num = sel_num(1:min(end, MAX_NP));
 np = numel(sel_num);
 
 fig = figure( ...
-    'Name',        se_fig_title(catname, prof.source_name), ...
+    'Name',        de__fig_title(catname, prof.source_name), ...
     'Color',       [0.97 0.97 0.97], ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
@@ -3755,7 +3755,7 @@ fprintf('  State summary: %d states × %d variables.\n', n_st_plot, n_num);
 n_cols = min(n_num, 3);
 n_rows = ceil(n_num / n_cols);
 
-fig = figure('Name', se_fig_title(sprintf('By %s', catname), prof.source_name), ...
+fig = figure('Name', de__fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 tl = tiledlayout(fig, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -3807,7 +3807,7 @@ if ~isempty(wide_yr_idxs)
     yr_names_s = string(prof.name(wide_yr_idxs(sort_ord)));
     n_t = numel(t_vals);
 
-    fig2 = figure('Name', se_fig_title(sprintf('%s × year', catname), prof.source_name), ...
+    fig2 = figure('Name', de__fig_title(sprintf('%s × year', catname), prof.source_name), ...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     ax = axes(fig2);
 
@@ -3842,7 +3842,7 @@ else
     n_t    = numel(t_vals);
     if n_t < 2, return; end
 
-    fig2 = figure('Name', se_fig_title(sprintf('%s × time', catname), prof.source_name),...
+    fig2 = figure('Name', de__fig_title(sprintf('%s × time', catname), prof.source_name),...
         'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
     tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -3892,7 +3892,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 % choropleth with a year slider rather than one static figure per year column.
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
-    fig_title = se_fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
+    fig_title = de__fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = se_pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title);
@@ -3916,7 +3916,7 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
             n_lv = numel(unique(sc_col(~ismissing(sc_col))));
         end
         if n_lv < 2, continue; end
-        hm_title = se_fig_title( ...
+        hm_title = de__fig_title( ...
             sprintf('Choropleth: %s × %s × year', catname, sc), prof.source_name);
         fprintf('  State heatmap choropleth: %s x %s (%d levels).\n', ...
             catname, sc, n_lv);
@@ -3930,7 +3930,7 @@ end
 
 for j = 1:numel(num_idxs)
     ncn        = prof.name{num_idxs(j)};
-    fig_title  = se_fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
+    fig_title  = de__fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
     if isempty(tcn)
         de_geobins(T, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', ncn, 'Title', fig_title);
     else
@@ -3991,34 +3991,9 @@ end
 end
 
 
-% ── se_fig_title ─────────────────────────────────────────────────────────────
-function s = se_fig_title(label, source_name)
-% If source_name ends with [varname] (NetCDF variable), append ": varname".
-m = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
-if ~isempty(m)
-    s = sprintf('%s: %s', label, strtrim(m{1}));
-else
-    s = label;
-end
-end
-
-
 % ── se_src_prefix ─────────────────────────────────────────────────────────────
 function s = se_src_prefix(~, rest)
 s = rest;
-end
-
-
-% ── se_stamp_source ───────────────────────────────────────────────────────────
-function se_stamp_source(fig, source_name)
-% Add a small gray source footnote at the bottom of the figure.
-if strcmp(source_name, 'table input'), return; end
-annotation(fig, 'textbox', [0.0, 0.0, 1.0, 0.022], ...
-    'String', source_name, ...
-    'EdgeColor', 'none', ...
-    'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-    'FontSize', 7, 'Color', [0.55 0.55 0.55], 'Interpreter', 'none', ...
-    'FitBoxToText', 'off');
 end
 
 
@@ -4118,7 +4093,7 @@ st_labels = st_labels(ord);
 
 pct_mat(isnan(pct_mat)) = 0;
 
-fig = figure('Name', se_fig_title( ...
+fig = figure('Name', de__fig_title( ...
     sprintf('%% of %s total by %s', total_code, catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 ax = axes(fig);
@@ -4193,7 +4168,7 @@ n_shown = size(sum_mat, 1);
 cmap    = lines(n_shown);
 
 % Absolute stacked area
-fig1 = figure('Name', se_fig_title( ...
+fig1 = figure('Name', de__fig_title( ...
     sprintf('Total by %s over time', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 ax1 = axes(fig1);
@@ -4209,7 +4184,7 @@ title(ax1, se_src_prefix(prof.source_name, sprintf('Total over time by %s', catn
 box(ax1, 'off');
 
 % 100% stacked area
-fig2 = figure('Name', se_fig_title( ...
+fig2 = figure('Name', de__fig_title( ...
     sprintf('Share by %s over time', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 ax2 = axes(fig2);
@@ -4311,7 +4286,7 @@ levels_show = levels_all(top_idx);
 n_rows_show = n_rows_all(top_idx);
 [colors, plot_order] = se_level_colors(levels_show);
 
-fig = figure('Name', se_fig_title(sprintf('By %s over time', catname), prof.source_name), ...
+fig = figure('Name', de__fig_title(sprintf('By %s over time', catname), prof.source_name), ...
     'Color', [0.97 0.97 0.97], 'NumberTitle', 'off');
 ax = axes(fig);
 hold(ax, 'on');

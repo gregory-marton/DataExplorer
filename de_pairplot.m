@@ -33,9 +33,9 @@ fsz       = F.base;
 np = numel(sel);
 
 src = char(prof.source_name);
-fig = figure('Name', pp_fig_name('Pairplot', src), ...
+fig = figure('Name', de__fig_title('Pairplot', src), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
-pp_stamp_source(fig, src, fsz);
+de__stamp_source(fig, src, fsz);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
 
 n = height(T);
@@ -468,19 +468,3 @@ s = strjoin(lines_(1:nl), newline);
 end
 
 
-function s = pp_fig_name(label, source_name)
-m = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
-if ~isempty(m)
-    s = sprintf('%s: %s', label, strtrim(m{1}));
-else
-    s = label;
-end
-end
-
-
-function pp_stamp_source(fig, source_name, fsz)
-if isempty(source_name) || strcmp(source_name, 'table input'), return; end
-annotation(fig, 'textbox', [0.0, 0.0, 1.0, 0.022], 'String', source_name, ...
-    'EdgeColor', 'none', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-    'FontSize', fsz, 'Color', [0.55 0.55 0.55], 'Interpreter', 'none', 'FitBoxToText', 'off');
-end

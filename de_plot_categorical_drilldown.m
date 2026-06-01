@@ -147,7 +147,7 @@ lev_counts = arrayfun(@(lk) sum(cat_col == levels{lk}), 1:numel(levels));
 n_num  = numel(num_idxs);
 
 fig = figure( ...
-    'Name',        fig_title(sprintf('By %s', catname), prof.source_name), ...
+    'Name',        de__fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color',       BG_GRAY, ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, n_num, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -281,7 +281,7 @@ levels_show = levels_all(top_idx);
 n_rows_show = n_rows_all(top_idx);
 [colors, plot_order] = level_colors(levels_show);
 
-fig = figure('Name', fig_title(sprintf('By %s over time', catname), prof.source_name), ...
+fig = figure('Name', de__fig_title(sprintf('By %s over time', catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 ax = axes(fig);
 hold(ax, 'on');
@@ -379,7 +379,7 @@ sel_num = sel_num(1:min(end, MAX_NP));
 np = numel(sel_num);
 
 fig = figure( ...
-    'Name',        fig_title(catname, prof.source_name), ...
+    'Name',        de__fig_title(catname, prof.source_name), ...
     'Color',       BG_GRAY, ...
     'NumberTitle', 'off');
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
@@ -548,7 +548,7 @@ fprintf('  State summary: %d states × %d variables.\n', n_st_plot, n_num);
 n_cols = min(n_num, 3);
 n_rows = ceil(n_num / n_cols);
 
-fig = figure('Name', fig_title(sprintf('By %s', catname), prof.source_name), ...
+fig = figure('Name', de__fig_title(sprintf('By %s', catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 tl = tiledlayout(fig, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -596,7 +596,7 @@ if ~isempty(wide_yr_idxs)
     yr_names_s = string(prof.name(wide_yr_idxs(sort_ord)));
     n_t = numel(t_vals);
 
-    fig2 = figure('Name', fig_title(sprintf('%s × year', catname), prof.source_name), ...
+    fig2 = figure('Name', de__fig_title(sprintf('%s × year', catname), prof.source_name), ...
         'Color', BG_GRAY, 'NumberTitle', 'off');
     ax = axes(fig2);
 
@@ -630,7 +630,7 @@ else
     n_t    = numel(t_vals);
     if n_t < 2, return; end
 
-    fig2 = figure('Name', fig_title(sprintf('%s × time', catname), prof.source_name), ...
+    fig2 = figure('Name', de__fig_title(sprintf('%s × time', catname), prof.source_name), ...
         'Color', BG_GRAY, 'NumberTitle', 'off');
     tl2 = tiledlayout(fig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -676,7 +676,7 @@ if ~isempty(time_idx), tcn = prof.name{time_idx}; end
 
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 if ~isempty(wide_yr_idxs) && isempty(time_idx)
-    fig_title_str = fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
+    fig_title_str = de__fig_title(sprintf('Choropleth: %s', catname), prof.source_name);
     T_long = pivot_wide_to_long(T, prof, wide_yr_idxs, wide_yr_vals);
     de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', 'Value', ...
         'TimeCol', 'Year', 'Title', fig_title_str);
@@ -696,7 +696,7 @@ if ~isempty(wide_yr_idxs) && isempty(time_idx)
             n_lv = numel(unique(sc_col(~ismissing(sc_col))));
         end
         if n_lv < 2, continue; end
-        hm_title = fig_title( ...
+        hm_title = de__fig_title( ...
             sprintf('Choropleth: %s × %s × year', catname, sc), prof.source_name);
         fprintf('  State heatmap choropleth: %s x %s (%d levels).\n', catname, sc, n_lv);
         de_geobins(T_long, 'GeoCol', catname, 'Grid', grid_name, ...
@@ -709,7 +709,7 @@ end
 
 for j = 1:numel(num_idxs)
     ncn        = prof.name{num_idxs(j)};
-    fig_title_str = fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
+    fig_title_str = de__fig_title(sprintf('Choropleth: %s', ncn), prof.source_name);
     if isempty(tcn)
         de_geobins(T, 'GeoCol', catname, 'Grid', grid_name, 'ColorCol', ncn, ...
             'Title', fig_title_str);
@@ -753,7 +753,7 @@ pct_mat  = pct_mat(ord, :);
 st_labels = st_labels(ord);
 pct_mat(isnan(pct_mat)) = 0;
 
-fig = figure('Name', fig_title( ...
+fig = figure('Name', de__fig_title( ...
     sprintf('%% of %s total by %s', total_code, catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 ax = axes(fig);
@@ -832,16 +832,6 @@ if is_other
     plot_order = [n, 1:n-1];
 else
     plot_order = 1:n;
-end
-end
-
-
-function s = fig_title(label, source_name)
-m = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
-if ~isempty(m)
-    s = sprintf('%s: %s', label, strtrim(m{1}));
-else
-    s = label;
 end
 end
 

@@ -92,7 +92,7 @@ abs_mat(isnan(abs_mat)) = 0;
 n_shown = size(sum_mat, 1);
 cmap    = lines(n_shown);
 
-fig1 = figure('Name', fig_title( ...
+fig1 = figure('Name', de__fig_title( ...
     sprintf('Total by %s over time', catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 ax1 = axes(fig1);
@@ -107,7 +107,7 @@ title(ax1, src_prefix(prof.source_name, sprintf('Total over time by %s', catname
     'FontSize', FSZ_BASE, 'Interpreter', 'none');
 box(ax1, 'off');
 
-fig2 = figure('Name', fig_title( ...
+fig2 = figure('Name', de__fig_title( ...
     sprintf('Share by %s over time', catname), prof.source_name), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 ax2 = axes(fig2);
@@ -127,16 +127,6 @@ end
 
 function tf = is_total_level(lv)
 tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b', 'once'));
-end
-
-
-function s = fig_title(label, source_name)
-m = regexp(char(source_name), '\[([^\]]+)\]\s*$', 'tokens', 'once');
-if ~isempty(m)
-    s = sprintf('%s: %s', label, strtrim(m{1}));
-else
-    s = label;
-end
 end
 
 

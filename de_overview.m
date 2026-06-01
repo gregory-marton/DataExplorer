@@ -25,7 +25,6 @@ PER_PAGE = NCOLS * NROWS;
 F       = de__font_sizes(options.FontSize);
 fsz     = F.base;       % passed to per-tile helpers
 BG_GRAY = [0.97 0.97 0.97];
-CLR_SRC = [0.55 0.55 0.55];
 
 all_idx = 1:numel(prof.name);
 if isfinite(options.MaxVars)
@@ -38,7 +37,6 @@ if nv == 0, return; end
 n        = height(T);
 n_pages  = ceil(nv / PER_PAGE);
 src      = char(prof.source_name);
-is_anon  = isempty(src) || strcmp(src, 'table input');
 
 for pg = 1:n_pages
     idx_range = (pg-1)*PER_PAGE+1 : min(pg*PER_PAGE, nv);
@@ -49,9 +47,7 @@ for pg = 1:n_pages
     else
         page_tag = sprintf('Overview %d/%d', pg, n_pages);
     end
-    fig_name = ov_fig_name(page_tag, src);
-
-    fig = figure('Name', fig_name, 'Color', BG_GRAY, ...
+    fig = figure('Name', de__fig_title(page_tag, src), 'Color', BG_GRAY, ...
         'NumberTitle', 'off');
     tl = tiledlayout(fig, NROWS, NCOLS, 'TileSpacing', 'tight', 'Padding', 'compact');
 
@@ -68,13 +64,7 @@ for pg = 1:n_pages
             'FontWeight', 'bold', 'Color', 'k', 'Interpreter', 'none');
     end
 
-    if ~is_anon
-        annotation(fig, 'textbox', [0, 0, 1, 0.022], 'String', src, ...
-            'EdgeColor', 'none', 'HorizontalAlignment', 'center', ...
-            'VerticalAlignment', 'bottom', 'FontSize', F.tiny, ...
-            'Color', CLR_SRC, 'Interpreter', 'none', ...
-            'FitBoxToText', 'off');
-    end
+    de__stamp_source(fig, src);
 
     for k = 1:n_this
         ci = all_idx(idx_range(k));
@@ -102,16 +92,6 @@ end
 
 
 % ── helpers ──────────────────────────────────────────────────────────────────
-
-function s = ov_fig_name(label, source_name)
-m = regexp(source_name, '\[([^\]]+)\]\s*$', 'tokens', 'once');
-if ~isempty(m)
-    s = sprintf('%s: %s', label, strtrim(m{1}));
-else
-    s = label;
-end
-end
-
 
 function ov_num_tile(ax, x, nmissing, n, fsz)
 DATA_BLUE  = [0.35 0.55 0.75];
