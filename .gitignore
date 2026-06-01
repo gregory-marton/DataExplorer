@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 *.pyo
+deferred_integration.log
 
 # Example datasets too large for git (download via download_examples.sh)
 examples/LLCP2024.ASC
