@@ -1716,30 +1716,7 @@ for k = 1:n_series
     end
 end
 
-% Compositional test: stacked only when data clearly has parts summing to a whole.
-% Primary signal: any categorical column has a "Total"-like level.
-% Fallback: row sums of aggregated means are extremely stable (CV < 0.05).
-TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
-has_total_label = false;
-cat_search = find(prof.type == "categorical" & ~prof.skip);
-for kk = 1:numel(cat_search)
-    lvls_kk = cellstr(categories(T.(prof.name{cat_search(kk)})));
-    if any(cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), lvls_kk))
-        has_total_label = true;
-        break;
-    end
-end
-Y_complete = Y_mean(all(~isnan(Y_mean), 2), :);
-all_nonneg  = ~isempty(Y_complete) && size(Y_complete, 2) > 1 && all(Y_complete(:) >= 0);
-if has_total_label && all_nonneg
-    use_stacked = true;
-elseif all_nonneg
-    row_sums    = sum(Y_complete, 2);
-    cv_sums     = std(row_sums) / max(abs(mean(row_sums)), eps);
-    use_stacked = cv_sums < 0.05;
-else
-    use_stacked = false;
-end
+use_stacked = se_is_compositional(Y_mean, T, prof);
 
 colors_ts = lines(n_series);
 
@@ -1875,29 +1852,7 @@ for k = 1:n_series
 end
 
 % Compositional test: stacked only when data clearly has parts summing to a whole.
-% Primary signal: any categorical column has a "Total"-like level.
-% Fallback: row sums of aggregated means are extremely stable (CV < 0.05).
-TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
-has_total_label = false;
-cat_search = find(prof.type == "categorical" & ~prof.skip);
-for kk = 1:numel(cat_search)
-    lvls_kk = cellstr(categories(T.(prof.name{cat_search(kk)})));
-    if any(cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), lvls_kk))
-        has_total_label = true;
-        break;
-    end
-end
-Y_complete = Y_mean(all(~isnan(Y_mean), 2), :);
-all_nonneg  = ~isempty(Y_complete) && size(Y_complete, 2) > 1 && all(Y_complete(:) >= 0);
-if has_total_label && all_nonneg
-    use_stacked = true;
-elseif all_nonneg
-    row_sums    = sum(Y_complete, 2);
-    cv_sums     = std(row_sums) / max(abs(mean(row_sums)), eps);
-    use_stacked = cv_sums < 0.05;
-else
-    use_stacked = false;
-end
+use_stacked = se_is_compositional(Y_mean, T, prof);
 
 colors_ts = lines(n_series);
 x_lbl     = prof.name{year_idx};
@@ -2753,17 +2708,26 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     ncn_list = prof.name(ts_num);
     n_ts     = numel(ts_num);
 
-    % Compositional: all non-negative across all selected numeric columns?
-    is_compositional = false;
-    if n_ts > 1
-        all_ok = true;
-        for kk = 1:n_ts
-            v = double(T.(ncn_list{kk}));
-            v = v(~isnan(v));
-            if isempty(v) || any(v < 0), all_ok = false; break; end
-        end
-        is_compositional = all_ok;
+    % Aggregate to per-time-point means (same logic as live plotters) then
+    % apply the shared compositional test.
+    if is_year_axis
+        xdata_g = double(T.(prof.name{time_idx}));
+        valid_g  = ~isnan(xdata_g);
+    else
+        xdata_g = T.(prof.name{time_idx});
+        valid_g  = ~isnat(xdata_g);
     end
+    [~, ~, xidx_g] = unique(xdata_g(valid_g));
+    n_ug = max(xidx_g);
+    Y_g  = NaN(n_ug, n_ts);
+    for kk = 1:n_ts
+        col_g = double(T.(ncn_list{kk})); col_g = col_g(valid_g);
+        for tt = 1:n_ug
+            v = col_g(xidx_g == tt); v = v(~isnan(v));
+            if ~isempty(v), Y_g(tt, kk) = mean(v); end
+        end
+    end
+    is_compositional = se_is_compositional(Y_g, T, prof);
 
     col_args  = strjoin(cellfun(@(s) sprintf('T.%s', s), ncn_list, 'UniformOutput', false), ' ');
     lbl_items = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ncn_list, 'UniformOutput', false), ', ');
@@ -3996,6 +3960,34 @@ T_long.Year  = repelem(yr_sorted(:), n_rows);
 value_col    = cell2mat(arrayfun(@(ti) double(T.(yr_names_s(ti))), ...
                    (1:n_t)', 'UniformOutput', false));
 T_long.Value = value_col;
+end
+
+
+% ── se_is_compositional ───────────────────────────────────────────────────────
+function tf = se_is_compositional(Y_mean, T, prof)
+% True when numeric time series form a compositional whole (parts sum to a
+% near-constant total).  Two signals, in priority order:
+%   1. Any categorical column has a "Total"-like level name.
+%   2. Row sums of per-time-point means have CV < 0.05.
+TOTAL_WORDS = {'total', 'totals', 'grand total', 'all totals'};
+has_total_label = false;
+cat_search = find(prof.type == "categorical" & ~prof.skip);
+for kk = 1:numel(cat_search)
+    lvls = cellstr(categories(T.(prof.name{cat_search(kk)})));
+    if any(cellfun(@(lv) any(strcmpi(lv, TOTAL_WORDS)), lvls))
+        has_total_label = true; break;
+    end
+end
+Y_comp     = Y_mean(all(~isnan(Y_mean), 2), :);
+all_nonneg = ~isempty(Y_comp) && size(Y_comp, 2) > 1 && all(Y_comp(:) >= 0);
+if has_total_label && all_nonneg
+    tf = true;
+elseif all_nonneg
+    row_sums = sum(Y_comp, 2);
+    tf = std(row_sums) / max(abs(mean(row_sums)), eps) < 0.05;
+else
+    tf = false;
+end
 end
 
 

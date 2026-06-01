@@ -27,6 +27,7 @@ cd "$ROOT"
 TMPOUT=$(mktemp)
 
 printf '\n=== DI run started: %s ===\n' "$(date)" >> "$LIVE_LOG"
+printf '\a'
 
 # Stream to live log in real-time; capture a copy in TMPOUT for .cache/ bookkeeping
 if python3 -m pytest tests/ --override-ini="addopts=" --tb=short -v 2>&1 | tee -a "$LIVE_LOG" > "$TMPOUT"; then
@@ -34,9 +35,11 @@ if python3 -m pytest tests/ --override-ini="addopts=" --tb=short -v 2>&1 | tee -
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } > "$ROOT/.cache/last_full_run_passed_${TS}.txt"
     rm -f "$SENTINEL" "$LAST_RUN"
     printf '=== DI run PASSED: %s ===\n' "$(date)" >> "$LIVE_LOG"
+    printf '\a'
 else
     # Overwrite (not append) so conftest always shows only the latest failed run
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } > "$LAST_RUN"
     printf '=== DI run FAILED: %s ===\n' "$(date)" >> "$LIVE_LOG"
+    printf '\a'
 fi
 rm -f "$TMPOUT"
