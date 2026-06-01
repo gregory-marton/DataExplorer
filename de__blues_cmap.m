@@ -1,5 +1,5 @@
-function cmap = dex_blues_cmap(n)
-%DEX_BLUES_CMAP  White-to-blue perceptual colormap for heatmaps.
+function cmap = de__blues_cmap(n)
+%DE__BLUES_CMAP  White-to-blue perceptual colormap for heatmaps.
 %
 %   cmap = dex_blues_cmap(n)   returns an n×3 RGB array
 %

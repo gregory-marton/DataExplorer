@@ -90,7 +90,7 @@ end
 
 
 function ca_plot_v_matrix(V_mat, P_mat, U_mat, col_cov, names, src, max_lbl, v_annotate, glyph_max_cols)
-F            = dex_font_sizes();
+F            = de__font_sizes();
 CLR_FILL     = [0.75 0.75 0.75];  % gray background rectangle per cell
 ALPHA_FILL   = 0.75;
 CLR_GLYPH    = [0.88 0.58 0.75];  % coverage glyph (mauve)
@@ -102,7 +102,7 @@ nc  = numel(names);
 fig = figure('Name', ca_fig_name("Association Strength", src));
 ax  = axes(fig);
 imagesc(ax, V_mat, [0 1]);
-blues = dex_blues_cmap(CMAP_N);
+blues = de__blues_cmap(CMAP_N);
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = "Cramer's V  (0=independent, 1=fully associated)";
@@ -185,7 +185,7 @@ end
 
 function ca_pareto_multiples(fig, grp, gname, gcats, val, ftitle, src, max_lbl)
 MAX_B = 15;
-F     = dex_font_sizes();
+F     = de__font_sizes();
 
 CLR_BAR   = [0 0.4470 0.7410];   % bar fill (MATLAB default blue)
 Z_95      = 1.96;                  % Z for 95% binomial CI
@@ -363,7 +363,7 @@ end
 
 function ca_stacked_bars(fig, grp, gname, gcats, val, vcats, ftitle, src, max_lbl)
 THRESH = 0.03;             % include a val category if ≥3% of any major group
-F      = dex_font_sizes();
+F      = de__font_sizes();
 CLR_OTHER     = [0.70 0.70 0.70]; % "Other" bar fill
 CHAR_DENSITY  = 75;               % max characters per unit segment width
 MIN_CHARS     = 4;                % minimum characters to bother rendering a label
@@ -433,7 +433,7 @@ for row = 1:ng
             else
                 lbl = ca_trunc(cat_name, max_ch);
             end
-            txt_clr = dex_text_color(clrs(si,:), 0.5);
+            txt_clr = de__text_color(clrs(si,:), 0.5);
             text(ax, x + seg_w/2, row, lbl, ...
                 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
                 'FontSize', F.base, 'Interpreter', 'none', 'Clipping', 'on', ...
@@ -465,7 +465,7 @@ end
 
 
 function ca_cond_heatmap(fig, grp, gname, gcats, val, vname, vcats, ftitle, src, max_lbl)
-F      = dex_font_sizes();
+F      = de__font_sizes();
 MAX_S  = 20;
 CLR_OTHER  = [0.82 0.82 0.82];   % "Other" overflow cells
 CLR_MARG   = [1.00 0.97 0.75];   % marginal totals cells (pale yellow)
@@ -526,7 +526,7 @@ P_full(1:nr, 1:nc) = P;
 
 ax = axes(fig);
 imagesc(ax, P_full, [0 1]);
-blues = dex_blues_cmap(CMAP_N);
+blues = de__blues_cmap(CMAP_N);
 colormap(ax, blues);
 cb = colorbar(ax);
 cb.Label.String = sprintf('P(%s|%s)', ca_trunc(gname,max_lbl), ca_trunc(vname,max_lbl));

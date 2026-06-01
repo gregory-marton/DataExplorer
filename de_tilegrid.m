@@ -52,7 +52,7 @@ arguments
     options.CLim              (1,2) double  = [NaN NaN]
 end
 
-F                 = dex_font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
+F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
 TILE_PX           = 36;
 FIG_W_MIN         = 500;   FIG_W_MAX = 1600;
 FIG_H_MIN         = 380;   FIG_H_MAX = 1000;

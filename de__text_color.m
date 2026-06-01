@@ -1,5 +1,5 @@
-function clr = dex_text_color(bg_rgb, threshold)
-%DEX_TEXT_COLOR  White or dark text color for legibility on a given background.
+function clr = de__text_color(bg_rgb, threshold)
+%DE__TEXT_COLOR  White or dark text color for legibility on a given background.
 %
 %   clr = dex_text_color(bg_rgb)            uses threshold = 0.5
 %   clr = dex_text_color(bg_rgb, threshold) caller-supplied threshold

@@ -1,5 +1,5 @@
-function p = dex_cat_assoc_params()
-%DEX_CAT_ASSOC_PARAMS  Default thresholds for categorical association figures.
+function p = de__cat_assoc_params()
+%DE__CAT_ASSOC_PARAMS  Default thresholds for categorical association figures.
 %
 %   p = dex_cat_assoc_params()
 %

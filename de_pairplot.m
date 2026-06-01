@@ -27,7 +27,7 @@ end
 if isempty(sel), return; end
 
 BG_GRAY   = [0.97 0.97 0.97];
-F         = dex_font_sizes(options.FontSize);
+F         = de__font_sizes(options.FontSize);
 fsz       = F.base;
 
 np = numel(sel);
@@ -375,7 +375,7 @@ for ri = 1:numel(cy)
     end
 end
 imagesc(ax, M);
-blues = dex_blues_cmap(CMAP_N);
+blues = de__blues_cmap(CMAP_N);
 colormap(ax, blues);
 set(ax, 'XTick', [], 'YTick', []);
 if numel(cx) <= 2 && numel(cy) <= 2

@@ -1,8 +1,8 @@
-function F = dex_font_sizes(base)
-%DEX_FONT_SIZES  Shared font-size hierarchy for DataExplorer plots.
+function F = de__font_sizes(base)
+%DE__FONT_SIZES  Shared font-size hierarchy for DataExplorer plots.
 %
-%   F = dex_font_sizes()        base = 9  (association plots)
-%   F = dex_font_sizes(base)    caller-supplied base (e.g. 7 for overview / tilegrid)
+%   F = de__font_sizes()        base = 9  (association plots)
+%   F = de__font_sizes(base)    caller-supplied base (e.g. 7 for overview / tilegrid)
 %
 %   Fields
 %   ------

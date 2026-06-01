@@ -22,7 +22,7 @@ end
 NCOLS    = 5;
 NROWS    = 3;
 PER_PAGE = NCOLS * NROWS;
-F       = dex_font_sizes(options.FontSize);
+F       = de__font_sizes(options.FontSize);
 fsz     = F.base;       % passed to per-tile helpers
 BG_GRAY = [0.97 0.97 0.97];
 CLR_SRC = [0.55 0.55 0.55];
