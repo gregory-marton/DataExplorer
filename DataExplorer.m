@@ -2799,6 +2799,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
         L{end+1} = '    legend(ax, ts_labels, ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
     end
     L{end+1} = sprintf('    xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value''); box off; hold(ax, ''off'');', tcn_sq);
+    L{end+1} = sprintf('    title(ax, ''time series, overlaid lines  (n = %d, %d series)'', ''FontSize'', 11, ''Interpreter'', ''none'');', height(T), n_ts);
     L{end+1} = '';
 
     % Stacked (only when compositional and ≥2 time points)
@@ -2810,6 +2811,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
         L{end+1} = '        area(ax, t_u, Y_plot(:, sord), ''LineStyle'', ''none'', ''FaceAlpha'', 0.85);';
         L{end+1} = '        legend(ax, ts_labels(sord), ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
         L{end+1} = sprintf('        xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value (stacked)''); box off;', tcn_sq);
+        L{end+1} = sprintf('        title(ax, ''time series, stacked area  (n = %d, %d series)'', ''FontSize'', 11, ''Interpreter'', ''none'');', height(T), n_ts);
         L{end+1} = '    end';
         L{end+1} = '';
     end

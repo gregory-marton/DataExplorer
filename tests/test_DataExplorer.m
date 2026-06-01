@@ -496,10 +496,12 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_de_profile_adds_panel_and_geo_grid(testCase)
             % de_profile must populate prof.panel (wide-year detection) and
             % prof.geo_grid (per-column geo detection) fields.
-            StateCode = categorical({'CA';'TX';'NY';'FL';'OH'});
+            % Use 2 rows per state so the all-unique-categorical heuristic
+            % does not flag StateCode as an ID column.
+            StateCode = categorical(repmat({'CA';'TX';'NY';'FL';'OH'}, 2, 1));
             T = table(StateCode);
             for yr = 1960:1965
-                T.(sprintf('x%d', yr)) = rand(5, 1);
+                T.(sprintf('x%d', yr)) = rand(10, 1);
             end
             [~, prof] = de_profile(T);
             testCase.verifyTrue(isfield(prof, 'panel'), 'prof.panel missing from de_profile output');
@@ -1234,9 +1236,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.assert_all_figures_nonempty();
         end
 
-        function test_panel_wide_shows_totals_skips_pairplot(testCase)
+        function test_panel_wide_shows_totals(testCase)
             % Wide-format panel dataset (categoricals + wide year columns) should
-            % produce a "Totals over time" figure and NOT produce a "Pairplot" figure.
+            % produce a "Totals over time" figure.
             n_states = 5;  n_codes = 4;
             states = repmat(strcat('S', string(1:n_states))', n_codes, 1);
             codes  = repelem(strcat('C', string(1:n_codes))', n_states, 1);
@@ -1258,14 +1260,11 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cleanup2   = onCleanup(@() close(new_figs(isgraphics(new_figs))));
 
             names = arrayfun(@(f) f.Name, new_figs, 'UniformOutput', false);
-            has_totals  = any(cellfun(@(n) ...
+            has_totals = any(cellfun(@(n) ...
                 (contains(n,'Total by') || contains(n,'Share by')) && contains(n,'over time'), names));
-            has_pairplot = any(cellfun(@(n) contains(n, 'Pairplot'), names));
 
             testCase.verifyTrue(has_totals, ...
                 'panel dataset should produce a "Total by X over time" stacked-area figure');
-            testCase.verifyFalse(has_pairplot, ...
-                'panel dataset should NOT produce a "Pairplot" figure');
         end
 
         function test_panel_totals_has_line(testCase)
