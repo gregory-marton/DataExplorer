@@ -801,7 +801,7 @@ AGG_RATIO = 0.30;
 n = numel(levels);
 mask = false(n, 1);
 for li = 1:n
-    if is_total_level(levels{li}), mask(li) = true; end
+    if de__is_total_level(levels{li}), mask(li) = true; end
 end
 if nargin < 2 || isempty(means), return; end
 valid = ~isnan(means) & means > 0 & ~mask;
@@ -817,9 +817,6 @@ end
 end
 
 
-function tf = is_total_level(lv)
-tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b', 'once'));
-end
 
 
 function [colors, plot_order] = level_colors(levels)

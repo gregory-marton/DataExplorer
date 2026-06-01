@@ -24,7 +24,7 @@ for vn = string(T.Properties.VariableNames)
     if ~iscategorical(col_v) && ~isstring(col_v) && ~iscellstr(col_v), continue; end
     levs_v = unique(string(col_v));
     levs_v = levs_v(~ismissing(levs_v));
-    tot_v  = levs_v(arrayfun(@(l) is_total_level(char(l)), levs_v));
+    tot_v  = levs_v(arrayfun(@(l) de__is_total_level(char(l)), levs_v));
     if ~isempty(tot_v)
         T_notot = T_notot(~ismember(string(col_v), tot_v), :);
     end
@@ -125,9 +125,6 @@ box(ax2, 'off');
 end
 
 
-function tf = is_total_level(lv)
-tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b', 'once'));
-end
 
 
 function s = src_prefix(~, rest)
