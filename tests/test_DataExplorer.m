@@ -163,8 +163,11 @@ classdef test_DataExplorer < matlab.unittest.TestCase
     end
 
     methods (TestMethodSetup)
-        function close_all_figures(~)
+        function close_all_figures_and_suppress(testCase)
             close all;
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            testCase.addTeardown(@() set(0, 'DefaultFigureVisible', old_vis));
         end
     end
 
