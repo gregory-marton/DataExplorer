@@ -2721,7 +2721,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     end
     [~, ~, xidx_g] = unique(xdata_g(valid_g));
     n_ug = max(xidx_g);
-    if isempty(n_ug)
+    if isempty(n_ug) || n_ug < 2
         is_compositional = false;
     else
     Y_g  = NaN(n_ug, n_ts);
@@ -2735,6 +2735,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     is_compositional = se_is_compositional(Y_g, T, prof);
     end
 
+    if ~isempty(n_ug) && n_ug >= 2
     col_args  = strjoin(cellfun(@(s) sprintf('T.%s', s), ncn_list, 'UniformOutput', false), ' ');
     lbl_items = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ncn_list, 'UniformOutput', false), ', ');
 
@@ -2786,6 +2787,7 @@ if ~isempty(time_idx) && ~isempty(ts_num)
         L{end+1} = '';
     end
     L{end+1} = 'end';  % close: if isdatetime(t_col) || isnumeric(t_col)
+    end  % n_ug >= 2
 end
 
 if isempty(L)
@@ -2883,7 +2885,7 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
-    num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
@@ -2934,7 +2936,7 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = sprintf('de_countrybins(T_long_co, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''World choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
-    num_plot = num_idxs(~ismember(num_idxs, geo_idx));
+    num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
