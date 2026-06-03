@@ -475,6 +475,24 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'FIPS-number StateCode must not be assigned us-states by name alone');
         end
 
+        function test_profile_skips_redundant_categorical(testCase)
+            % Two perfectly-associated categoricals (Cramer's V ~ 1) carry the same
+            % information: keep one, skip the other.  Prefer dropping the
+            % identifier-named column (StateCode) over the readable one (StateName).
+            nm = repelem("S" + string(1:6), 30)';
+            T = table(categorical(nm + "c"), categorical(nm), ...
+                'VariableNames', {'StateCode','StateName'});
+            [~, prof] = de_profile(T);
+            ci = find(strcmp(prof.name, 'StateCode'));
+            ni = find(strcmp(prof.name, 'StateName'));
+            testCase.verifyTrue(prof.skip(ci), ...
+                'redundant id-named StateCode should be skipped');
+            testCase.verifyFalse(prof.skip(ni), ...
+                'StateName should be kept as the representative');
+            testCase.verifyTrue(contains(prof.skip_reason(ci), "redundant"), ...
+                'skip reason should mention redundancy');
+        end
+
         % ── Temporal parsing of date-like strings ─────────────────────────────
 
         function test_profile_parses_iso_date_strings_to_datetime(testCase)
@@ -704,6 +722,28 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             key_h = findobj(ax, 'Type', 'text', 'Tag', 'legend_key');
             testCase.verifyNotEmpty(key_h, ...
                 'should have a legend_key text object in the axes margin');
+        end
+
+        function test_cond_heatmap_orders_rows_by_count_desc(testCase)
+            % Regression: the SVD row-reorder dumped the largest-count row to the
+            % bottom for near-1:1 (high-association) pairs.  Rows must read in
+            % count-descending order (largest on top).
+            counts = [1120 591 300 250 200 172];
+            nm = repelem("S" + string(1:numel(counts)), counts)';
+            code = nm + "c";
+            T = table(categorical(code), categorical(nm), ...
+                'VariableNames', {'StateCode','StateName'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            close all;
+
+            de_cond_heatmap(T, "StateCode", "StateName");
+            ax = findobj(gcf, 'Type', 'axes');
+            yl = string(get(ax(1), 'YTickLabel'));
+            testCase.verifyEqual(yl(1), "S1c", ...
+                'Largest-count row (S1c, n=1120) must be on top, not reordered away');
         end
 
         function test_de_countrybins_basic(testCase)
