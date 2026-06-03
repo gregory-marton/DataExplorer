@@ -380,6 +380,33 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'A, B, C are monotone transforms → should form a family of >= 3');
         end
 
+        function test_corr_family_geo_ladder_drawn(testCase)
+            % When a geo key exists, de_plot_corr_family also draws a per-region
+            % "value ladder" sparkline (Tag 'value_ladder').
+            rng(9);
+            n = 180;
+            states = repmat(["AL";"CA";"TX";"NY";"FL";"OH"], n/6, 1);
+            latent = abs(randn(n,1)) + 1;
+            A = latent + 0.05*randn(n,1);
+            B = latent*1.4 + 0.05*randn(n,1);
+            C = latent*0.8 + 0.05*randn(n,1);
+            T = table(categorical(states), A, B, C, ...
+                'VariableNames', {'State','MeasureA','MeasureB','MeasureC'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);
+            testCase.assumeNotEmpty(fams, 'precondition: a family is detected');
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            close all;
+
+            de_plot_corr_family(T, prof, fams{1});
+            lad = findobj(0, 'Tag', 'value_ladder');
+            testCase.verifyNotEmpty(lad, ...
+                'geo value-ladder sparklines should be drawn when a geo key exists');
+        end
+
         function test_corr_families_ignores_independent_cols(testCase)
             % Five truly independent columns → no family.
             rng(2);
