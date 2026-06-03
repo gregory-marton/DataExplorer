@@ -146,7 +146,7 @@ if ~any(isnan(options.CLim))
     vmax = options.CLim(2);
 end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
-if is_heatmap_cat || is_scatter_cat, has_choro = false; end
+if is_heatmap_cat || is_scatter_cat || is_value_ladder, has_choro = false; end
 
 % Log color scale.  Policy: callers (the recipe) pass LogColor "on"/"off" based on
 % the column's profiled skewness; "auto" falls back to a skewness test on the tile
@@ -419,39 +419,45 @@ if has_spark && has_choro && ~is_heatmap_cat
         'Margin', 3, 'LineWidth', 0.5);
 end
 
-%% ── Value ladder (CellRenderer='value_ladder': per-tile sparkline over members)
+%% ── Value ladder (CellRenderer='value_ladder': per-tile colored bars per member)
 if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
-    tile_h   = 1 - 2*GAP;
-    SPARK_MX = 0.10;
-    x_ticks  = linspace(0, 1, K_lad);
+    tile_h  = 1 - 2*GAP;
+    BAR_MX  = 0.08;
+    cmap_lad = lines(K_lad);
+    inner_w = tile_h - 2*BAR_MX;
+    bw      = inner_w / K_lad;
+    base_lo = min(lad_lo, 0);                 % bars grow from 0 (or below if neg)
+    leg_h   = gobjects(1, K_lad);             % one handle per member for the legend
     for ti = 1:n_tiles
         if all(isnan(ladder(ti,:))), continue; end
         r = ROWS(ti);  c = COLS(ti);
-        spark_y_top = r + GAP + (1 - 0.28) * tile_h;
-        spark_y_bot = r + 1 - GAP - 0.01;
-        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
-        row    = ladder(ti, :);
-        norm_h = (row - lad_lo) / (lad_hi - lad_lo);
-        y_spark = spark_y_bot - norm_h * (spark_y_bot - spark_y_top);
-        y_spark(isnan(row)) = NaN;
-        fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
-        tc = tg_text_color(fc);
-        line(ax, x_spark, y_spark, 'Color', tc, 'LineWidth', 0.8, ...
-            'Marker', '.', 'MarkerSize', 4, 'Tag', 'value_ladder');
+        bar_top = r + GAP + (1 - 0.28) * tile_h;
+        bar_bot = r + 1 - GAP - 0.01;
+        for ki = 1:K_lad
+            v = ladder(ti, ki);
+            if isnan(v), continue; end
+            norm_h = (v - base_lo) / (lad_hi - base_lo);
+            norm_h = max(0, min(1, norm_h));
+            x0 = c + GAP + BAR_MX + (ki-1)*bw;
+            y_top = bar_bot - norm_h * (bar_bot - bar_top);
+            ph = patch(ax, [x0 x0+bw*0.85 x0+bw*0.85 x0], ...
+                [bar_bot bar_bot y_top y_top], cmap_lad(ki,:), ...
+                'EdgeColor', 'none', 'Tag', 'value_ladder');
+            if ~isgraphics(leg_h(ki)), leg_h(ki) = ph; end
+        end
     end
-end
 
-%% ── Legend key (value ladder) ────────────────────────────────────────────────
-if is_value_ladder && K_lad > 0
-    key_str = "ladder (left" + char(8594) + "right): " + strjoin(val_cols, ", ");
-    if options.LegendNote ~= ""
-        key_str = key_str + "  |  " + options.LegendNote;
+    % Color legend (member → color), at subtitle font size
+    valid = isgraphics(leg_h);
+    if any(valid)
+        lg = legend(ax, leg_h(valid), cellstr(val_cols(valid)), ...
+            'Location', 'eastoutside', 'FontSize', F.subtitle, ...
+            'Interpreter', 'none', 'Box', 'off');
+        if options.LegendNote ~= ""
+            lg.Title.String = char(options.LegendNote);
+            lg.Title.FontSize = FSZ_LEGEND;
+        end
     end
-    text(ax, -MARGIN + 0.05, -MARGIN + 0.05, char(key_str), ...
-        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
-        'BackgroundColor', CLR_LEGEND_BG, 'EdgeColor', CLR_LEGEND_BORDER, ...
-        'Margin', 3, 'LineWidth', 0.5);
 end
 
 %% ── Category heatmap (CellRenderer='heatmap_cat': x=time, y=category, color=value)
