@@ -271,11 +271,13 @@ if is_value_ladder
     if all(isnan(options.SharedYLim))
         lad_lo = min(non_ov_lad(:), [], 'omitnan');
         lad_hi = max(non_ov_lad(:), [], 'omitnan');
-        % Log the shared scale when values are non-negative and span > 2 orders
-        % of magnitude — otherwise one outlier tile flattens every other tile.
+        % Log the shared scale when values are non-negative and right-skewed
+        % (same criterion as the choropleth path) — otherwise one outlier tile
+        % flattens every other tile.
         posl = non_ov_lad(non_ov_lad > 0 & isfinite(non_ov_lad));
         finl = non_ov_lad(isfinite(non_ov_lad));
-        if ~isempty(posl) && all(finl >= 0) && max(posl)/min(posl) > 100
+        if ~isempty(posl) && all(finl >= 0) && ...
+           (max(posl)/min(posl) > 100 || (tg_skewness(finl) > 1.5 && max(posl)/min(posl) > 5))
             use_log_ladder = true;
             lad_floor = min(posl) / 10;        % zeros / tiny values floored a decade below
             ladder(ladder <= 0) = lad_floor;
@@ -469,14 +471,18 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
         lg = legend(ax, leg_h(valid), cellstr(val_cols(valid)), ...
             'Location', 'eastoutside', 'FontSize', F.subtitle, ...
             'Interpreter', 'none', 'Box', 'off');
-        note = options.LegendNote;
+        % Legend title doubles as the vertical scale: the value range a full bar
+        % spans (un-logged), plus log/omission notes.
         if use_log_ladder
-            if note == "", note = "bars: log scale"; else, note = note + "  |  log scale"; end
+            note = sprintf('bar height: %.3g to %.3g (log)', 10^base_lo, 10^lad_hi);
+        else
+            note = sprintf('bar height: %.3g to %.3g', base_lo, lad_hi);
         end
-        if note ~= ""
-            lg.Title.String = char(note);
-            lg.Title.FontSize = FSZ_LEGEND;
+        if options.LegendNote ~= ""
+            note = note + "  |  " + options.LegendNote;
         end
+        lg.Title.String = char(note);
+        lg.Title.FontSize = FSZ_LEGEND;
     end
 end
 
