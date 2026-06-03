@@ -43,6 +43,7 @@ prof.type        = repmat("unknown", 1, ncol);
 prof.orig_class  = repmat("", 1, ncol);
 prof.nmissing    = zeros(1, ncol);
 prof.nunique     = zeros(1, ncol);
+prof.skewness    = nan(1, ncol);
 prof.geo_grid    = repmat({''}, 1, ncol);
 
 for k = 1:ncol
@@ -56,22 +57,63 @@ for k = 1:ncol
         prof.orig_class(k) = string(class(col));
     end
 
-    % String/char/cellstr: try numeric conversion, else categorical
+    % String/char/cellstr: try numeric conversion, else categorical.
+    % Two heuristics prevent numeric conversion for identifier-like columns:
+    %   1. Leading-zero detection: values like "01","003" are codes, not numbers.
+    %   2. Name keyword check: split on CamelCase/snake_case; match id/code/num/number.
     if ischar(col) || iscellstr(col) || (isstring(col) && ~isscalar(col))
         col = string(col);
         col(ismember(col, missingStrings)) = missing;
         numvals     = str2double(col);
         pct_numeric = sum(~isnan(numvals)) / n;
-        if pct_numeric >= NUMERIC_FRAC
+
+        % Leading-zero check (e.g., FIPS codes "01","003","0010"): language-agnostic.
+        valid_mask = ~isnan(numvals) & col ~= missing;
+        if any(valid_mask)
+            lz = valid_mask & startsWith(col, '0') & ~startsWith(col, '0.') & col ~= "0";
+            pct_lz = sum(lz) / max(sum(valid_mask), 1);
+        else
+            pct_lz = 0;
+        end
+
+        % Name keyword check: tokenize (CamelCase/snake_case); match last word.
+        % ("NumObsBelowMDL" → last word "mdl" → no match; "CountyCode" → "code" → match)
+        toks       = de_name_tokens(cname);
+        is_id_name = ismember(toks(end), ["code","id","num","number"]);
+
+        if pct_numeric >= NUMERIC_FRAC && pct_lz <= 0.10 && ~is_id_name
             col = numvals;
         else
-            col = categorical(col);
+            % Try temporal parsing for date-like strings readtable left as text.
+            dt = de_maybe_datetime(col);
+            if ~isempty(dt)
+                col = dt;
+            else
+                col = categorical(col);
+            end
         end
         T.(cname) = col;
     end
 
     % Re-fetch after possible conversion
     col = T.(cname);
+
+    % Reclassify pre-loaded integer columns whose name looks like an identifier.
+    % readtable loads "State Code" as int/double 1..56 before profiling — the
+    % string-conversion block above is never reached for those.  Check again here.
+    if isnumeric(col) && ~islogical(col) && prof.orig_class(k) ~= "text"
+        col_clean = col(~isnan(col));
+        if ~isempty(col_clean) && all(col_clean == floor(col_clean))
+            toks_k     = de_name_tokens(cname);
+            is_id_k    = ismember(toks_k(end), ["code","id","num","number"]);
+            if is_id_k
+                col_str = string(col);
+                col_str(strcmp(col_str, "NaN")) = missing;
+                col = categorical(col_str);
+                T.(cname) = col;
+            end
+        end
+    end
 
     if isnumeric(col) || islogical(col)
         if islogical(col)
@@ -83,6 +125,13 @@ for k = 1:ncol
         end
         prof.nmissing(k) = nmiss;
         prof.nunique(k)  = numel(unique(col(~isnan(col))));
+        x = double(col(~isnan(col)));
+        if numel(x) > 2
+            s = std(x);
+            if s > 0
+                prof.skewness(k) = mean(((x - mean(x)) / s).^3);
+            end
+        end
 
     elseif iscategorical(col)
         bad_cats = intersect(categories(col), cellstr(missingStrings));
@@ -133,6 +182,15 @@ for k = cat_cols
     end
 end
 
+% ── High-cardinality categorical skip (after geo detection so geo cols exempt) ─
+HIGH_CARD_THRESHOLD = 100;
+for k = find(prof.type == "categorical" & ~prof.skip)
+    if prof.nunique(k) > HIGH_CARD_THRESHOLD && isempty(prof.geo_grid{k})
+        prof.skip(k)        = true;
+        prof.skip_reason(k) = sprintf("high-cardinality (%d unique values)", prof.nunique(k));
+    end
+end
+
 % ── Panel detection ───────────────────────────────────────────────────────────
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 panel.is_panel      = false;
@@ -166,4 +224,60 @@ if ~isempty(wide_yr_idxs) && ~isempty(cat_all) && any(prof.nunique(cat_all) > 2)
     panel.description = strjoin(parts, [' ' char(215) ' ']);
 end
 prof.panel = panel;
+
+% ── Semantic role per column (geographic / temporal / identifier) ─────────────
+% A layer on top of prof.type: surfaces the meaning of a column beyond its
+% storage type.  Empty string for plain measures/categories.
+LAT_LON_NAMES = ["lat","latitude","lat_","latitude_dd","decimallatitude", ...
+                 "lon","long","longitude","lon_","longitude_dd","decimallongitude"];
+names_lower = lower(string(prof.name));
+prof.role   = repmat("", 1, ncol);
+for k = 1:ncol
+    nm_toks   = de_name_tokens(prof.name{k});
+    last_word = nm_toks(end);
+
+    is_geo  = ~isempty(prof.geo_grid{k}) || ismember(names_lower(k), LAT_LON_NAMES);
+    is_time = prof.type(k) == "datetime" ...
+        || (prof.type(k) == "numeric" && ...
+            any(ismember(nm_toks, ["year","month","day","date","time"]))) ...
+        || ismember(k, panel.wide_yr_idxs);
+    is_ident = prof.skip_reason(k) == "all values unique (ID column)" ...
+        || ismember(last_word, ["code","id","num","number"]);
+
+    if is_geo
+        prof.role(k) = "geographic";
+    elseif is_time
+        prof.role(k) = "temporal";
+    elseif is_ident
+        prof.role(k) = "identifier";
+    end
+end
+end
+
+
+% ── de_maybe_datetime ─────────────────────────────────────────────────────────
+function dt = de_maybe_datetime(s)
+%DE_MAYBE_DATETIME  Parse a string column to datetime if it is clearly date-like.
+%   Returns [] unless >= 70% of non-missing values both (a) match a date-like
+%   pattern (digit groups with -/ separators, a month name, or a HH:MM time)
+%   and (b) parse to a valid (non-NaT) datetime.  Conservative by design so
+%   decimal/code strings are never misread as dates.
+dt = [];
+s  = string(s);
+nonmiss = s(~ismissing(s));
+if isempty(nonmiss), return; end
+
+datelike = ~cellfun('isempty', regexp(cellstr(nonmiss), ...
+    '\d{1,4}[-/]\d{1,2}|[A-Za-z]{3,}\s+\d{1,2}|\d{1,2}:\d{2}', 'once'));
+if mean(datelike) < 0.70, return; end
+
+try
+    cand = datetime(s);
+catch
+    return
+end
+frac_ok = sum(~isnat(cand(~ismissing(s)))) / numel(nonmiss);
+if frac_ok >= 0.70
+    dt = cand;
+end
 end
