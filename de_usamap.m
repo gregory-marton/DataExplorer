@@ -152,13 +152,12 @@ fig = figure('Color',BG_GRAY,'NumberTitle','off','Visible',vis, ...
 if options.Title ~= "", fig.Name = char(options.Title); end
 
 %% ── Single map axes (usamap conus) ───────────────────────────────────────────
-% usamap() creates its own map axes in the current figure.
-% Make fig current, call usamap, then grab and reposition the axes.
-% NOTE: modern Mapping Toolbox renders usamap through a web-based uifigure that
-% ignores the root DefaultFigureVisible; force the resulting figure to honour it
-% so headless/test runs don't pop a blank CEF window.
+% usamap() draws into the current figure.  Use set(0,'CurrentFigure',...) — NOT
+% figure(fig) — to make it current: figure(h) raises AND un-hides the figure,
+% which momentarily flashes a window in headless/test runs.  set CurrentFigure
+% leaves a hidden figure hidden.
 ax_right = 0.82 + 0.10*double(~has_choro);
-figure(fig);        % set as current figure so usamap draws into it
+set(0, 'CurrentFigure', fig);
 usamap('conus');
 ax = gca;
 fig = ancestor(ax, 'figure');
