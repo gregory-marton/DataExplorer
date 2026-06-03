@@ -51,6 +51,8 @@ arguments
     options.SharedXLim        (1,2) double  = [NaN NaN]
     options.CLim              (1,2) double  = [NaN NaN]
     options.LogColor          (1,1) string  = "auto"   % "auto" | "on" | "off"
+    options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
+    options.LegendNote        (1,1) string  = ""
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
@@ -88,6 +90,9 @@ is_scatter_cat = options.CellRenderer == "scatter_cat" && ...
     options.XCol ~= "" && ismember(options.XCol, varnames) && ...
     options.YCol ~= "" && ismember(options.YCol, varnames) && ...
     numel(normed) == height(T) && height(T) > 0;
+val_cols       = options.ValueCols(ismember(options.ValueCols, varnames));
+is_value_ladder = options.CellRenderer == "value_ladder" && ...
+    numel(val_cols) >= 2 && numel(normed) == height(T) && height(T) > 0;
 
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
@@ -246,6 +251,32 @@ if is_scatter_cat
     end
 end
 
+%% ── Value-ladder data (CellRenderer='value_ladder') ──────────────────────────
+% Per tile: mean of each family member, drawn as a sparkline across the members
+% on a y-scale shared by every tile (so heights compare across patches).
+ladder = []; lad_lo = NaN; lad_hi = NaN; K_lad = 0;
+if is_value_ladder
+    K_lad  = numel(val_cols);
+    ladder = NaN(n_tiles, K_lad);
+    for ti = 1:n_tiles
+        s_mask = normed == CODES{ti};
+        if ~any(s_mask), continue; end
+        for ki = 1:K_lad
+            v = double(T.(char(val_cols(ki))));
+            v = v(s_mask); v = v(~isnan(v));
+            if ~isempty(v), ladder(ti, ki) = mean(v); end
+        end
+    end
+    non_ov_lad = ladder(~IS_OVERFLOW, :);
+    if all(isnan(options.SharedYLim))
+        lad_lo = min(non_ov_lad(:), [], 'omitnan');
+        lad_hi = max(non_ov_lad(:), [], 'omitnan');
+    else
+        lad_lo = options.SharedYLim(1);
+        lad_hi = options.SharedYLim(2);
+    end
+end
+
 %% ── Figure and axes ──────────────────────────────────────────────────────────
 has_spark = has_time && n_t > 1;
 
@@ -285,6 +316,7 @@ end
 lbl_y_frac = 0.50;
 if has_spark, lbl_y_frac = LBL_Y_SPARK; end
 if is_heatmap_cat, lbl_y_frac = LBL_Y_CAT; end
+if is_value_ladder, lbl_y_frac = LBL_Y_SPARK; end
 
 for ti = 1:n_tiles
     r  = ROWS(ti);  c = COLS(ti);
@@ -381,6 +413,41 @@ if has_spark && has_choro && ~is_heatmap_cat
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     key_str = ['color: mean  |  spark: ' t1s char(8594) tns];
     text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
+        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
+        'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
+        'BackgroundColor', CLR_LEGEND_BG, 'EdgeColor', CLR_LEGEND_BORDER, ...
+        'Margin', 3, 'LineWidth', 0.5);
+end
+
+%% ── Value ladder (CellRenderer='value_ladder': per-tile sparkline over members)
+if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
+    tile_h   = 1 - 2*GAP;
+    SPARK_MX = 0.10;
+    x_ticks  = linspace(0, 1, K_lad);
+    for ti = 1:n_tiles
+        if all(isnan(ladder(ti,:))), continue; end
+        r = ROWS(ti);  c = COLS(ti);
+        spark_y_top = r + GAP + (1 - 0.28) * tile_h;
+        spark_y_bot = r + 1 - GAP - 0.01;
+        x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
+        row    = ladder(ti, :);
+        norm_h = (row - lad_lo) / (lad_hi - lad_lo);
+        y_spark = spark_y_bot - norm_h * (spark_y_bot - spark_y_top);
+        y_spark(isnan(row)) = NaN;
+        fc = tg_val2color(Heat_bg(ti), vmin, vmax, cmap_ch, has_choro);
+        tc = tg_text_color(fc);
+        line(ax, x_spark, y_spark, 'Color', tc, 'LineWidth', 0.8, ...
+            'Marker', '.', 'MarkerSize', 4, 'Tag', 'value_ladder');
+    end
+end
+
+%% ── Legend key (value ladder) ────────────────────────────────────────────────
+if is_value_ladder && K_lad > 0
+    key_str = "ladder (left" + char(8594) + "right): " + strjoin(val_cols, ", ");
+    if options.LegendNote ~= ""
+        key_str = key_str + "  |  " + options.LegendNote;
+    end
+    text(ax, -MARGIN + 0.05, -MARGIN + 0.05, char(key_str), ...
         'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
         'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
         'BackgroundColor', CLR_LEGEND_BG, 'EdgeColor', CLR_LEGEND_BORDER, ...

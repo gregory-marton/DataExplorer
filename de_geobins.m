@@ -74,6 +74,8 @@ arguments
     options.SharedXLim       (1,2) double  = [NaN NaN]
     options.CLim             (1,2) double  = [NaN NaN]
     options.LogColor         (1,1) string  = "auto"
+    options.ValueCols        (1,:) string  = string([])
+    options.LegendNote       (1,1) string  = ""
 end
 
 fig = []; ax = [];
@@ -190,7 +192,9 @@ g.is_overflow = IS_OVERFLOW;
     'YCol',          options.YCol, ...
     'SharedXLim',    options.SharedXLim, ...
     'CLim',          options.CLim, ...
-    'LogColor',      options.LogColor);
+    'LogColor',      options.LogColor, ...
+    'ValueCols',     options.ValueCols, ...
+    'LegendNote',    options.LegendNote);
 
 end % de_geobins
 
