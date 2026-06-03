@@ -61,7 +61,7 @@ FIG_W_MIN         = 500;   FIG_W_MAX = 1600;
 FIG_H_MIN         = 380;   FIG_H_MAX = 1000;
 CBAR_X            = 0.86;  CBAR_W   = 0.03;
 FSZ_LEGEND        = 6.5;   FSZ_CATLEGEND = 5.5;  % non-integer; stay local
-LBL_Y_SPARK       = 0.28;  LBL_Y_CAT = 0.10;
+LBL_Y_SPARK       = 0.12;  LBL_Y_CAT = 0.10;   % label near the top; data fills below
 CLR_LEGEND_BG     = [0.91 0.91 0.91];
 CLR_LEGEND_BORDER = [0.55 0.55 0.55];
 BG_GRAY           = [0.97 0.97 0.97];
@@ -390,7 +390,7 @@ if has_spark && has_choro && ~is_heatmap_cat
     for ti = 1:n_tiles
         if all(isnan(Heat(ti,:))), continue; end
         r = ROWS(ti);  c = COLS(ti);
-        spark_y_top = r + GAP + (1 - 0.28) * tile_h;
+        spark_y_top = r + lbl_y_frac + 0.06;   % fill up to just below the label
         spark_y_bot = r + 1 - GAP - 0.01;
         x_spark = c + GAP + SPARK_MX + x_ticks * (tile_h - 2*SPARK_MX);
         heat_row = Heat(ti, :);
@@ -431,8 +431,8 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
     for ti = 1:n_tiles
         if all(isnan(ladder(ti,:))), continue; end
         r = ROWS(ti);  c = COLS(ti);
-        bar_top = r + GAP + (1 - 0.28) * tile_h;
-        bar_bot = r + 1 - GAP - 0.01;
+        bar_top = r + lbl_y_frac + 0.06;   % full bars rise to just under the label
+        bar_bot = r + 1 - GAP - 0.01;      % baseline near the bottom of the tile
         for ki = 1:K_lad
             v = ladder(ti, ki);
             if isnan(v), continue; end
@@ -462,7 +462,7 @@ end
 
 %% ── Category heatmap (CellRenderer='heatmap_cat': x=time, y=category, color=value)
 if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
-    heat_top = GAP + 0.20;
+    heat_top = lbl_y_frac + 0.08;   % fill up to just below the label
     heat_bot = 1 - GAP;
     cell_h   = (heat_bot - heat_top) / K;
     cell_w   = (1 - 2*GAP) / n_t;
