@@ -254,7 +254,7 @@ end
 %% ── Value-ladder data (CellRenderer='value_ladder') ──────────────────────────
 % Per tile: mean of each family member, drawn as a sparkline across the members
 % on a y-scale shared by every tile (so heights compare across patches).
-ladder = []; lad_lo = NaN; lad_hi = NaN; K_lad = 0;
+ladder = []; lad_lo = NaN; lad_hi = NaN; K_lad = 0; use_log_ladder = false;
 if is_value_ladder
     K_lad  = numel(val_cols);
     ladder = NaN(n_tiles, K_lad);
@@ -271,6 +271,18 @@ if is_value_ladder
     if all(isnan(options.SharedYLim))
         lad_lo = min(non_ov_lad(:), [], 'omitnan');
         lad_hi = max(non_ov_lad(:), [], 'omitnan');
+        % Log the shared scale when values are non-negative and span > 2 orders
+        % of magnitude — otherwise one outlier tile flattens every other tile.
+        posl = non_ov_lad(non_ov_lad > 0 & isfinite(non_ov_lad));
+        finl = non_ov_lad(isfinite(non_ov_lad));
+        if ~isempty(posl) && all(finl >= 0) && max(posl)/min(posl) > 100
+            use_log_ladder = true;
+            lad_floor = min(posl) / 10;        % zeros / tiny values floored a decade below
+            ladder(ladder <= 0) = lad_floor;
+            ladder = log10(ladder);
+            lad_lo = log10(lad_floor);
+            lad_hi = log10(max(posl));
+        end
     else
         lad_lo = options.SharedYLim(1);
         lad_hi = options.SharedYLim(2);
@@ -426,7 +438,11 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
     cmap_lad = lines(K_lad);
     inner_w = tile_h - 2*BAR_MX;
     bw      = inner_w / K_lad;
-    base_lo = min(lad_lo, 0);                 % bars grow from 0 (or below if neg)
+    if use_log_ladder
+        base_lo = lad_lo;                     % log scale: baseline at the floor
+    else
+        base_lo = min(lad_lo, 0);             % linear: bars grow from 0 (or below if neg)
+    end
     leg_h   = gobjects(1, K_lad);             % one handle per member for the legend
     for ti = 1:n_tiles
         if all(isnan(ladder(ti,:))), continue; end
@@ -453,8 +469,12 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
         lg = legend(ax, leg_h(valid), cellstr(val_cols(valid)), ...
             'Location', 'eastoutside', 'FontSize', F.subtitle, ...
             'Interpreter', 'none', 'Box', 'off');
-        if options.LegendNote ~= ""
-            lg.Title.String = char(options.LegendNote);
+        note = options.LegendNote;
+        if use_log_ladder
+            if note == "", note = "bars: log scale"; else, note = note + "  |  log scale"; end
+        end
+        if note ~= ""
+            lg.Title.String = char(note);
             lg.Title.FontSize = FSZ_LEGEND;
         end
     end
