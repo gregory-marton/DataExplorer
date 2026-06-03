@@ -380,6 +380,26 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'A, B, C are monotone transforms → should form a family of >= 3');
         end
 
+        function test_corr_family_representative_is_medoid(testCase)
+            % The kept representative (fam(1)) should be the medoid — the member
+            % most correlated with the rest — NOT the highest-variance-but-
+            % peripheral member.
+            rng(21);
+            n = 300;
+            z = randn(n,1);
+            A = z + 0.1*randn(n,1);
+            B = z + 0.1*randn(n,1);
+            C = z + 0.1*randn(n,1);
+            D = 5*z + 1.5*randn(n,1);   % highest variance, but noisier → peripheral
+            T = table(A, B, C, D, 'VariableNames', {'A','B','C','D'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);
+            testCase.assumeNotEmpty(fams, 'precondition: a family is detected');
+            rep = string(prof.name{fams{1}(1)});
+            testCase.verifyNotEqual(rep, "D", ...
+                'high-variance-but-peripheral D must not be the medoid representative');
+        end
+
         function test_corr_family_geo_ladder_drawn(testCase)
             % When a geo key exists, de_plot_corr_family also draws a per-region
             % "value ladder" sparkline (Tag 'value_ladder').

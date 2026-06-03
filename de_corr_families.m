@@ -15,9 +15,10 @@ function families = de_corr_families(T, prof, options)
 %   Both are computed toolbox-free (ranks + corrcoef), so no Statistics Toolbox.
 %
 %   Clustering: complete-linkage — a column joins a group only when it exceeds
-%   the threshold with EVERY existing member.  Groups are seeded by descending
-%   column variance so the highest-signal column is the natural representative
-%   (first element of each returned cell).
+%   the threshold with EVERY existing member.  Within each group the first element
+%   is the MEDOID (the member with the highest mean |correlation| to the rest):
+%   the most representative member, used as the family's representative downstream
+%   since all other members are dropped from the pairplot/choropleths.
 
 arguments
     T         table
@@ -92,6 +93,15 @@ for si = 1:m
 
     cluster_indices = find(in_cluster);
     if numel(cluster_indices) >= options.MinSize
+        % Representative = medoid: the member with the highest mean |correlation|
+        % to the rest of the family.  Since every other member is dropped from
+        % downstream plots, the survivor should be the most representative of the
+        % shared signal — not the most extreme (variance is scale-biased).
+        sub  = R(cluster_indices, cluster_indices);
+        nci  = numel(cluster_indices);
+        ma   = (sum(sub, 2)' - 1) / max(nci - 1, 1);   % mean |r| to others (1×nci)
+        [~, mo] = sort(ma, 'descend');
+        cluster_indices = cluster_indices(mo);          % medoid first
         nfam           = nfam + 1;
         families{nfam} = candidates(cluster_indices);
         assigned(in_cluster) = true;
