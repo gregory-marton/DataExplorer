@@ -20,12 +20,13 @@ def _gen_recipe(csv_text: str, matlab_bin: str) -> str:
     csv = tmp / "smoke.csv"
     csv.write_text(csv_text)
     out = tmp / "recipe_out.m"
+    # Copy this csv's specific recipe (dataexplorer_<stem>.m), NOT the newest
+    # dataexplorer_*.m — the deferred integration run writes its own recipes to
+    # the same tempdir concurrently, so "newest" can grab the wrong one.
     script = (
         "set(0,'DefaultFigureVisible','off');"
         f"DataExplorer('{csv}');"
-        "d = dir(fullfile(tempdir,'dataexplorer_*.m'));"
-        "[~,i] = max([d.datenum]);"
-        f"copyfile(fullfile(d(i).folder, d(i).name), '{out}');"
+        f"copyfile(fullfile(tempdir,'dataexplorer_{csv.stem}.m'), '{out}');"
     )
     res = run_matlab(script, timeout=240, matlab=matlab_bin)
     assert res.returncode == 0, f"MATLAB failed:\n{res.stderr}\n{res.stdout}"
@@ -121,7 +122,10 @@ def test_recipe_excludes_camelcase_id_choropleths(matlab_bin):
 def test_recipe_collapses_correlated_family(matlab_bin):
     recipe = _gen_recipe(_camelcase_csv(), matlab_bin)
     assert "de_corr_families" in recipe, "recipe must compute families"
-    assert "de_plot_corr_family" in recipe, "recipe must plot families"
+    # Per-family plots are emitted as flat, editable calls driven by fam_cols
+    # (not the old de_plot_corr_family wrapper).
+    assert "fam_cols" in recipe, "recipe must emit per-family fam_cols plots"
+    assert "de_plot_corr_family" not in recipe, "de_plot_corr_family was removed"
     # MeasureA/B/C are a correlated family: at most one may be a choropleth color.
     n_family_choro = sum(
         f"'ColorCol','{m}'" in recipe for m in ("MeasureA", "MeasureB", "MeasureC")

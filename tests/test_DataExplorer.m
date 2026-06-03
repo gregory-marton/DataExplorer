@@ -400,9 +400,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'high-variance-but-peripheral D must not be the medoid representative');
         end
 
-        function test_corr_family_geo_ladder_drawn(testCase)
-            % When a geo key exists, de_plot_corr_family also draws a per-region
-            % "value ladder" sparkline (Tag 'value_ladder').
+        function test_value_ladder_renders_bars(testCase)
+            % de_statebins CellRenderer='value_ladder' draws colored bars (Tag
+            % 'value_ladder') — one per member per state — with a labeled axis.
             rng(9);
             n = 180;
             states = repmat(["AL";"CA";"TX";"NY";"FL";"OH"], n/6, 1);
@@ -412,19 +412,18 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             C = latent*0.8 + 0.05*randn(n,1);
             T = table(categorical(states), A, B, C, ...
                 'VariableNames', {'State','MeasureA','MeasureB','MeasureC'});
-            [~, prof] = de_profile(T);
-            fams = de_corr_families(T, prof);
-            testCase.assumeNotEmpty(fams, 'precondition: a family is detected');
 
             old_vis = get(0, 'DefaultFigureVisible');
             set(0, 'DefaultFigureVisible', 'off');
             cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
             close all;
 
-            de_plot_corr_family(T, prof, fams{1});
-            lad = findobj(0, 'Tag', 'value_ladder');
-            testCase.verifyNotEmpty(lad, ...
-                'geo value-ladder sparklines should be drawn when a geo key exists');
+            de_statebins(T, 'StateCol','State', 'CellRenderer','value_ladder', ...
+                'ValueCols', ["MeasureA","MeasureB","MeasureC"]);
+            bars = findobj(0, 'Tag', 'value_ladder');
+            axn  = findobj(0, 'Tag', 'ladder_axis');
+            testCase.verifyNotEmpty(bars, 'value_ladder must draw bars');
+            testCase.verifyNotEmpty(axn,  'value_ladder must draw a labeled axis');
         end
 
         function test_corr_families_ignores_independent_cols(testCase)
@@ -1437,8 +1436,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             % Correlated-family figures must be wired into the recipe.
             testCase.verifyTrue(contains(recipe, "de_corr_families"), ...
                 'Recipe must compute correlated families');
-            testCase.verifyTrue(contains(recipe, "de_plot_corr_family"), ...
-                'Recipe must plot correlated families');
+            testCase.verifyTrue(contains(recipe, "fam_cols"), ...
+                'Recipe must emit per-family plots driven by an editable fam_cols list');
             % Identifier columns must never be a choropleth color variable.
             for idname = ["StateCode","CountyCode","SiteNum","ParameterCode", ...
                           "State Code","County Code","Site Num","Parameter Code"]
