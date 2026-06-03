@@ -1794,6 +1794,58 @@ end
 end
 
 
+% ── cg_corr_family_code ──────────────────────────────────────────────────────
+function code = cg_corr_family_code(~, prof, families)
+%CG_CORR_FAMILY_CODE  Recipe code for each correlated family.
+%   The medoid/family/scale decisions are resolved here (generation time); the
+%   emitted recipe is flat and editable: a member pairplot and, when a geo key
+%   exists, a per-region value-ladder, both driven by one editable name list.
+code = '';
+if isempty(families), return; end
+
+% Geo key (first non-skipped categorical with a recognised grid)
+geo_idx = [];
+if isfield(prof, 'geo_grid')
+    for gk = find(prof.type == "categorical" & ~prof.skip)
+        if numel(prof.geo_grid) >= gk && ~isempty(prof.geo_grid{gk})
+            geo_idx = gk; break
+        end
+    end
+end
+
+L  = cell(1, 5 * numel(families));   % up to 5 lines per family
+li = 0;
+for fi = 1:numel(families)
+    fam   = families{fi};                       % medoid-ordered column indices
+    rep   = prof.name{fam(1)};
+    names = prof.name(fam);
+    cols_cell = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ...
+        names, 'UniformOutput', false), ', ');
+
+    li = li+1; L{li} = sprintf('%% Correlated family: %s (+%d correlated)', rep, numel(fam)-1);
+    li = li+1; L{li} = sprintf('fam_cols = {%s};', cols_cell);
+    li = li+1; L{li} = 'de_pairplot(T, prof, fam_cols);';
+    if ~isempty(geo_idx)
+        gname   = prof.name{geo_idx};
+        grid_nm = prof.geo_grid{geo_idx};
+        sk = max(prof.skewness(fam), [], 'omitnan');
+        if isempty(sk) || isnan(sk), sk = 0; end
+        if sk > 2, scale = 'log'; else, scale = 'linear'; end
+        switch grid_nm
+            case 'us-states'
+                li = li+1; L{li} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, scale);
+            case 'world'
+                li = li+1; L{li} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, scale);
+            otherwise
+                li = li+1; L{li} = sprintf('de_geobins(T, ''GeoCol'',''%s'', ''Grid'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, grid_nm, scale);
+        end
+    end
+    li = li+1; L{li} = '';
+end
+code = strjoin(L(1:li), newline);
+end
+
+
 % ── cg_panel_code ────────────────────────────────────────────────────────────
 function code = cg_panel_code(~, ~, panel)
 %CG_PANEL_CODE  Recipe code for panel (wide-year) stacked-area and grouped
@@ -1854,6 +1906,7 @@ choro_code         = cg_state_choropleth_code(prof, families);
 country_code       = cg_country_choropleth_code(prof, families);
 geo_multi_code     = cg_geo_multicategorical_code(T, prof);
 geoscatter_code    = cg_geoscatter_code(T, prof);
+family_code        = cg_corr_family_code(T, prof, families);
 panel_code         = cg_panel_code(T, prof, panel);
 
 header = sprintf([...
@@ -1874,12 +1927,12 @@ sections = { ...
     '%% === Load ===', load_code, '', ...
     '%% === Clean ===', clean_code, '', ...
     '%% === Overview ===', 'de_overview(T, prof);', '', ...
-    '%% === Correlated families ===', ...
-        'fams = de_corr_families(T, prof);', ...
-        'for fi = 1:numel(fams), de_plot_corr_family(T, prof, fams{fi}); end', '', ...
-    '%% === Pairplot ===', pairplot_code, '', ...
+    '%% === Pairplot ===', 'fams = de_corr_families(T, prof);', pairplot_code, '', ...
     '%% === Best-of Plots ===', plots_code ...
 };
+if ~isempty(family_code)
+    sections = [sections, {'', '%% === Correlated families ===', family_code}];
+end
 if ~isempty(cat_assoc_lines)
     sections = [sections, {'', '%% === Categorical Associations ==='}, cat_assoc_lines(:)'];
 end

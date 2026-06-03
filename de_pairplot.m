@@ -6,7 +6,8 @@ function de_pairplot(T, prof, sel, options)
 %
 %   T    — table (already profiled)
 %   prof — struct from de_profile(T)
-%   sel  — column indices to include (row vector); use de_select_columns to pick
+%   sel  — columns to include: numeric indices (e.g. from de_select_columns) OR a
+%          string/cellstr list of column names.
 %
 %   Produces one figure: an np×np grid where each cell uses the best plot type
 %   for its pair of variable types:
@@ -20,12 +21,16 @@ function de_pairplot(T, prof, sel, options)
 arguments
     T       table
     prof    struct
-    sel     double
+    sel
     options.FontSize (1,1) double {mustBePositive} = 7
     options.Title    (1,1) string = "Pairplot"
     options.Subtitle (1,1) string = ""
 end
 
+% Accept column names (string/cellstr) as well as numeric indices.
+if ~isnumeric(sel)
+    sel = find(ismember(string(prof.name), string(sel)));
+end
 if isempty(sel), return; end
 
 BG_GRAY   = [0.97 0.97 0.97];
