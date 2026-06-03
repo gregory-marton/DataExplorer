@@ -191,6 +191,16 @@ console profile and on the figures) so you can see it and override it.
   dependency in exchange for code a student can actually read, learn a reusable
   vocabulary from, and edit — with sensible defaults (alpha blending, shared axis
   limits, confidence bands) baked into the calls instead of forgotten.
+- **Complexity belongs in the generator; the recipe stays flat and editable.** The
+  `cg_*` code generators may do arbitrarily clever analysis to *decide* what to emit,
+  but what they emit should be a handful of plain library calls plus the *structure*
+  exposed as editable variables — e.g. a correlated family becomes
+  `fam_cols = {...}; de_pairplot(T, prof, fam_cols); de_statebins(..., 'ValueCols',fam_cols)`,
+  not a single opaque call that hides the column list. A new single-purpose wrapper
+  that exists only to shorten the recipe is a smell: it moves the decision out of the
+  student's reach. Prefer composing existing `de_*` calls
+  around a named variable the student can see and change. Add a library function only
+  when it is genuinely reusable capability, not recipe sugar.
 - **Toolbox-free core.** Every `de_*` function must run on base MATLAB. The
   Statistics and Mapping toolboxes are optional enhancements; degrade gracefully
   (e.g. compute Spearman via manual ranking + `corrcoef`, not `corr`).
