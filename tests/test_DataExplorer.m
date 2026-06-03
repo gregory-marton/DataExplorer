@@ -239,6 +239,260 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Low-cardinality categorical should not be skipped');
         end
 
+        % ── Change 1: FIPS pattern guard ──────────────────────────────────────
+
+        function test_profile_id_name_keeps_strings_categorical(testCase)
+            % "State Code" values like "01","06","48" look numeric but the column
+            % name contains "code" → must stay categorical so geo detection runs.
+            T = table(["01";"06";"48"], 'VariableNames', {'State_Code'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "categorical", ...
+                'Column named State_Code must stay categorical despite numeric-looking values');
+        end
+
+        function test_profile_count_column_still_converts_to_numeric(testCase)
+            % "Count" does not match the id-name pattern → converts to numeric
+            T = table(["1";"2";"3";"4";"5"], 'VariableNames', {'Count'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "numeric", ...
+                'Column named Count must convert to numeric (no id-name pattern match)');
+        end
+
+        % ── Name tokenization (CamelCase / snake_case / spaces) ───────────────
+
+        function test_name_tokens_camelcase(testCase)
+            testCase.verifyEqual(de_name_tokens("StateCode"), ["state","code"]);
+            testCase.verifyEqual(de_name_tokens("SiteNum"),   ["site","num"]);
+            testCase.verifyEqual(de_name_tokens("ParameterCode"), ["parameter","code"]);
+            testCase.verifyEqual(de_name_tokens("Observation Count"), ["observation","count"]);
+            testCase.verifyEqual(de_name_tokens("State_Code"), ["state","code"]);
+            testCase.verifyEqual(de_name_tokens("POC"), "poc");
+        end
+
+        function test_profile_camelcase_id_reclassified(testCase)
+            % CamelCase id name with integer values → reclassified to categorical
+            % (regression: zero-width CamelCase split silently failed).
+            T = table(repmat((1:50)', 4, 1), 'VariableNames', {'SiteNum'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "categorical", ...
+                'Integer column named SiteNum must be reclassified to categorical');
+        end
+
+        % ── Change 2: High-cardinality categorical skip ───────────────────────
+
+        function test_profile_high_cardinality_categorical_skipped(testCase)
+            % > 100 unique (but with repeats, so not an all-unique ID) → high-card skip
+            vals = repmat(string((1:150)') + "_w", 2, 1);   % 300 rows, 150 unique
+            T = table(vals, 'VariableNames', {'Widget'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(prof.skip(1), ...
+                'Categorical with 150 unique values should be skip=true (high-cardinality)');
+            testCase.verifyTrue(contains(prof.skip_reason(1), "high-cardinality"), ...
+                'skip_reason should mention high-cardinality');
+        end
+
+        function test_profile_below_high_card_threshold_not_skipped(testCase)
+            % 50 unique (with repeats) < threshold → not skipped
+            vals = repmat(string((1:50)') + "_w", 4, 1);    % 200 rows, 50 unique
+            T = table(vals, 'VariableNames', {'Widget'});
+            [~, prof] = de_profile(T);
+            testCase.verifyFalse(prof.skip(1), ...
+                'Categorical with 50 unique values should not be high-cardinality skipped');
+        end
+
+        % ── Change 4: Lat/lon excluded from pairplot ──────────────────────────
+
+        function test_select_columns_excludes_latitude_longitude(testCase)
+            % de_select_columns must never pick Latitude or Longitude as pairplot vars
+            n = 50;
+            lat  = 30 + rand(n,1) * 20;
+            lon  = -120 + rand(n,1) * 50;
+            vals = randn(n,1);
+            T = table(lat, lon, vals, 'VariableNames', {'Latitude','Longitude','Value'});
+            [~, prof] = de_profile(T);
+            sel = de_select_columns(T, prof, 8);
+            lat_idx = find(strcmp(prof.name, 'Latitude'));
+            lon_idx = find(strcmp(prof.name, 'Longitude'));
+            testCase.verifyFalse(ismember(lat_idx, sel), ...
+                'Latitude must not appear in pairplot column selection');
+            testCase.verifyFalse(ismember(lon_idx, sel), ...
+                'Longitude must not appear in pairplot column selection');
+        end
+
+        % ── Change 5a: Skewness in de_profile ────────────────────────────────
+
+        function test_profile_skewness_right_skewed_data(testCase)
+            % Exponential data has strong positive skewness
+            rng(42);
+            x = exprnd(1, 500, 1);
+            T = table(x, 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(isfield(prof, 'skewness'), ...
+                'de_profile must return prof.skewness field');
+            testCase.verifyGreaterThan(prof.skewness(1), 1.5, ...
+                'Exponential data should have skewness > 1.5');
+        end
+
+        function test_profile_skewness_symmetric_data(testCase)
+            % Symmetric data has near-zero skewness
+            rng(42);
+            x = randn(500, 1);
+            T = table(x, 'VariableNames', {'X'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(isfield(prof, 'skewness'), ...
+                'de_profile must return prof.skewness field');
+            testCase.verifyLessThan(abs(prof.skewness(1)), 0.5, ...
+                'Normal data should have |skewness| < 0.5');
+        end
+
+        % ── Correlated family detection ───────────────────────────────────────
+
+        function test_corr_families_detects_cluster(testCase)
+            % Five columns drawn from the same latent variable → one family.
+            rng(1);
+            n = 200;
+            z = randn(n,1);
+            T = table(z + 0.05*randn(n,1), z + 0.05*randn(n,1), ...
+                      z + 0.05*randn(n,1), z + 0.05*randn(n,1), ...
+                      z + 0.05*randn(n,1), randn(n,1), ...
+                'VariableNames', {'A','B','C','D','E','Noise'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);
+            testCase.verifyNotEmpty(fams, 'Should detect at least one family');
+            sizes = cellfun(@numel, fams);
+            testCase.verifyGreaterThanOrEqual(max(sizes), 4, ...
+                'Family of A–E should have ≥ 4 members (Noise excluded)');
+        end
+
+        function test_corr_families_spearman_catches_monotone_nonlinear(testCase)
+            % Columns related by monotone NONLINEAR transforms of a latent
+            % variable: Spearman (default) should group them even though
+            % Pearson would be weakened by the nonlinearity.
+            rng(11);
+            n = 200;
+            x = sort(rand(n,1) * 4 - 2) + 0.001*randn(n,1);
+            T = table(x, exp(x), sign(x).*abs(x).^3, randn(n,1), ...
+                'VariableNames', {'A','B','C','Noise'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);   % default Method="spearman"
+            testCase.verifyNotEmpty(fams, 'Spearman should detect a monotone family');
+            testCase.verifyGreaterThanOrEqual(max(cellfun(@numel, fams)), 3, ...
+                'A, B, C are monotone transforms → should form a family of >= 3');
+        end
+
+        function test_corr_families_ignores_independent_cols(testCase)
+            % Five truly independent columns → no family.
+            rng(2);
+            n = 200;
+            T = table(randn(n,1), randn(n,1), randn(n,1), randn(n,1), randn(n,1), ...
+                'VariableNames', {'P','Q','R','S','U'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);
+            testCase.verifyEmpty(fams, ...
+                'Independent columns should produce no families');
+        end
+
+        function test_select_columns_excludes_family_nonreps(testCase)
+            % When a family is provided, de_select_columns keeps only the
+            % representative (first member) and excludes the rest.
+            rng(3);
+            n = 200;
+            z = randn(n,1);
+            T = table(z + 0.02*randn(n,1), z + 0.02*randn(n,1), ...
+                      z + 0.02*randn(n,1), randn(n,1), ...
+                'VariableNames', {'X1','X2','X3','Y'});
+            [~, prof] = de_profile(T);
+            fams = de_corr_families(T, prof);
+            testCase.assumeNotEmpty(fams, 'Precondition: family must be detected');
+            sel = de_select_columns(T, prof, 8, fams);
+            % At most one member of each family should appear in selection.
+            for fi = 1:numel(fams)
+                n_in_sel = sum(ismember(fams{fi}, sel));
+                testCase.verifyLessThanOrEqual(n_in_sel, 1, ...
+                    sprintf('Family %d: at most 1 member may appear in pairplot selection', fi));
+            end
+        end
+
+        % ── Semantic role classification ──────────────────────────────────────
+
+        function test_profile_role_field_exists(testCase)
+            T = table([1;2;3], 'VariableNames', {'Value'});
+            [~, prof] = de_profile(T);
+            testCase.verifyTrue(isfield(prof, 'role'), ...
+                'de_profile must return a prof.role field');
+        end
+
+        function test_profile_role_geographic_state(testCase)
+            % Values must actually be recognizable as states (the grid does not
+            % resolve FIPS numbers — that is the documented soft spot).
+            T = table(["AL";"CA";"TX";"AL";"CA";"TX"], 'VariableNames', {'State_Code'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.role(1), "geographic", ...
+                'A state column with recognizable codes should have role "geographic"');
+        end
+
+        function test_profile_role_temporal_year(testCase)
+            T = table((2000:2010)', 'VariableNames', {'Year'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.role(1), "temporal", ...
+                'A numeric column named Year should have role "temporal"');
+        end
+
+        function test_profile_role_temporal_datetime(testCase)
+            T = table(datetime(2020,1,1) + caldays((0:9)'), 'VariableNames', {'Stamp'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.role(1), "temporal", ...
+                'A datetime column should have role "temporal"');
+        end
+
+        function test_profile_role_identifier(testCase)
+            T = table(categorical(["a";"b";"c";"d";"e"]), 'VariableNames', {'RecordID'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.role(1), "identifier", ...
+                'An all-unique / id-named column should have role "identifier"');
+        end
+
+        function test_profile_role_plain_numeric_empty(testCase)
+            T = table([1.5;2.7;3.1;8.2;0.4], 'VariableNames', {'Concentration'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.role(1), "", ...
+                'A plain numeric measure should have empty role');
+        end
+
+        function test_geo_key_prefers_name_over_fips_code(testCase)
+            % A StateName column (recognizable names) must win us-states over a
+            % StateCode column of FIPS numbers the grid can't resolve.
+            states = ["Alabama";"California";"Texas";"Florida";"Ohio"];
+            fips   = [1;6;48;12;39];
+            T = table(repmat(states,4,1), repmat(fips,4,1), ...
+                'VariableNames', {'StateName','StateCode'});
+            [~, prof] = de_profile(T);
+            si = find(strcmp(prof.name, 'StateName'));
+            ci = find(strcmp(prof.name, 'StateCode'));
+            testCase.verifyEqual(prof.geo_grid{si}, 'us-states', ...
+                'StateName (recognizable names) should be detected as us-states');
+            testCase.verifyNotEqual(prof.geo_grid{ci}, 'us-states', ...
+                'FIPS-number StateCode must not be assigned us-states by name alone');
+        end
+
+        % ── Temporal parsing of date-like strings ─────────────────────────────
+
+        function test_profile_parses_iso_date_strings_to_datetime(testCase)
+            T = table(["2024-01-15";"2024-06-20";"2024-09-01";"2024-12-31"], ...
+                'VariableNames', {'CollectedOn'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "datetime", ...
+                'A column of ISO date strings should be parsed to datetime');
+        end
+
+        function test_profile_decimal_strings_not_parsed_as_dates(testCase)
+            % Decimal-looking strings must NOT be misread as dates.
+            T = table(["1.0";"foo";"bar";"baz";"5.0"], 'VariableNames', {'Mixed'});
+            [~, prof] = de_profile(T);
+            testCase.verifyEqual(prof.type(1), "categorical", ...
+                'Decimal/text strings must stay categorical, not become datetime');
+        end
+
         function test_profile_source_name_is_scalar_string(testCase)
             % Loading via a double-quoted path must not produce a 1×2 string array
             % in prof.source_name (regression: [fname, fext] on string type).
@@ -653,6 +907,28 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'Recipe must contain de_plot_cat_association for categorical-heavy tables');
         end
 
+        % ── Change 3: Geo scatter fires regardless of Mapping Toolbox ─────────
+
+        function test_geo_scatter_figure_created_for_lat_lon_table(testCase)
+            % DataExplorer on a table with Latitude/Longitude must create a figure
+            % whose name starts with "Map" — regardless of Mapping Toolbox availability.
+            n = 30;
+            rng(7);
+            Latitude  = 30 + rand(n,1) * 20;
+            Longitude = -120 + rand(n,1) * 50;
+            Value     = randn(n,1);
+            T = table(Latitude, Longitude, Value);
+            tmp = [tempname '.csv'];
+            writetable(T, tmp);
+            cl = onCleanup(@() delete(tmp));
+
+            DataExplorer(tmp);
+
+            map_figs = testCase.figures_named('Map');
+            testCase.verifyNotEmpty(map_figs, ...
+                'DataExplorer must create a Map figure when Latitude/Longitude columns exist');
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -1065,6 +1341,21 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             recipe_path = se_find_latest_recipe();
             testCase.assert_recipe_valid(recipe_path);
             testCase.assert_recipe_self_contained(recipe_path);
+
+            recipe = string(fileread(recipe_path));
+            % Correlated-family figures must be wired into the recipe.
+            testCase.verifyTrue(contains(recipe, "de_corr_families"), ...
+                'Recipe must compute correlated families');
+            testCase.verifyTrue(contains(recipe, "de_plot_corr_family"), ...
+                'Recipe must plot correlated families');
+            % Identifier columns must never be a choropleth color variable.
+            for idname = ["StateCode","CountyCode","SiteNum","ParameterCode", ...
+                          "State Code","County Code","Site Num","Parameter Code"]
+                testCase.verifyFalse( ...
+                    contains(recipe, "'ColorCol','" + idname + "'") || ...
+                    contains(recipe, "'ColorCol', '" + idname + "'"), ...
+                    sprintf('Choropleth must not be colored by id column %s', idname));
+            end
         end
 
         % ── 2026 daygenbyfuel xlsx  (not yet baselined) ───────────────────
