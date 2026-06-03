@@ -47,7 +47,7 @@ DataExplorer runs a four-step pipeline:
 
 Plots produced include:
 
-- **Overview** — paginated 5 × 3 grid of per-variable diagnostic tiles
+- **Overview** — paginated 4 × 2 grid of per-variable diagnostic tiles
 - **Time series** — overlaid lines and stacked-area views; detects year-columns and datetime columns automatically
 - **Geographic** — US state choropleth (`de_statebins`), world choropleth (`de_countrybins`), lat/lon scatter map
 - **Pairplot** — type-aware scatter matrix (scatter, boxplot, violin, histogram, heatmap) for selected columns
@@ -82,9 +82,170 @@ The standalone `de_*` functions can be used independently of DataExplorer:
 | `de_reservoir_sample(file, n)` | Random reservoir sample from a large file |
 | `de_stride_sample(file, ...)` | Deterministic stride sample; supports NetCDF |
 
+## Design principles
+
+DataExplorer makes a lot of automatic choices. These are the rules behind them —
+useful when extending it or interpreting its output.
+
+- **Forgiving by default.** Heuristics are deliberately lenient: a string column
+  becomes numeric if ≥ 70 % of values parse; ~20 missing-value sentinels (`N/A`,
+  `NULL`, `-`, …) are recognised; delimiters and header rows are sniffed. Preserve
+  this tolerance when changing the profiler.
+- **Classify by meaning, not just storage type.** Beyond numeric / categorical /
+  datetime, columns get a semantic *role* — `measure`, `identifier`, `temporal`, or
+  `geographic` — and the role, not the storage type, drives what gets plotted. See
+  *How types and roles are identified* below.
+- **Group related variables by correlation, not by name.** Families of related
+  measures (e.g. mean, standard deviation, and a ladder of percentiles) are found
+  with rank (Spearman) correlation and complete-linkage clustering — language-
+  agnostic, so it works regardless of naming. A family collapses to a single
+  representative in the pairplot and choropleths, plus one combined figure.
+- **Choose scales from the data.** Strongly right-skewed positive variables switch
+  to log automatically (semi-log vs log-log decided from the count spread); mixed-
+  sign skewed variables use a symmetric-log transform. Log usage is always made
+  visually obvious (distinct bar colour + a corner badge), never silent.
+- **No interactive widgets in plots.** Time is encoded as a visual axis — a heatmap
+  x-axis or a per-tile sparkline — never a slider. Everything renders to a static
+  figure a recipe can reproduce.
+- **Geographic detection validates values, not just names.** A column is treated as
+  a map key only when its values actually match a known grid's vocabulary.
+- **Information-dense but readable.** Axes carry units where known; central
+  tendencies carry bootstrapped confidence bands; axis limits are shared across
+  small multiples so patches are comparable; cardinalities are shown.
+- **Prompts are rare and intentional.** Only genuinely ambiguous cases (multi-file
+  ZIP, multi-sheet Excel) ask. Don't add prompts without a clear need.
+- **Fast by default; signal when slow.** The core pipeline should produce something
+  useful within a minute or two. Anything slower prints a message first and shows a
+  single-line progress indicator — never block silently.
+
+## How types and roles are identified
+
+Classification is the heart of DataExplorer, and it rests on a few principles
+rather than any single rule.
+
+- **Prefer several converging signals over one brittle test.** No lone heuristic
+  decides a column. Language-dependent signals (matching English keywords in a name)
+  are used only as a *fallback* to language-agnostic ones (the shape of the values,
+  their statistics) — names are the least reliable evidence.
+- **Resolve storage type first, meaning second.** A column is first settled into a
+  storage type (numeric, categorical, datetime, logical), then given a semantic
+  *role* on top — `measure`, `identifier`, `temporal`, or `geographic`. The role is
+  what steers the visualisations.
+
+**Numbers vs. codes.** A text column that mostly parses as numbers is *usually* a
+measure — but not always. Leading zeros (`01`, `003`) betray a code that merely
+looks numeric; that value-shape signal is language-agnostic and wins. A name whose
+final token is *code*, *id*, *num*, or *number* also marks an identifier
+(tokenization is CamelCase-aware, because `readtable` turns `State Code` into
+`StateCode`). All-unique values are a third identifier tell. Identifiers are kept
+out of correlation plots and choropleths, where they would only add noise.
+
+**Temporal.** Time arrives in three guises, all recognised: a real
+`datetime`/`duration` column; a text column whose values *look* like dates (date
+separators or month names) and parse cleanly, which is converted to `datetime`; and
+a numeric or wide-layout column named for a time unit. Real datetime objects are
+preferred so plots get proper time axes.
+
+**Geographic.** Geography, too, comes in more than one form, treated as one family
+of signals: **latitude/longitude pairs** — recognised by name, kept together, and
+fed to the scatter map — and **place columns** (state or country codes/names),
+recognised by matching the column's *actual values* against a known place
+vocabulary, not the name alone. (A consequence and current soft spot: a `StateCode`
+of FIPS numbers a grid can't resolve should fall back to a sibling name column —
+value-matching is the right principle, the vocabularies just need to grow.)
+
+**Relationships between columns.** Beyond single-column roles, DataExplorer looks
+for *families* of related measures — say a mean, a standard deviation, and a ladder
+of percentiles all describing one quantity. These are found by **rank correlation**,
+which is language-agnostic and robust to monotone nonlinearity, so it never depends
+on the columns being named alike. A family collapses to one representative across
+the analysis, plus a single combined figure, instead of a dozen near-duplicates.
+
+**Forgiving, but never silent.** Where DataExplorer auto-corrects — recoding a
+missing sentinel, choosing a log scale, collapsing a family — it does so to give a
+useful first result with minimal input, but it *reports every such choice* (in the
+console profile and on the figures) so you can see it and override it.
+
+## Architecture & implementation principles
+
+- **Everything is reachable through the recipe (top-level design choice).** Every
+  visualisation DataExplorer can produce must appear in the generated recipe — there
+  are no direct-render-only paths. This does double duty: the recipe is how a user
+  *discovers* what was done and edits it, and it cleanly separates two things that
+  should be tested apart — the *policy* of when a plot is appropriate (decided by the
+  recipe assembler) from whether the *plot tool itself* draws correctly (the `de_*`
+  function). Add a plot by wiring it into the assembler **and** writing its `de_*`
+  function; never by adding a side path that bypasses the recipe.
+- **Code generation is the primitive; execution is a side effect.** DataExplorer
+  assembles a complete, self-contained MATLAB *recipe* (load + clean + every plot)
+  and runs it with `eval`. The recipe — not a hidden render path — is the source of
+  truth, which is why `save_recipe` produces something that runs standalone with
+  only the `de_*` library on the path. When adding or changing a visualisation,
+  wire it into the recipe assembler (`se_assemble_recipe` and the `cg_*` code
+  generators) and the standalone `de_*` function it calls.
+- **The `de_*` files are the library; `DataExplorer.m` orchestrates.** Reusable
+  capability lives in standalone `de_*.m` files so both the recipe and a human can
+  call them directly.
+- **The recipe is a teaching scaffold, and it speaks the library.** Recipes call the
+  `de_*` functions rather than emitting verbose vanilla MATLAB. The trade is a small
+  dependency in exchange for code a student can actually read, learn a reusable
+  vocabulary from, and edit — with sensible defaults (alpha blending, shared axis
+  limits, confidence bands) baked into the calls instead of forgotten.
+- **Toolbox-free core.** Every `de_*` function must run on base MATLAB. The
+  Statistics and Mapping toolboxes are optional enhancements; degrade gracefully
+  (e.g. compute Spearman via manual ranking + `corrcoef`, not `corr`).
+- **Strings, not chars.** Use the MATLAB `string` type throughout; convert to `char`
+  only at an API boundary that requires it.
+- **No silent shims.** No version-compatibility guards or empty `catch` blocks that
+  swallow errors. A `try/catch` for a genuine edge case must still surface what
+  happened.
+- **Parse names robustly.** Column names arrive in many forms; `readtable` turns
+  `"State Code"` into CamelCase `StateCode`. MATLAB's `regexp(…, 'split')` does
+  **not** split on zero-width boundaries, so CamelCase won't tokenize that way — use
+  `de_name_tokens` for any name-based heuristic.
+
+## Testing discipline
+
+Hard-won, in roughly the order they bit us:
+
+- **Test-first, red-green.** Write the failing test, watch it fail for the right
+  reason, then implement. No batching fixes ahead of tests.
+- **`checkcode`-green is not "working."** The fast lint tier catches syntax, not
+  behaviour. Behavioural checks — does the recipe exclude id columns? does it run
+  without crashing? — belong in a **gating smoke test**
+  (`tests/test_recipe_smoke.py`), which generates *and executes* a recipe from a
+  tiny synthetic dataset. Recipe generation is cheap, so there is no excuse to
+  defer it to the slow tier.
+- **Tests must use real input forms.** A regression test for id-column handling
+  that uses `State_Code` (snake_case) misses the bug that only appears with
+  `StateCode` (what `readtable` actually produces). Reproduce the real shape of the
+  data.
+- **Run the behavioural test before claiming done**, not just the linter.
+- **Prefer scripts to shell one-liners.** Recurring analysis or search goes in
+  `scripts/` (e.g. `inspect_corr.py`, `list_funcs.py`) so it is reusable and a
+  human can run it too.
+- **Chesterton's fence.** When extracting or refactoring `de_*` behaviour, match the
+  original exactly unless you understand why a decision was made.
+- **No student PII, ever.** This is a teaching tool that handles student data. Never
+  put real student names — or any student-identifying information — in code, tests,
+  comments, docstrings, or examples. Use clearly fictional names (Alice Apple,
+  Beatrice Beachball).
+
+## Roadmap / vision
+
+- **A browser variant.** A JavaScript port deployable to GitHub Pages — zero
+  install, runs entirely client-side (file reading in the browser, no server). The
+  same five-phase pipeline, with the recipe becoming a self-contained HTML file the
+  student edits. The leaning is toward [Observable Plot](https://observablehq.com/plot/)
+  (a lighter spiritual successor to D3) for the generated charts.
+- **One mental model across languages.** Whatever the host (MATLAB today, JS and
+  potentially Python later), the contract stays the same: load → profile → echo a
+  readable recipe → show. The recipe is the portable, editable artifact in every
+  variant.
+
 ## Requirements
 
-- **MATLAB R2025a or later**
+- **MATLAB R2025b (25.2) or later**
 - **Statistics and Machine Learning Toolbox** — optional; enables violin plots
 - **Mapping Toolbox** — optional; used only by `de_usamap` (teaching demo)
 
