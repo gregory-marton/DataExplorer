@@ -53,6 +53,7 @@ arguments
     options.LogColor          (1,1) string  = "auto"   % "auto" | "on" | "off"
     options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
     options.LegendNote        (1,1) string  = ""
+    options.Scale             (1,1) string  = "auto"   % value_ladder: "linear"|"log"|"auto"
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
@@ -271,13 +272,19 @@ if is_value_ladder
     if all(isnan(options.SharedYLim))
         lad_lo = min(non_ov_lad(:), [], 'omitnan');
         lad_hi = max(non_ov_lad(:), [], 'omitnan');
-        % Log the shared scale when values are non-negative and right-skewed
-        % (same criterion as the choropleth path) — otherwise one outlier tile
-        % flattens every other tile.
+        % Scale: "log" forces it, "linear" forbids it, "auto" logs when values
+        % are non-negative and right-skewed (one outlier would otherwise flatten
+        % every other tile).  Log requires non-negative data with positives.
         posl = non_ov_lad(non_ov_lad > 0 & isfinite(non_ov_lad));
         finl = non_ov_lad(isfinite(non_ov_lad));
-        if ~isempty(posl) && all(finl >= 0) && ...
-           (max(posl)/min(posl) > 100 || (tg_skewness(finl) > 1.5 && max(posl)/min(posl) > 5))
+        nonneg_ok = ~isempty(posl) && all(finl >= 0);
+        switch lower(options.Scale)
+            case "log",    want_log = nonneg_ok;
+            case "linear", want_log = false;
+            otherwise,     want_log = nonneg_ok && ...
+                (max(posl)/min(posl) > 100 || (tg_skewness(finl) > 1.5 && max(posl)/min(posl) > 5));
+        end
+        if want_log
             use_log_ladder = true;
             lad_floor = min(posl) / 10;        % zeros / tiny values floored a decade below
             ladder(ladder <= 0) = lad_floor;

@@ -32,6 +32,7 @@ arguments
     options.LogColor     (1,1) string = "auto"
     options.ValueCols    (1,:) string = string([])
     options.LegendNote   (1,1) string = ""
+    options.Scale        (1,1) string = "auto"
 end
 
 % GridFile (legacy) overrides default; otherwise use 'world' preset
@@ -60,5 +61,6 @@ end
     'CLim',         options.CLim, ...
     'LogColor',     options.LogColor, ...
     'ValueCols',    options.ValueCols, ...
-    'LegendNote',   options.LegendNote);
+    'LegendNote',   options.LegendNote, ...
+    'Scale',        options.Scale);
 end
