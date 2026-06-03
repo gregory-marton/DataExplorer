@@ -465,6 +465,38 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
         end
     end
 
+    % Vertical scale: a labeled y-axis on each leftmost-column tile, aligned with
+    % the bars (the scale is shared across all tiles).  Ticks/labels sit in the
+    % left margin (nothing is left of the leftmost column).
+    min_col = min(COLS(~IS_OVERFLOW));
+    if use_log_ladder
+        p0 = ceil(lad_lo);  p1 = floor(lad_hi);
+        if p1 >= p0, tick_t = p0:p1; else, tick_t = [lad_lo, lad_hi]; end
+        tick_v = 10 .^ tick_t;
+    else
+        tick_t = linspace(base_lo, lad_hi, 3);
+        tick_v = tick_t;
+    end
+    for ti = 1:n_tiles
+        if IS_OVERFLOW(ti) || COLS(ti) ~= min_col || all(isnan(ladder(ti,:))), continue; end
+        r = ROWS(ti);
+        bar_top = r + lbl_y_frac + 0.06;
+        bar_bot = r + 1 - GAP - 0.01;
+        ax_x    = min_col + GAP;          % left edge of the tile interior
+        line(ax, [ax_x ax_x], [bar_bot bar_top], 'Color', [0.4 0.4 0.4], ...
+            'LineWidth', 0.5, 'Tag', 'ladder_axis');
+        for tk = 1:numel(tick_t)
+            nh = (tick_t(tk) - base_lo) / (lad_hi - base_lo);
+            if nh < -1e-3 || nh > 1 + 1e-3, continue; end
+            yt = bar_bot - nh * (bar_bot - bar_top);
+            line(ax, [ax_x-0.05 ax_x], [yt yt], 'Color', [0.4 0.4 0.4], ...
+                'LineWidth', 0.5, 'Tag', 'ladder_axis');
+            text(ax, ax_x-0.07, yt, tg_fmt_tick(tick_v(tk)), ...
+                'HorizontalAlignment', 'right', 'VerticalAlignment', 'middle', ...
+                'FontSize', FSZ_LEGEND, 'Color', [0.3 0.3 0.3], 'Tag', 'ladder_axis');
+        end
+    end
+
     % Color legend (member → color), at subtitle font size
     valid = isgraphics(leg_h);
     if any(valid)
@@ -588,6 +620,21 @@ function cmap = tg_cmap(spec)
 CMAP_N = 256;
 if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
+end
+
+function s = tg_fmt_tick(v)
+% Compact axis-tick label: 0, 12, 3k, 4M, 0.04.
+if v == 0
+    s = '0';
+elseif abs(v) >= 1e6
+    s = sprintf('%.0fM', v/1e6);
+elseif abs(v) >= 1e3
+    s = sprintf('%.0fk', v/1e3);
+elseif abs(v) >= 1
+    s = sprintf('%.0f', v);
+else
+    s = sprintf('%.2g', v);
+end
 end
 
 function sk = tg_skewness(v)
