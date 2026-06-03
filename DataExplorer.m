@@ -113,19 +113,8 @@ if ischar(source) || isstring(source)
                 end
             end
             if height(T_sp_) > 0
-                [T_sp_, prof_sp_] = se_profile(T_sp_, options.MissingStrings);
-                prof_sp_.source_name = sprintf('%s%s  [%s]', fn_, fe_, ...
-                    strjoin(sp_vars_, ', '));
-                prof_sp_.nc_spatial_grid = true;
-                % Sampling note: rows kept vs. total elements in first spatial var.
-                var_idx_sp_ = find(strcmp({nc_info_.Variables.Name}, sp_vars_{1}), 1);
-                sz_sp_      = double(nc_info_.Variables(var_idx_sp_).Size);
-                total_sp_   = prod(sz_sp_);
-                dim_str_    = strjoin(arrayfun(@num2str, sz_sp_, 'UniformOutput', false), '×');
-                prof_sp_.sampling_note = sprintf('stride sampled: %d / %d total  (%s)', ...
-                    height(T_sp_), total_sp_, dim_str_);
-                se_plot(T_sp_, prof_sp_, options, prof_sp_.panel);
-                % Single recipe covering all spatial variables + one geo scatter per var.
+                % Fully recipe-driven (no direct render path): the spatial recipe
+                % loads, profiles, overviews, and geo-scatters every spatial var.
                 recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_);
                 T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
                 T = T_sp_;
@@ -605,7 +594,7 @@ function T = load_text(filepath, options)
         n_before = height(T);
         T = se_sample(T, options.MaxRows);
         if height(T) < n_before
-            T = se_record_sampled(T, height(T));
+            T = se_record_sampled(T, height(T), n_before);
         end
     end
 
@@ -936,6 +925,10 @@ function recipe_path = cg_netcdf_spatial_recipe(filepath, sp_vars)
     end
     L = [L, stride_sub];
     L{end+1} = '';
+    L{end+1} = '% Profile + overview of the spatial sample';
+    L{end+1} = '[T, prof] = de_profile(T);';
+    L{end+1} = 'de_overview(T, prof);';
+    L{end+1} = '';
     L{end+1} = '% Aggregate by grid cell: mean and std across all time steps';
     L{end+1} = sprintf('T_agg = groupsummary(T, {''longitude'',''latitude''}, {''mean'',''std''}, %s);', vars_cell_str);
     L{end+1} = '';
@@ -1160,13 +1153,69 @@ function T = se_sample(T, maxrows)
 end
 
 
+% ── se_filter_choro_cols ──────────────────────────────────────────────────────
+function idxs = se_filter_choro_cols(idxs, prof, families)
+%SE_FILTER_CHORO_COLS  Remove non-data-variable candidates from choropleth selection.
+%   Excludes: constant, time-named, lat/lon coordinate, integer id-named columns,
+%   and non-representative members of correlated families (keeps only fam(1)).
+if nargin < 3, families = {}; end
+if isempty(idxs), return; end
+
+LAT_LON      = ["lat","latitude","lat_","latitude_dd","decimallatitude", ...
+                "lon","long","longitude","lon_","longitude_dd","decimallongitude"];
+names_lower  = lower(string(prof.name));
+
+is_const     = prof.nunique(idxs) <= 1;
+is_coord     = ismember(names_lower(idxs), LAT_LON);
+% Identifier (id-like last token) and time-named columns, via robust tokenizer
+% (MATLAB regexp \b does not work, and CamelCase needs de_name_tokens).
+is_id        = false(size(idxs));
+is_time_name = false(size(idxs));
+TIME_TOKENS  = ["year","month","day","date","time"];
+for ji = 1:numel(idxs)
+    toks = de_name_tokens(prof.name{idxs(ji)});
+    if ismember(toks(end), ["code","id","num","number"])
+        is_id(ji) = true;
+    end
+    if any(ismember(toks, TIME_TOKENS))
+        is_time_name(ji) = true;
+    end
+end
+
+% Non-representative family members (keep only fam(1) per family)
+is_fam_nonrep = false(size(idxs));
+if ~isempty(families)
+    non_rep = cell2mat(cellfun(@(f) f(2:end), families, 'UniformOutput', false));
+    is_fam_nonrep = ismember(idxs, non_rep);
+end
+
+idxs = idxs(~is_const & ~is_time_name & ~is_coord & ~is_id & ~is_fam_nonrep);
+end
+
+
+% ── se_logcolor_arg ───────────────────────────────────────────────────────────
+function s = se_logcolor_arg(prof, idx)
+%SE_LOGCOLOR_ARG  Return ", 'LogColor','on'" for strongly-skewed numeric columns,
+%   else ''.  Lets the recipe decide log color from the profiled skewness.
+s = '';
+if isfield(prof, 'skewness') && idx >= 1 && idx <= numel(prof.skewness) ...
+        && ~isnan(prof.skewness(idx)) && abs(prof.skewness(idx)) > 2
+    s = ', ''LogColor'',''on''';
+end
+end
+
+
 % ── se_record_sampled ─────────────────────────────────────────────────────────
-function T = se_record_sampled(T, n)
+function T = se_record_sampled(T, n, n_orig)
 % Store how many rows were sampled so cg_load_code can emit SampleData().
+% n_orig is the pre-sampling row count (stored so de_overview can display "n of N").
+    if nargin < 3, n_orig = n; end
     if isempty(T.Properties.UserData)
-        T.Properties.UserData = struct('sheet', '', 'inner_file', '', 'sampled', n);
+        T.Properties.UserData = struct('sheet', '', 'inner_file', '', ...
+            'sampled', n, 'n_orig', n_orig);
     else
         T.Properties.UserData.sampled = n;
+        T.Properties.UserData.n_orig  = n_orig;
     end
 end
 
@@ -1279,7 +1328,14 @@ if ~isempty(options.Columns)
     sel = sel(~prof.skip(sel));   % still drop >80%-missing columns
 
 else
-    sel = de_select_columns(T, prof, options.MaxVars);
+    families = de_corr_families(T, prof);
+    if ~isempty(families)
+        fam_desc = strjoin(cellfun(@(f) sprintf('%d cols', numel(f)), ...
+            families, 'UniformOutput', false), ', ');
+        fprintf('  Detected %d correlated family/families (%s) — showing combined figures.\n', ...
+            numel(families), fam_desc);
+    end
+    sel = de_select_columns(T, prof, options.MaxVars, families);
 end
 
 if isempty(sel)
@@ -1393,6 +1449,13 @@ title(tl, title_str, 'FontSize', 11, 'Interpreter', 'none');
 
 % ── Categorical drill-down ──────────────────────────────────────────────────
 se_plot_categorical_drilldown(T, prof, sel);
+
+% ── Correlated-family figures ────────────────────────────────────────────────
+if exist('families', 'var')
+    for fi = 1:numel(families)
+        de_plot_corr_family(T, prof, families{fi}, 'Source', prof.source_name);
+    end
+end
 
 end
 
@@ -1605,7 +1668,12 @@ if has_mapping
             geoscatter(ax, lat, lon, BASE_SZ, [0.22 0.44 0.69], 'filled', ...
                 'MarkerFaceAlpha', 0.5);
     end
-    geobasemap(ax, 'streets-light');
+    try
+        geobasemap(ax, 'streets-light');
+    catch
+        % Basemap unavailable (offline, no API key, unlicensed tile server) —
+        % points are still visible on a plain white background.
+    end
 
 else
     % Fallback: plain scatter with axis labels
@@ -2736,57 +2804,13 @@ if ~isempty(time_idx) && ~isempty(ts_num)
     end
 
     if ~isempty(n_ug) && n_ug >= 2
-    col_args  = strjoin(cellfun(@(s) sprintf('T.%s', s), ncn_list, 'UniformOutput', false), ' ');
     lbl_items = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ncn_list, 'UniformOutput', false), ', ');
+    if is_compositional, comp_arg = 'on'; else, comp_arg = 'off'; end
 
     L{end+1} = sprintf('%% Time series: %d series over %s', n_ts, tcn);
-    L{end+1} = sprintf('t_col = T.%s;', tcn);
-    L{end+1} = 'if isdatetime(t_col) || isnumeric(t_col)';
-    L{end+1} = '    valid_t = ~ismissing(t_col);';
-    L{end+1} = sprintf('    col_mat = [%s];', col_args);
-    L{end+1} = sprintf('    ts_labels = {%s};', lbl_items);
-    L{end+1} = '    t_u = unique(t_col(valid_t));';
-    L{end+1} = sprintf('    n_u = numel(t_u); n_s = %d; Y = NaN(n_u, n_s);', n_ts);
-    L{end+1} = '    for i = 1:n_u';
-    L{end+1} = '        mask = t_col == t_u(i);';
-    L{end+1} = '        for k = 1:n_s';
-    L{end+1} = '            v = col_mat(mask, k); v = v(~isnan(v));';
-    L{end+1} = '            if ~isempty(v), Y(i,k) = mean(v); end';
-    L{end+1} = '        end';
-    L{end+1} = '    end';
+    L{end+1} = sprintf('de_timeseries(T, ''%s'', {%s}, ''Compositional'', ''%s'', ''TitlePrefix'', ''%s'');', ...
+        tcn_sq, lbl_items, comp_arg, fig_prefix);
     L{end+1} = '';
-
-    % Overlaid + Total
-    L{end+1} = sprintf('    figure(''Name'', ''%stime series (overlaid)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', fig_prefix);
-    L{end+1} = '    ax = gca; hold(ax, ''on''); colors_ts = lines(n_s);';
-    L{end+1} = '    for k = 1:n_s';
-    L{end+1} = '        plot(ax, t_u, Y(:,k), ''-'', ''Color'', colors_ts(k,:), ''LineWidth'', 1.5, ''DisplayName'', ts_labels{k});';
-    L{end+1} = '    end';
-    if is_compositional
-        L{end+1} = '    Y_total = sum(Y, 2, ''omitnan'');';
-        L{end+1} = '    plot(ax, t_u, Y_total, ''-'', ''Color'', [0.10 0.10 0.10], ''LineWidth'', 3, ''DisplayName'', ''Total'');';
-        L{end+1} = '    legend(ax, [ts_labels {''Total''}], ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
-    else
-        L{end+1} = '    legend(ax, ts_labels, ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
-    end
-    L{end+1} = sprintf('    xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value''); box off; hold(ax, ''off'');', tcn_sq);
-    L{end+1} = sprintf('    title(ax, ''time series, overlaid lines  (n = %d, %d series)'', ''FontSize'', 11, ''Interpreter'', ''none'');', height(T), n_ts);
-    L{end+1} = '';
-
-    % Stacked (only when compositional and ≥2 time points)
-    if is_compositional
-        L{end+1} = '    if n_u > 1';
-        L{end+1} = sprintf('        figure(''Name'', ''%stime series (stacked)'', ''NumberTitle'', ''off'', ''Color'', [1 1 1]);', fig_prefix);
-        L{end+1} = '        ax = gca; Y_plot = Y; Y_plot(isnan(Y_plot)) = 0;';
-        L{end+1} = '        [~, sord] = sort(mean(Y_plot, 1), ''descend'');';
-        L{end+1} = '        area(ax, t_u, Y_plot(:, sord), ''LineStyle'', ''none'', ''FaceAlpha'', 0.85);';
-        L{end+1} = '        legend(ax, ts_labels(sord), ''Location'', ''bestoutside'', ''Interpreter'', ''none'', ''FontSize'', 8);';
-        L{end+1} = sprintf('        xlabel(ax, ''%s'', ''Interpreter'', ''none''); ylabel(ax, ''Value (stacked)''); box off;', tcn_sq);
-        L{end+1} = sprintf('        title(ax, ''time series, stacked area  (n = %d, %d series)'', ''FontSize'', 11, ''Interpreter'', ''none'');', height(T), n_ts);
-        L{end+1} = '    end';
-        L{end+1} = '';
-    end
-    L{end+1} = 'end';  % close: if isdatetime(t_col) || isnumeric(t_col)
     end  % n_ug >= 2
 end
 
@@ -2855,8 +2879,9 @@ end
 
 
 % ── cg_state_choropleth_code ────────────────────────────────────────────────
-function code = cg_state_choropleth_code(~, prof)
+function code = cg_state_choropleth_code(prof, families)
 %CG_STATE_CHOROPLETH_CODE  Return recipe code for state choropleth figures.
+if nargin < 2, families = {}; end
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
@@ -2872,6 +2897,7 @@ catname = prof.name{geo_idx};
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 [time_idx, ~] = de_find_time_axis(prof);
 num_idxs = find(prof.type == "numeric" & ~prof.skip);
+num_idxs = se_filter_choro_cols(num_idxs, prof, families);
 L = {};
 
 if ~isempty(wide_yr_idxs)
@@ -2889,11 +2915,12 @@ else
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
+        lca = se_logcolor_arg(prof, num_plot(j));
         if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, ncn);
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, lca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s'');', catname, ncn, tcn, ncn);
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, lca);
         end
         sub{2*j} = '';
     end
@@ -2906,8 +2933,9 @@ end
 
 
 % ── cg_country_choropleth_code ───────────────────────────────────────────────
-function code = cg_country_choropleth_code(~, prof)
+function code = cg_country_choropleth_code(prof, families)
 %CG_COUNTRY_CHOROPLETH_CODE  Return recipe code for world choropleth figures.
+if nargin < 2, families = {}; end
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
@@ -2923,6 +2951,7 @@ catname = prof.name{geo_idx};
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 [time_idx, ~] = de_find_time_axis(prof);
 num_idxs = find(prof.type == "numeric" & ~prof.skip);
+num_idxs = se_filter_choro_cols(num_idxs, prof, families);
 L = {};
 
 if ~isempty(wide_yr_idxs)
@@ -2940,11 +2969,12 @@ else
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
+        lca = se_logcolor_arg(prof, num_plot(j));
         if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, ncn);
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, lca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s'');', catname, ncn, tcn, ncn);
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, lca);
         end
         sub{2*j} = '';
     end
@@ -3042,6 +3072,46 @@ code = strjoin(L, newline);
 end
 
 
+% ── cg_geoscatter_code ───────────────────────────────────────────────────────
+function code = cg_geoscatter_code(T, prof)
+%CG_GEOSCATTER_CODE  Recipe code for a lat/lon point map (tabular data).
+%   Colors points by the first numeric data column, sizes by the second (if any).
+%   Skipped for NetCDF spatial grids (those get their own de_geoscatter recipe).
+code = '';
+if isfield(prof, 'nc_spatial_grid') && prof.nc_spatial_grid, return; end
+
+LAT_NAMES = ["lat","latitude","lat_","latitude_dd","decimallatitude"];
+LON_NAMES = ["lon","long","longitude","lon_","longitude_dd","decimallongitude"];
+nl = lower(string(prof.name));
+lat_i = find(ismember(nl, LAT_NAMES) & ~prof.skip, 1);
+lon_i = find(ismember(nl, LON_NAMES) & ~prof.skip, 1);
+if isempty(lat_i) || isempty(lon_i), return; end
+
+lat = double(T.(prof.name{lat_i}));
+lon = double(T.(prof.name{lon_i}));
+if sum(~isnan(lat) & ~isnan(lon)) < 2, return; end
+
+% Numeric data columns to encode (exclude the coordinates themselves)
+num = find(prof.type == "numeric" & ~prof.skip);
+num = num(~ismember(num, [lat_i, lon_i]));
+if isempty(num), return; end
+
+latn = prof.name{lat_i};
+lonn = prof.name{lon_i};
+ccol = prof.name{num(1)};
+if numel(num) >= 2
+    scol = prof.name{num(2)};
+    code = sprintf(['de_geoscatter(T.%s, T.%s, T.%s, T.%s, ' ...
+        'ColorLabel=''%s'', SizeLabel=''%s'', Title=''Map'');'], ...
+        lonn, latn, ccol, scol, ccol, scol);
+else
+    code = sprintf(['de_geoscatter(T.%s, T.%s, T.%s, ones(height(T),1), ' ...
+        'ColorLabel=''%s'', SizeLabel='''', Title=''Map'');'], ...
+        lonn, latn, ccol, ccol);
+end
+end
+
+
 % ── cg_panel_code ────────────────────────────────────────────────────────────
 function code = cg_panel_code(~, ~, panel)
 %CG_PANEL_CODE  Recipe code for panel (wide-year) stacked-area and grouped
@@ -3079,6 +3149,9 @@ else
 end
 recipe_path = fullfile(tempdir, sprintf('dataexplorer_%s.m', bname_safe));
 
+% Detect correlated families so they collapse to one representative everywhere.
+families = de_corr_families(T, prof);
+
 % Select the same columns the pairplot used
 if ~isempty(options.Columns)
     if isnumeric(options.Columns)
@@ -3089,15 +3162,16 @@ if ~isempty(options.Columns)
     end
     sel = sel(~prof.skip(sel));
 else
-    sel = de_select_columns(T, prof, options.MaxVars);
+    sel = de_select_columns(T, prof, options.MaxVars, families);
 end
 
 load_code   = cg_load_code(filepath, T);
 clean_code  = cg_clean_code();
 plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
-choro_code         = cg_state_choropleth_code(T, prof);
-country_code       = cg_country_choropleth_code(T, prof);
+choro_code         = cg_state_choropleth_code(prof, families);
+country_code       = cg_country_choropleth_code(prof, families);
 geo_multi_code     = cg_geo_multicategorical_code(T, prof);
+geoscatter_code    = cg_geoscatter_code(T, prof);
 panel_code         = cg_panel_code(T, prof, panel);
 
 header = sprintf([...
@@ -3108,7 +3182,7 @@ header = sprintf([...
     prof.source_name, datetime('now','Format','yyyy-MM-dd HH:mm'), ...
     regexprep(prof.source_name, '[^A-Za-z0-9]', '_'));
 
-pairplot_code = sprintf('de_pairplot(T, prof, de_select_columns(T, prof, %d));', ...
+pairplot_code = sprintf('de_pairplot(T, prof, de_select_columns(T, prof, %d, fams));', ...
     options.MaxVars);
 
 cat_assoc_lines = cg_cat_association_code(T, prof);
@@ -3118,6 +3192,9 @@ sections = { ...
     '%% === Load ===', load_code, '', ...
     '%% === Clean ===', clean_code, '', ...
     '%% === Overview ===', 'de_overview(T, prof);', '', ...
+    '%% === Correlated families ===', ...
+        'fams = de_corr_families(T, prof);', ...
+        'for fi = 1:numel(fams), de_plot_corr_family(T, prof, fams{fi}); end', '', ...
     '%% === Pairplot ===', pairplot_code, '', ...
     '%% === Best-of Plots ===', plots_code ...
 };
@@ -3138,6 +3215,11 @@ if ~isempty(geo_multi_code)
     sections{end+1} = '';
     sections{end+1} = '%% === Geo x Categorical ===';
     sections{end+1} = geo_multi_code;
+end
+if ~isempty(geoscatter_code)
+    sections{end+1} = '';
+    sections{end+1} = '%% === Geo Scatter (lat/lon) ===';
+    sections{end+1} = geoscatter_code;
 end
 if ~isempty(panel_code)
     sections{end+1} = '';
@@ -4385,7 +4467,8 @@ end
 function tf = se_is_total_level(lv)
 % Case-insensitive word-boundary match for "total" in a level name.
 % Catches: 'Total', 'TOTAL', 'US Total', 'Grand Total', etc.
-tf = ~isempty(regexpi(strtrim(char(lv)), '\btotal\b', 'once'));
+% NOTE: MATLAB regexp's \b does not match here; \< \> are the working boundaries.
+tf = ~isempty(regexpi(strtrim(char(lv)), '\<total\>', 'once'));
 end
 
 
