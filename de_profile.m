@@ -191,6 +191,30 @@ for k = find(prof.type == "categorical" & ~prof.skip)
     end
 end
 
+% ── Redundant categorical skip ────────────────────────────────────────────────
+% When two categoricals are near-perfectly associated (Cramér's V ≈ 1) they carry
+% the same information.  Keep one representative and skip the other (prefer
+% dropping an identifier-named, non-geo, or higher-cardinality column).  The
+% skipped column still shows in the overview — just not in analysis plots.
+REDUNDANT_V = 0.95;
+cat_live = find((prof.type == "categorical" | prof.type == "logical") & ~prof.skip);
+for ii = 1:numel(cat_live)
+    a = cat_live(ii);
+    if prof.skip(a), continue; end
+    for jj = ii+1:numel(cat_live)
+        b = cat_live(jj);
+        if prof.skip(b), continue; end
+        v = de_cramer_v(T.(prof.name{a}), T.(prof.name{b}));
+        if v >= REDUNDANT_V
+            drop = de_redundant_pick(prof, a, b);
+            keep = a + b - drop;
+            prof.skip(drop)        = true;
+            prof.skip_reason(drop) = sprintf("redundant (V=%.2f with %s)", v, prof.name{keep});
+            if drop == a, break; end   % a is gone; advance to the next a
+        end
+    end
+end
+
 % ── Panel detection ───────────────────────────────────────────────────────────
 [wide_yr_idxs, wide_yr_vals] = de_detect_wide_years(prof);
 panel.is_panel      = false;
@@ -280,4 +304,35 @@ frac_ok = sum(~isnat(cand(~ismissing(s)))) / numel(nonmiss);
 if frac_ok >= 0.70
     dt = cand;
 end
+end
+
+
+% ── de_redundant_pick ─────────────────────────────────────────────────────────
+function d = de_redundant_pick(prof, a, b)
+%DE_REDUNDANT_PICK  Of two redundant categoricals, return the index to DROP,
+%   keeping the more useful one: prefer dropping an identifier-named column, then
+%   a non-geo column, then the higher-cardinality one, then the later index.
+ida = de_tok_is_id(prof.name{a});
+idb = de_tok_is_id(prof.name{b});
+if ida ~= idb
+    if ida, d = a; else, d = b; end
+    return
+end
+ga = ~isempty(prof.geo_grid{a});
+gb = ~isempty(prof.geo_grid{b});
+if ga ~= gb
+    if ga, d = b; else, d = a; end
+    return
+end
+if prof.nunique(a) ~= prof.nunique(b)
+    if prof.nunique(a) > prof.nunique(b), d = a; else, d = b; end
+    return
+end
+d = max(a, b);
+end
+
+
+function tf = de_tok_is_id(name)
+toks = de_name_tokens(name);
+tf = ismember(toks(end), ["code","id","num","number"]);
 end
