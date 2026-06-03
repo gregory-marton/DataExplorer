@@ -22,6 +22,8 @@ arguments
     prof    struct
     sel     double
     options.FontSize (1,1) double {mustBePositive} = 7
+    options.Title    (1,1) string = "Pairplot"
+    options.Subtitle (1,1) string = ""
 end
 
 if isempty(sel), return; end
@@ -33,7 +35,7 @@ fsz       = F.base;
 np = numel(sel);
 
 src = char(prof.source_name);
-fig = figure('Name', de__fig_title('Pairplot', src), ...
+fig = figure('Name', de__fig_title(char(options.Title), src), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');
 de__stamp_source(fig, src);
 tl = tiledlayout(fig, np, np, 'TileSpacing', 'tight', 'Padding', 'compact');
@@ -118,6 +120,10 @@ else
     title_str = sprintf('n = %d', n);
 end
 title(tl, title_str, 'FontSize', F.page, 'Interpreter', 'none');
+if strlength(options.Subtitle) > 0
+    subtitle(tl, char(options.Subtitle), 'FontSize', max(fsz, 7), ...
+        'Color', [0.30 0.30 0.30], 'Interpreter', 'none');
+end
 end
 
 

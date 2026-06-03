@@ -1,4 +1,4 @@
-function sel = de_select_columns(T, prof, maxv)
+function sel = de_select_columns(T, prof, maxv, families)
 %DE_SELECT_COLUMNS  Pick the most informative, non-redundant columns to plot.
 %
 %   Numeric columns are scored by spread (std/range) and then pruned
@@ -7,6 +7,12 @@ function sel = de_select_columns(T, prof, maxv)
 %   distribution (uniform = high entropy = informative; near-constant = 0).
 %   The final selection interleaves: fill numeric slots first, then
 %   categorical, up to maxv total.
+%
+%   Optional 4th argument: families — cell array from de_corr_families.
+%   When supplied, only the first (highest-variance) member of each family
+%   is eligible; all other family members are excluded before scoring.
+
+if nargin < 4, families = {}; end
 
 CORR_THRESH  = 0.92;
 MAX_NUM_FRAC = 0.75;
@@ -18,6 +24,20 @@ cat_idx = not_skip(prof.type(not_skip) == "categorical" | ...
                    prof.type(not_skip) == "logical");
 
 num_idx = not_skip(prof.type(not_skip) == "numeric");
+
+% Exclude lat/lon coordinate columns — they belong in the geo scatter, not pairplot.
+LAT_LON_NAMES = ["lat","latitude","lat_","latitude_dd","decimallatitude", ...
+                  "lon","long","longitude","lon_","longitude_dd","decimallongitude"];
+names_lower = lower(string(prof.name));
+is_coord    = ismember(names_lower, LAT_LON_NAMES);
+num_idx     = num_idx(~is_coord(num_idx));
+
+% Exclude non-representative family members: keep only fam(1) (highest-variance
+% seed from de_corr_families); drop fam(2:end) so families show as one column.
+if ~isempty(families)
+    all_non_rep = cell2mat(cellfun(@(f) f(2:end), families, 'UniformOutput', false));
+    num_idx = num_idx(~ismember(num_idx, all_non_rep));
+end
 
 num_scores = zeros(1, numel(num_idx));
 for k = 1:numel(num_idx)
