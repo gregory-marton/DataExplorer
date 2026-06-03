@@ -3,7 +3,8 @@ function de_cond_heatmap(T, grp_col, val_col)
 %
 %   de_cond_heatmap(T, grp_col, val_col)
 %
-%   Heatmap of P(val_col | grp_col) with SVD-reordered rows and columns.
+%   Heatmap of P(val_col | grp_col) with rows and columns ordered by frequency
+%   (most common first).
 %   Suitable when both categoricals have high cardinality (>15 levels).
 %
 %   See also de_plot_cat_association, de_pareto_multiples, de_stacked_bars.

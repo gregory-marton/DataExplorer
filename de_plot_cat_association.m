@@ -497,14 +497,10 @@ for ci = 1:nc
         P(ri,ci) = n_rc / nci;
     end
 end
-if nr > 3
-    [U,~,~]   = svd(P,'econ');
-    [~,rord]  = sort(U(:,1));
-    P         = P(rord,:);
-    N         = N(rord,:);
-    show_g    = show_g(rord);
-    nri_total = nri_total(rord);
-end
+% Rows and columns are both kept in count-descending order (largest first).
+% (A prior SVD row-reorder was removed: for high-association near-permutation
+% matrices svd is degenerate and sort(U(:,1)) scrambled the order — e.g. it
+% dumped the largest-count row to the bottom.)
 
 has_oth_row = numel(gcats) > MAX_S;
 has_oth_col = numel(vcats) > MAX_S;
