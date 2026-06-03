@@ -50,6 +50,7 @@ arguments
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double  = [NaN NaN]
     options.CLim              (1,2) double  = [NaN NaN]
+    options.LogColor          (1,1) string  = "auto"   % "auto" | "on" | "off"
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
@@ -141,6 +142,33 @@ if ~any(isnan(options.CLim))
 end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 if is_heatmap_cat || is_scatter_cat, has_choro = false; end
+
+% Log color scale.  Policy: callers (the recipe) pass LogColor "on"/"off" based on
+% the column's profiled skewness; "auto" falls back to a skewness test on the tile
+% values.  Mechanism: non-negative data with zeros is supported by flooring zeros a
+% decade below the smallest positive value, so counts (which have zero means) still
+% render on a log scale instead of being blocked.
+use_log_color = false;
+if has_choro && any(isnan(options.CLim))
+    hv  = Heat(~IS_OVERFLOW, :);
+    hv  = hv(isfinite(hv));
+    pos = hv(hv > 0);
+    nonneg = ~isempty(hv) && all(hv >= 0) && ~isempty(pos);
+    switch lower(options.LogColor)
+        case "on",  use_log_color = nonneg;
+        case "off", use_log_color = false;
+        otherwise   % "auto"
+            use_log_color = nonneg && ...
+                (max(pos)/min(pos) > 100 || (tg_skewness(hv) > 1.5 && max(pos)/min(pos) > 5));
+    end
+end
+if use_log_color
+    floor_v = min(pos) / 10;        % zeros / non-positives map a decade below
+    Heat(Heat <= 0) = floor_v;
+    Heat = log10(Heat);
+    vmin = log10(floor_v);
+    vmax = log10(max(pos));
+end
 
 %% ── Multi-category sparkline data ────────────────────────────────────────────
 multi_heat = []; top_cat_levels = {};
@@ -303,6 +331,16 @@ if has_choro
         tns_cb = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
         lbl = sprintf('mean(%s, %s – %s)', lbl, t1s_cb, tns_cb);
     end
+    if use_log_color
+        lbl = [lbl ' (log scale)'];
+        % Set tick labels at round powers of 10 within [vmin, vmax]
+        pow10 = ceil(vmin):floor(vmax);
+        if numel(pow10) >= 2
+            cb.Ticks     = pow10;
+            cb.TickLabels = arrayfun(@(p) num2str(10^p,'%.4g'), pow10, ...
+                'UniformOutput', false);
+        end
+    end
     cb.Label.String = lbl;
     cb.FontSize = F.subtitle;
 end
@@ -451,6 +489,19 @@ function cmap = tg_cmap(spec)
 CMAP_N = 256;
 if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
+end
+
+function sk = tg_skewness(v)
+% Sample skewness of a vector (toolbox-free). Returns 0 if undefined.
+v = v(:);
+v = v(~isnan(v));
+sk = 0;
+if numel(v) > 2
+    s = std(v);
+    if s > 0
+        sk = mean(((v - mean(v)) / s) .^ 3);
+    end
+end
 end
 
 function fc = tg_val2color(val, vmin, vmax, cmap, has_choro)

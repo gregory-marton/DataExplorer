@@ -146,17 +146,23 @@ BG_GRAY    = [0.97 0.97 0.97];
 CLR_BORDER = [0.45 0.45 0.45];
 CBAR_X     = 0.86;  CBAR_W = 0.03;
 
-fig = figure('Color',BG_GRAY,'NumberTitle','off', ...
+vis = get(0, 'DefaultFigureVisible');   % honour headless/test runs
+fig = figure('Color',BG_GRAY,'NumberTitle','off','Visible',vis, ...
     'Units','normalized','Position',[0.05 0.08 0.88 0.85]);
 if options.Title ~= "", fig.Name = char(options.Title); end
 
 %% ── Single map axes (usamap conus) ───────────────────────────────────────────
 % usamap() creates its own map axes in the current figure.
 % Make fig current, call usamap, then grab and reposition the axes.
+% NOTE: modern Mapping Toolbox renders usamap through a web-based uifigure that
+% ignores the root DefaultFigureVisible; force the resulting figure to honour it
+% so headless/test runs don't pop a blank CEF window.
 ax_right = 0.82 + 0.10*double(~has_choro);
 figure(fig);        % set as current figure so usamap draws into it
 usamap('conus');
 ax = gca;
+fig = ancestor(ax, 'figure');
+set(fig, 'Visible', vis);
 set(ax, 'Units','normalized', ...
     'Position',[0.02, 0.05+sldr_lift, ax_right, 0.90-sldr_lift]);
 mstruct = getm(ax);
