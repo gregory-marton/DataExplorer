@@ -973,9 +973,13 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
         function test_recipe_311_like_has_cat_association(testCase)
             % Recipe for a categorical-heavy table must contain de_plot_cat_association.
-            Borough      = categorical(repmat({'Manhattan';'Brooklyn';'Queens';'Bronx'}, 10, 1));
-            ComplainType = categorical(repmat({'Noise';'Graffiti';'Heat';'Rodent'}, 10, 1));
-            Status       = categorical(repmat({'Open';'Closed'}, 20, 1));
+            % Use INDEPENDENT categoricals — aligned repmat cycles would be mutually
+            % perfectly associated (V=1) and collapse under the redundancy skip.
+            rng(3);
+            n = 160;
+            Borough      = categorical(randsample({'Manhattan','Brooklyn','Queens','Bronx'}, n, true)');
+            ComplainType = categorical(randsample({'Noise','Graffiti','Heat','Rodent'}, n, true)');
+            Status       = categorical(randsample({'Open','Closed'}, n, true)');
             T = table(Borough, ComplainType, Status);
             tmp = [tempname '.csv'];
             writetable(T, tmp);
