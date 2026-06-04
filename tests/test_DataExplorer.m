@@ -872,6 +872,21 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'de_pairplot must create a figure with "Pairplot" in its Name');
         end
 
+        function test_de_pairplot_caps_huge_selection(testCase)
+            % A hand-edited selection larger than the cap must warn and truncate,
+            % never build an N×N grid that explodes quadratically (the regression
+            % that timed out Prod_dataset / FIADB via a ~64-member family).
+            nC   = 20;
+            vars = arrayfun(@(k) sprintf('M%02d', k), 1:nC, 'UniformOutput', false);
+            data = array2table(randn(40, nC), 'VariableNames', vars);
+            [T, prof] = de_profile(data);
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            testCase.verifyWarning(@() de_pairplot(T, prof, 1:nC), ...
+                'de_pairplot:tooManyColumns');
+        end
+
         function test_recipe_311_like_has_pairplot(testCase)
             % A categorical-heavy (311-like) dataset: recipe must contain de_pairplot.
             Borough      = categorical(repmat({'Manhattan';'Brooklyn';'Queens';'Bronx'}, 10, 1));

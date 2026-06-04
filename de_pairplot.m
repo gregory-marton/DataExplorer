@@ -39,6 +39,17 @@ fsz       = F.base;
 
 np = numel(sel);
 
+% Defensive cap: an np×np grid explodes quadratically.  The recipe already caps
+% family/selection size, but a hand-edited sel must not reintroduce a 64×64 grid.
+MAX_PAIRPLOT = 12;
+if np > MAX_PAIRPLOT
+    warning('de_pairplot:tooManyColumns', ...
+        'de_pairplot: %d columns requested; showing the first %d (a %dx%d grid is impractical).', ...
+        np, MAX_PAIRPLOT, np, np);
+    sel = sel(1:MAX_PAIRPLOT);
+    np  = MAX_PAIRPLOT;
+end
+
 src = char(prof.source_name);
 fig = figure('Name', de__fig_title(char(options.Title), src), ...
     'Color', BG_GRAY, 'NumberTitle', 'off');

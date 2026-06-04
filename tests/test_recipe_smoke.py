@@ -69,6 +69,49 @@ def _latlon_csv(n=40):
     return "\n".join(rows) + "\n"
 
 
+def _wide_family_csv(n=120, members=12):
+    """A state column plus many (>MaxVars) strongly-correlated numeric columns,
+    mimicking wide year columns that collapse into one large family."""
+    import random
+
+    random.seed(11)
+    states = ["Alabama", "California", "Texas", "Florida", "Ohio", "NewYork"]
+    cols = [f"M{j:02d}" for j in range(members)]
+    rows = ["StateName," + ",".join(cols)]
+    for i in range(n):
+        latent = abs(random.gauss(5, 2)) + 1
+        vals = [f"{latent * (1 + 0.3 * j) + random.gauss(0, 0.05):.4f}" for j in range(members)]
+        rows.append(f"{states[i % len(states)]}," + ",".join(vals))
+    return "\n".join(rows) + "\n"
+
+
+def _fam_cols_lists(recipe):
+    import re
+
+    return [re.findall(r"'([^']*)'", body) for body in re.findall(r"fam_cols = \{([^}]*)\}", recipe)]
+
+
+def test_recipe_caps_family_members(matlab_bin):
+    # A large correlated family (12 members) must not emit a 12-wide pairplot /
+    # 12-bar ladder — that is the regression that timed out Prod_dataset/FIADB.
+    # The emitted fam_cols is capped to MaxVars (8); the (+N correlated) comment
+    # still records the full size so nothing is hidden.
+    recipe = _gen_recipe(_wide_family_csv(), matlab_bin)
+    fams = _fam_cols_lists(recipe)
+    assert fams, f"expected at least one correlated family.\n{recipe}"
+    for names in fams:
+        assert len(names) <= 8, (
+            f"fam_cols must be capped to <=8 members; got {len(names)}: {names}\n{recipe}"
+        )
+    # Prove the cap was actually exercised: the source family exceeded the cap.
+    import re
+
+    plus_counts = [int(x) for x in re.findall(r"\(\+(\d+) correlated\)", recipe)]
+    assert any(c >= 8 for c in plus_counts), (
+        f"test should exercise an over-cap family (+>=8 correlated); saw {plus_counts}\n{recipe}"
+    )
+
+
 def test_recipe_uses_de_timeseries(matlab_bin):
     # The multi-series time-series block must be expressed as a de_timeseries call,
     # not inlined.

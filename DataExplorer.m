@@ -1797,13 +1797,17 @@ end
 
 
 % ── cg_corr_family_code ──────────────────────────────────────────────────────
-function code = cg_corr_family_code(~, prof, families)
+function code = cg_corr_family_code(~, prof, families, max_members)
 %CG_CORR_FAMILY_CODE  Recipe code for each correlated family.
 %   The medoid/family/scale decisions are resolved here (generation time); the
 %   emitted recipe is flat and editable: a member pairplot and, when a geo key
 %   exists, a per-region value-ladder, both driven by one editable name list.
+%   The member list is capped at max_members (medoid + top-(K-1)) so a large
+%   family — e.g. ~64 correlated wide-year columns — cannot emit a 64x64
+%   pairplot or 64-bar ladder.  The (+N correlated) comment keeps the full size.
 code = '';
 if isempty(families), return; end
+if nargin < 4 || isempty(max_members), max_members = 8; end
 
 % Geo key (first non-skipped categorical with a recognised grid)
 geo_idx = [];
@@ -1818,13 +1822,15 @@ end
 L  = cell(1, 5 * numel(families));   % up to 5 lines per family
 li = 0;
 for fi = 1:numel(families)
-    fam   = families{fi};                       % medoid-ordered column indices
+    fam_full = families{fi};                     % medoid-ordered column indices
+    nfull    = numel(fam_full);
+    fam      = fam_full(1:min(max_members, nfull));   % medoid + top-(K-1)
     rep   = prof.name{fam(1)};
     names = prof.name(fam);
     cols_cell = strjoin(cellfun(@(s) sprintf('''%s''', strrep(s,'''','''''')), ...
         names, 'UniformOutput', false), ', ');
 
-    li = li+1; L{li} = sprintf('%% Correlated family: %s (+%d correlated)', rep, numel(fam)-1);
+    li = li+1; L{li} = sprintf('%% Correlated family: %s (+%d correlated)', rep, nfull-1);
     li = li+1; L{li} = sprintf('fam_cols = {%s};', cols_cell);
     li = li+1; L{li} = 'de_pairplot(T, prof, fam_cols);';
     if ~isempty(geo_idx)
@@ -1908,7 +1914,7 @@ choro_code         = cg_state_choropleth_code(prof, families);
 country_code       = cg_country_choropleth_code(prof, families);
 geo_multi_code     = cg_geo_multicategorical_code(T, prof);
 geoscatter_code    = cg_geoscatter_code(T, prof);
-family_code        = cg_corr_family_code(T, prof, families);
+family_code        = cg_corr_family_code(T, prof, families, options.MaxVars);
 panel_code         = cg_panel_code(T, prof, panel);
 
 header = sprintf([...
