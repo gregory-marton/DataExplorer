@@ -174,6 +174,17 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
             [T, prof] = de_profile(T);
         end
+
+        function z = make_multi_zip()
+            % A temp ZIP holding two CSVs (for de_load multi-file tests).
+            d = tempname; mkdir(d);
+            writetable(table((1:3)', (4:6)', 'VariableNames', {'a','b'}), ...
+                fullfile(d, 'one.csv'));
+            writetable(table((1:5)', 'VariableNames', {'c'}), ...
+                fullfile(d, 'two.csv'));
+            z = [tempname '.zip'];
+            zip(z, {'one.csv', 'two.csv'}, d);
+        end
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -527,6 +538,28 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             [T, prof] = de_profile(T);
             s = de_pick_stratifier(T, prof, "Val", "State");
             testCase.verifyEqual(s, "");
+        end
+
+        function test_de_load_zip_single_file_opens(testCase)
+            % A ZIP with exactly one data file just opens (the common case).
+            f = fullfile(testCase.EXAMPLES_DIR, 'annual_aqi_by_county_2025.zip');
+            if ~exist(f, 'file'), testCase.assumeFail('AQI zip not found'); end
+            T = de_load(f);
+            testCase.verifyGreaterThan(height(T), 0);
+            testCase.verifyGreaterThan(width(T), 0);
+        end
+
+        function test_de_load_zip_multiple_files_errors_with_options(testCase)
+            % Several data files + no InnerFile → informative error, no guessing.
+            z = test_DataExplorer.make_multi_zip();
+            testCase.verifyError(@() de_load(z), 'de_load:multipleFilesInZip');
+        end
+
+        function test_de_load_zip_innerfile_selects_member(testCase)
+            % InnerFile picks the named member from a multi-file ZIP.
+            z = test_DataExplorer.make_multi_zip();
+            T = de_load(z, 'InnerFile', 'two.csv');
+            testCase.verifyEqual(height(T), 5);
         end
 
         function test_select_columns_excludes_family_nonreps(testCase)
