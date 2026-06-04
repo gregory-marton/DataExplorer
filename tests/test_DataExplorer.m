@@ -149,6 +149,33 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
     end
 
+    methods (Static, Access = private)
+        function [T, prof] = strat_fixture(n, seed, withMid)
+            % Table with a geo State key, a strong stratifier, near-zero Junk,
+            % and (optionally) a moderate stratifier — all independent of State so
+            % nothing is redundancy-skipped.  Used by the de_pick_stratifier tests.
+            if nargin < 3, withMid = false; end
+            rng(seed);
+            State = categorical(repmat({'AL';'CA';'TX';'FL'}, n/4, 1));
+            lev   = ["P"; "Q"];
+            lev3  = ["X"; "Y"; "Z"];
+            Junk  = categorical(randi(5, n, 1));
+            if withMid
+                Strong = categorical(lev(randi(2, n, 1)));
+                Midcat = categorical(lev3(randi(3, n, 1)));
+                Val = double(Strong == 'Q') * 10 + double(Midcat == 'Z') * 4 + randn(n, 1);
+                T = table(State, Strong, Midcat, Junk, Val, ...
+                    'VariableNames', {'State','Strong','Midcat','Junk','Val'});
+            else
+                Standard = categorical(lev(randi(2, n, 1)));
+                Val = double(Standard == 'Q') * 10 + randn(n, 1) * 0.5;
+                T = table(State, Standard, Junk, Val, ...
+                    'VariableNames', {'State','Standard','Junk','Val'});
+            end
+            [T, prof] = de_profile(T);
+        end
+    end
+
     % ─────────────────────────────────────────────────────────────────────────
     %  Setup / teardown
     % ─────────────────────────────────────────────────────────────────────────
@@ -436,6 +463,70 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             fams = de_corr_families(T, prof);
             testCase.verifyEmpty(fams, ...
                 'Independent columns should produce no families');
+        end
+
+        function test_variance_explained_perfect_and_independent(testCase)
+            % η² ≈ 1 when groups fully determine x; ≈ 0 when independent.
+            xp = [1 1 1 10 10 10]';
+            gp = categorical([1 1 1 2 2 2]');
+            testCase.verifyGreaterThan(de_variance_explained(xp, gp), 0.99);
+            rng(0);
+            xi = randn(400, 1);
+            gi = categorical(repmat([1; 2], 200, 1));
+            testCase.verifyLessThan(de_variance_explained(xi, gi), 0.1);
+        end
+
+        function test_variance_explained_degenerate_returns_zero(testCase)
+            % Constant x, or a single group, explains nothing.
+            testCase.verifyEqual( ...
+                de_variance_explained(ones(6,1), categorical([1 1 1 2 2 2]')), 0);
+            testCase.verifyEqual( ...
+                de_variance_explained([1 2 3 4]', categorical(ones(4,1))), 0);
+        end
+
+        function test_pick_stratifier_selects_qualifying_excludes_others(testCase)
+            % Strong stratifier chosen; geo key, below-floor (Junk) and skipped
+            % columns excluded.  Independent of State so nothing is redundancy-skipped.
+            [T, prof] = test_DataExplorer.strat_fixture(400, 1);
+            [s, e, cn] = de_pick_stratifier(T, prof, "Val", "State");
+            testCase.verifyEqual(s, "Standard");
+            testCase.verifyGreaterThan(e, 0.5);
+            testCase.verifyFalse(any(cn == "Junk"), 'near-zero η² must be below floor');
+            testCase.verifyFalse(any(cn == "State"), 'geo key is not a stratifier');
+        end
+
+        function test_pick_stratifier_seed_deterministic(testCase)
+            [T, prof] = test_DataExplorer.strat_fixture(600, 2, true);
+            rng(7); a = de_pick_stratifier(T, prof, "Val", "State");
+            rng(7); b = de_pick_stratifier(T, prof, "Val", "State");
+            testCase.verifyEqual(a, b, 'same seed → same pick');
+        end
+
+        function test_pick_stratifier_weights_favor_stronger(testCase)
+            % Two qualifying candidates: the higher-η² one is sampled more often.
+            [T, prof] = test_DataExplorer.strat_fixture(600, 2, true);
+            nStrong = 0; nMid = 0;
+            for k = 1:800
+                s = de_pick_stratifier(T, prof, "Val", "State");
+                nStrong = nStrong + (s == "Strong");
+                nMid    = nMid + (s == "Midcat");
+            end
+            testCase.verifyGreaterThan(nStrong, nMid, ...
+                'stronger stratifier should be picked more often');
+        end
+
+        function test_pick_stratifier_none_qualifies_returns_empty(testCase)
+            % A numeric independent of every categorical → no stratifier.
+            rng(9); n = 300;
+            State = categorical(repmat({'AL';'CA';'TX';'FL'}, n/4, 1));
+            lev   = ["P"; "Q"];
+            C1    = categorical(lev(randi(2, n, 1)));
+            C2    = categorical(lev(randi(2, n, 1)));
+            Val   = randn(n, 1);
+            T = table(State, C1, C2, Val);
+            [T, prof] = de_profile(T);
+            s = de_pick_stratifier(T, prof, "Val", "State");
+            testCase.verifyEqual(s, "");
         end
 
         function test_select_columns_excludes_family_nonreps(testCase)
