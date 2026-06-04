@@ -14,8 +14,12 @@ from pathlib import Path
 from conftest import ROOT, run_matlab
 
 
-def _gen_recipe(csv_text: str, matlab_bin: str) -> str:
-    """Write csv_text to a temp file, run DataExplorer headless, return recipe text."""
+def _gen_recipe(csv_text: str, matlab_bin: str, extra: str = "") -> str:
+    """Write csv_text to a temp file, run DataExplorer headless, return recipe text.
+
+    extra — additional DataExplorer name-value args, e.g. ", 'RandSeed', 1" (the
+    geo stratifier choice is otherwise random, so tests pin it for reproducibility).
+    """
     tmp = Path(tempfile.mkdtemp())
     csv = tmp / "smoke.csv"
     csv.write_text(csv_text)
@@ -25,7 +29,7 @@ def _gen_recipe(csv_text: str, matlab_bin: str) -> str:
     # the same tempdir concurrently, so "newest" can grab the wrong one.
     script = (
         "set(0,'DefaultFigureVisible','off');"
-        f"DataExplorer('{csv}');"
+        f"DataExplorer('{csv}'{extra});"
         f"copyfile(fullfile(tempdir,'dataexplorer_{csv.stem}.m'), '{out}');"
     )
     res = run_matlab(script, timeout=240, matlab=matlab_bin)
@@ -141,6 +145,41 @@ def _skewed_state_csv(n=150):
         val = random.expovariate(1.0) ** 2  # very right-skewed (skewness >> 2)
         rows.append(f"{states[i % len(states)]},{val:.5f}")
     return "\n".join(rows) + "\n"
+
+
+def _strat_state_csv(n=300):
+    """State + a strong categorical stratifier (Standard) + a near-zero one (Junk)
+    + a numeric strongly stratified by Standard.  Standard is independent of state
+    so it is not redundancy-skipped."""
+    import random
+
+    random.seed(3)
+    states = ["Alabama", "California", "Texas", "Florida", "Ohio", "NewYork"]
+    standards = ["S1", "S2", "S3"]
+    rows = ["StateName,Standard,Junk,Val"]
+    for i in range(n):
+        st = states[i % len(states)]
+        sd = standards[random.randrange(3)]      # independent of state
+        junk = random.choice(["a", "b"])         # categorical, ~zero η²
+        val = (10 if sd == "S3" else 0) + random.gauss(0, 1)
+        rows.append(f"{st},{sd},{junk},{val:.4f}")
+    return "\n".join(rows) + "\n"
+
+
+def test_recipe_stratifies_single_numeric_choropleth(matlab_bin):
+    # A single numeric whose per-state mean is confounded must come out as a
+    # de-confounded state×level heatmap (CellRenderer='heatmap_cat'), stratified
+    # by a qualifying categorical — never a bare mean choropleth.  The near-zero
+    # stratifier (Junk) must be below the floor; the chosen one is from {Standard}.
+    recipe = _gen_recipe(_strat_state_csv(), matlab_bin, extra=", 'RandSeed', 1")
+    assert "de_statebins" in recipe, f"expected a state map.\n{recipe}"
+    assert "heatmap_cat" in recipe, (
+        f"confounded single numeric should be shown stratified.\n{recipe}"
+    )
+    assert "'CatCol','Standard'" in recipe, (
+        f"stratifier must be the qualifying categorical Standard, not Junk.\n{recipe}"
+    )
+    assert "'CatCol','Junk'" not in recipe, "near-zero η² Junk must be below floor"
 
 
 def test_recipe_logscale_for_skewed_choropleth(matlab_bin):

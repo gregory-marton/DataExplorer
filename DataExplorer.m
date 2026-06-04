@@ -19,6 +19,9 @@ function T = DataExplorer(source, options)
 %   NCReduction    ("")      NetCDF 3D+: "flatten" | "mean" | "slice" (bypasses reduction prompt)
 %   NCDimension    (1)       NetCDF: dimension index for "mean" or "slice" reduction
 %   NCSliceIndex   (1)       NetCDF: element index along NCDimension when NCReduction="slice"
+%   RandSeed       (NaN)     seed for the (otherwise random) stratifier choice in
+%                            geo plots; set for a reproducible recipe, leave unset
+%                            to get a different valid stratification on each run
 %
 %   Examples
 %   ────────
@@ -43,6 +46,7 @@ arguments
     options.NCReduction     (1,1) string  = ""          % NetCDF 3D+: "flatten"|"mean"|"slice"
     options.NCDimension     (1,1) double  = 1           % NetCDF: dimension index for mean/slice
     options.NCSliceIndex    (1,1) double  = 1           % NetCDF: element index when NCReduction="slice"
+    options.RandSeed        (1,1) double  = NaN         % seed stratifier choice for a reproducible recipe
 end
 
 %% ── 0.  Version check ────────────────────────────────────────────────────
@@ -1563,9 +1567,13 @@ end
 
 
 % ── cg_state_choropleth_code ────────────────────────────────────────────────
-function code = cg_state_choropleth_code(prof, families)
+function code = cg_state_choropleth_code(T, prof, families)
 %CG_STATE_CHOROPLETH_CODE  Return recipe code for state choropleth figures.
-if nargin < 2, families = {}; end
+%   A single-numeric per-state mean mixes sub-populations (e.g. a state's monitor
+%   mix), so where a categorical stratifies the numeric we emit a state×level
+%   heatmap (de-confounded) instead of a bare mean map.  The stratifier is a
+%   weighted-random pick (de_pick_stratifier); re-running surfaces other views.
+if nargin < 3, families = {}; end
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
@@ -1596,19 +1604,35 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
-    sub = cell(1, 2*numel(num_plot));
+    sub = cell(1, 3*numel(num_plot));   % comment + call + blank per numeric
+    si  = 0;
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
         sca = se_scale_arg(prof, num_plot(j));
-        if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, sca);
+        [strat, eta2] = de_pick_stratifier(T, prof, string(ncn), string(catname));
+        if strat ~= ""
+            si = si+1; sub{si} = sprintf(['%% %s mean per state mixes %s (eta2=%d%%); ' ...
+                'shown stratified — re-run DataExplorer for a different view'], ...
+                ncn, char(strat), round(100*eta2));
+            if isempty(time_idx)
+                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ' ...
+                    '''CatCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                    catname, ncn, char(strat), ncn, char(strat));
+            else
+                tcn = prof.name{time_idx};
+                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ' ...
+                    '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                    catname, ncn, char(strat), tcn, ncn, char(strat));
+            end
+        elseif isempty(time_idx)
+            si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
+            si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
         end
-        sub{2*j} = '';
+        si = si+1; sub{si} = '';
     end
-    L = [L, sub];
+    L = [L, sub(1:si)];
 end
 
 if isempty(L), return; end
@@ -1617,9 +1641,11 @@ end
 
 
 % ── cg_country_choropleth_code ───────────────────────────────────────────────
-function code = cg_country_choropleth_code(prof, families)
+function code = cg_country_choropleth_code(T, prof, families)
 %CG_COUNTRY_CHOROPLETH_CODE  Return recipe code for world choropleth figures.
-if nargin < 2, families = {}; end
+%   Single-numeric per-country means are stratified into a country×level heatmap
+%   where a categorical explains the numeric (see cg_state_choropleth_code).
+if nargin < 3, families = {}; end
 code = '';
 cat_all = find(prof.type == "categorical" & ~prof.skip);
 geo_idx = [];
@@ -1650,19 +1676,35 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
-    sub = cell(1, 2*numel(num_plot));
+    sub = cell(1, 3*numel(num_plot));   % comment + call + blank per numeric
+    si  = 0;
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
         sca = se_scale_arg(prof, num_plot(j));
-        if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, sca);
+        [strat, eta2] = de_pick_stratifier(T, prof, string(ncn), string(catname));
+        if strat ~= ""
+            si = si+1; sub{si} = sprintf(['%% %s mean per country mixes %s (eta2=%d%%); ' ...
+                'shown stratified — re-run DataExplorer for a different view'], ...
+                ncn, char(strat), round(100*eta2));
+            if isempty(time_idx)
+                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ' ...
+                    '''CatCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                    catname, ncn, char(strat), ncn, char(strat));
+            else
+                tcn = prof.name{time_idx};
+                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ' ...
+                    '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                    catname, ncn, char(strat), tcn, ncn, char(strat));
+            end
+        elseif isempty(time_idx)
+            si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
+            si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
         end
-        sub{2*j} = '';
+        si = si+1; sub{si} = '';
     end
-    L = [L, sub];
+    L = [L, sub(1:si)];
 end
 
 if isempty(L), return; end
@@ -1883,6 +1925,13 @@ function [recipe_path, recipe_text] = se_assemble_recipe(filepath, T, prof, pane
 
 assert(isstruct(panel), 'panel must be a struct');
 
+% Geo stratifier choice is weighted-random (see de_pick_stratifier).  Seed it for
+% a reproducible recipe when RandSeed is set; otherwise leave the RNG alone so
+% each run surfaces a different valid stratification.
+if isfield(options, 'RandSeed') && ~isnan(options.RandSeed)
+    rng(options.RandSeed);
+end
+
 if isempty(filepath)
     bname_safe = 'table_input';
 else
@@ -1910,8 +1959,8 @@ end
 load_code   = cg_load_code(filepath, T);
 clean_code  = cg_clean_code();
 plots_code  = cg_best_plots_code(T, prof, sel, prof.source_name);
-choro_code         = cg_state_choropleth_code(prof, families);
-country_code       = cg_country_choropleth_code(prof, families);
+choro_code         = cg_state_choropleth_code(T, prof, families);
+country_code       = cg_country_choropleth_code(T, prof, families);
 geo_multi_code     = cg_geo_multicategorical_code(T, prof);
 geoscatter_code    = cg_geoscatter_code(T, prof);
 family_code        = cg_corr_family_code(T, prof, families, options.MaxVars);
