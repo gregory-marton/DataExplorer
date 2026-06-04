@@ -50,10 +50,9 @@ arguments
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double  = [NaN NaN]
     options.CLim              (1,2) double  = [NaN NaN]
-    options.LogColor          (1,1) string  = "auto"   % "auto" | "on" | "off"
     options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
     options.LegendNote        (1,1) string  = ""
-    options.Scale             (1,1) string  = "auto"   % value_ladder: "linear"|"log"|"auto"
+    options.Scale             (1,1) string  = "auto"   % "linear"|"log"|"auto"; color axis (choropleth) or bar axis (value_ladder)
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
@@ -149,7 +148,7 @@ end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
 if is_heatmap_cat || is_scatter_cat || is_value_ladder, has_choro = false; end
 
-% Log color scale.  Policy: callers (the recipe) pass LogColor "on"/"off" based on
+% Log color scale.  Policy: callers (the recipe) pass Scale "log"/"linear" based on
 % the column's profiled skewness; "auto" falls back to a skewness test on the tile
 % values.  Mechanism: non-negative data with zeros is supported by flooring zeros a
 % decade below the smallest positive value, so counts (which have zero means) still
@@ -160,9 +159,9 @@ if has_choro && any(isnan(options.CLim))
     hv  = hv(isfinite(hv));
     pos = hv(hv > 0);
     nonneg = ~isempty(hv) && all(hv >= 0) && ~isempty(pos);
-    switch lower(options.LogColor)
-        case "on",  use_log_color = nonneg;
-        case "off", use_log_color = false;
+    switch lower(options.Scale)
+        case "log",    use_log_color = nonneg;
+        case "linear", use_log_color = false;
         otherwise   % "auto"
             use_log_color = nonneg && ...
                 (max(pos)/min(pos) > 100 || (tg_skewness(hv) > 1.5 && max(pos)/min(pos) > 5));

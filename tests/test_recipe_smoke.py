@@ -100,13 +100,17 @@ def _skewed_state_csv(n=150):
     return "\n".join(rows) + "\n"
 
 
-def test_recipe_logcolor_for_skewed_choropleth(matlab_bin):
+def test_recipe_logscale_for_skewed_choropleth(matlab_bin):
     # A strongly right-skewed choropleth column must get a log color scale,
-    # decided from prof.skewness by the recipe.
+    # decided from prof.skewness by the recipe. Color and bar axes share one
+    # vocabulary word: Scale (not a separate LogColor parameter).
     recipe = _gen_recipe(_skewed_state_csv(), matlab_bin)
     assert "de_statebins" in recipe, f"expected a state choropleth.\n{recipe}"
-    assert "'LogColor','on'" in recipe, (
-        f"skewed choropleth column should get LogColor on.\n{recipe}"
+    assert "'Scale','log'" in recipe, (
+        f"skewed choropleth column should get Scale log.\n{recipe}"
+    )
+    assert "LogColor" not in recipe, (
+        f"LogColor was folded into Scale; it must not appear.\n{recipe}"
     )
 
 

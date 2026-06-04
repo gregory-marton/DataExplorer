@@ -1193,14 +1193,16 @@ idxs = idxs(~is_const & ~is_time_name & ~is_coord & ~is_id & ~is_fam_nonrep);
 end
 
 
-% ── se_logcolor_arg ───────────────────────────────────────────────────────────
-function s = se_logcolor_arg(prof, idx)
-%SE_LOGCOLOR_ARG  Return ", 'LogColor','on'" for strongly-skewed numeric columns,
-%   else ''.  Lets the recipe decide log color from the profiled skewness.
+% ── se_scale_arg ──────────────────────────────────────────────────────────────
+function s = se_scale_arg(prof, idx)
+%SE_SCALE_ARG  Return ", 'Scale','log'" for strongly-skewed numeric columns,
+%   else ''.  Lets the recipe decide log scale from the profiled skewness.
+%   Scale governs the quantitative axis of whichever renderer is active —
+%   choropleth color or value_ladder bars.
 s = '';
 if isfield(prof, 'skewness') && idx >= 1 && idx <= numel(prof.skewness) ...
         && ~isnan(prof.skewness(idx)) && abs(prof.skewness(idx)) > 2
-    s = ', ''LogColor'',''on''';
+    s = ', ''Scale'',''log''';
 end
 end
 
@@ -1597,12 +1599,12 @@ else
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
-        lca = se_logcolor_arg(prof, num_plot(j));
+        sca = se_scale_arg(prof, num_plot(j));
         if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, lca);
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, lca);
+            sub{2*j-1} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
         end
         sub{2*j} = '';
     end
@@ -1651,12 +1653,12 @@ else
     sub = cell(1, 2*numel(num_plot));
     for j = 1:numel(num_plot)
         ncn = prof.name{num_plot(j)};
-        lca = se_logcolor_arg(prof, num_plot(j));
+        sca = se_scale_arg(prof, num_plot(j));
         if isempty(time_idx)
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, lca);
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
             tcn = prof.name{time_idx};
-            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, lca);
+            sub{2*j-1} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
         end
         sub{2*j} = '';
     end
