@@ -260,7 +260,7 @@ function T = load_from_zip(filepath, options)
     % (common in some zip tools) — use strtrim for extension checks but keep
     % the raw name for Java lookups, then strtrim when writing to disk.
     did_selective = false;
-    zip_entries   = zip_list_entries(filepath);   % struct array: .name, .bytes
+    zip_entries   = de__zip_list(filepath);   % struct array: .name, .bytes
 
     if ~isempty(zip_entries)
         % Filter to data-file candidates
@@ -354,7 +354,7 @@ function T = load_from_zip(filepath, options)
             all_ok = true;
             for k = 1:numel(cand)
                 try
-                    zip_extract_entry(filepath, cand(k).name, tmpdir);
+                    de__zip_extract(filepath, cand(k).name, tmpdir);
                 catch
                     all_ok = false;
                     break;
@@ -551,11 +551,11 @@ function T = load_excel(filepath, options)
     T = readtable(filepath, opts, 'Sheet', sheetname);
     T.Properties.UserData = struct('sheet', sheetname, 'inner_file', '');
     names_before = T.Properties.VariableNames;
-    T = se_fix_names(T, filepath, '.xlsx', sheetname);
+    T = de__fix_names(T, filepath, '.xlsx', sheetname);
     if ~isequal(names_before, T.Properties.VariableNames)
         T.Properties.UserData.explicit_header = true;
     end
-    T = se_sample(T, options.MaxRows);
+    T = de__sample(T, options.MaxRows);
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
@@ -590,19 +590,19 @@ function T = load_text(filepath, options)
             file_mb, options.MaxRows);
         fprintf('    This avoids loading the full file into memory.\n');
         T = de_reservoir_sample(filepath, options.MaxRows, Verbose=true);
-        T = se_record_sampled(T, height(T));
+        T = de__record_sampled(T, height(T));
     else
         opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
         opts.MissingRule = 'fill';
         T = readtable(filepath, opts);
         n_before = height(T);
-        T = se_sample(T, options.MaxRows);
+        T = de__sample(T, options.MaxRows);
         if height(T) < n_before
-            T = se_record_sampled(T, height(T), n_before);
+            T = de__record_sampled(T, height(T), n_before);
         end
     end
 
-    T = se_fix_names(T, filepath, '.csv', []);
+    T = de__fix_names(T, filepath, '.csv', []);
 end
 
 
@@ -850,7 +850,7 @@ function T = load_netcdf(filepath, options)
         end
     end
 
-    T = se_sample(T, options.MaxRows);
+    T = de__sample(T, options.MaxRows);
     fprintf('  ✓ Loaded %d × %d table from "%s".\n', height(T), width(T), varname);
     T.Properties.UserData = struct('sheet', '', 'inner_file', '', 'nc_varname', varname);
 end
@@ -1063,98 +1063,10 @@ end
 
 
 % ── se_fix_names ─────────────────────────────────────────────────────────────
-function T = se_fix_names(T, filepath, ext, sheet)
-%SE_FIX_NAMES  If all names are Var1, Var2, …, try using the literal first row.
-
-    names = T.Properties.VariableNames;
-    is_default = all(cellfun(@(n) ~isempty(regexp(n, '^Var\d+$', 'once')), names));
-
-    if ~is_default
-        return
-    end
-
-    fprintf('  ⚠ All column names are Var1, Var2, … — inspecting raw first row.\n');
-
-    try
-        if ismember(ext, [".xlsx", ".xls", ".xlsm"])
-            raw = readtable(filepath, 'Sheet', sheet, ...
-                'ReadVariableNames', false, 'ReadRowNames', false);
-        else
-            % Re-sniff delimiter
-            fid = fopen(filepath, 'r');
-            fl  = fgetl(fid);
-            fclose(fid);
-            ntabs = sum(fl == char(9));
-            delim = ',';
-            if ntabs > sum(fl == ','), delim = '\t'; end
-            raw = readtable(filepath, 'Delimiter', delim, ...
-                'ReadVariableNames', false, 'ReadRowNames', false);
-        end
-
-        firstrow = table2cell(raw(1, :));
-
-        % A row looks like a pure-text header if every cell is non-numeric text
-        is_text = cellfun(@(v) ischar(v) || isstring(v), firstrow);
-        is_num  = cellfun(@(v) ~isnan(str2double(string(v))), firstrow);
-        looks_like_header = all(is_text) && ~all(is_num);
-
-        % Also detect mixed headers: some text labels + year-like integers
-        % (e.g. "Data_Status, StateCode, MSN, 1960, 1961, …, 2023").
-        % Require ≥3 year-like integers to avoid false positives on data rows
-        % that happen to include one year value (e.g. survey year).
-        YEAR_MIN  = 1900;  YEAR_MAX = 2100;
-        year_vals = cellfun(@(v) isnumeric(v) && isscalar(v) && ~isnan(v) && ...
-            v >= YEAR_MIN && v <= YEAR_MAX && v == floor(v), firstrow);
-        looks_like_mixed_header = any(is_text) && sum(year_vals) >= 3 && ~looks_like_header;
-
-        if looks_like_header || looks_like_mixed_header
-            % Build candidate names; convert numeric cells (e.g. 1960) to
-            % their string representation before makeValidName.
-            cand = cell(1, numel(firstrow));
-            for j = 1:numel(firstrow)
-                v = firstrow{j};
-                if isnumeric(v) && isscalar(v)
-                    cand{j} = sprintf('%g', v);   % 1960 → '1960' → x1960
-                else
-                    cand{j} = char(string(v));
-                end
-            end
-            valid = matlab.lang.makeValidName(cand);
-            T.Properties.VariableNames = cellstr(valid);
-            T(1, :) = [];   % drop the now-redundant first row
-            if looks_like_mixed_header
-                fprintf('  ✓ Header row has mixed text + year columns — names reassigned:\n');
-            else
-                fprintf('  ✓ Reassigned variable names from first data row:\n');
-            end
-            preview = strjoin(valid(1:min(6, end)), ',  ');
-            if numel(valid) > 6
-                fprintf('      %s, … (%d more)\n', preview, numel(valid) - 6);
-            else
-                fprintf('      %s\n', preview);
-            end
-        else
-            fprintf('  First row looks like data (not headers). Keeping Var1/Var2/…\n');
-            fprintf('  TODO: rename columns manually via T.Properties.VariableNames\n');
-        end
-
-    catch ME
-        fprintf('  Could not re-read for header check: %s\n', ME.message);
-    end
-end
+% de__fix_names is defined in de__fix_names.m
 
 
-% ── se_sample ────────────────────────────────────────────────────────────────
-function T = se_sample(T, maxrows)
-    n = height(T);
-    if n > maxrows
-        idx = sort(randperm(n, maxrows));
-        T   = T(idx, :);
-        fprintf('  ℹ Large file: keeping %d of %d rows (random sample).\n', ...
-            maxrows, n);
-        fprintf('    Increase with:  DataExplorer(file, MaxRows=N)\n');
-    end
-end
+% de__sample, de__fix_names, de__record_sampled are now standalone de__*.m files.
 
 
 % ── se_filter_choro_cols ──────────────────────────────────────────────────────
@@ -1230,18 +1142,7 @@ end
 
 
 % ── se_record_sampled ─────────────────────────────────────────────────────────
-function T = se_record_sampled(T, n, n_orig)
-% Store how many rows were sampled so cg_load_code can emit SampleData().
-% n_orig is the pre-sampling row count (stored so de_overview can display "n of N").
-    if nargin < 3, n_orig = n; end
-    if isempty(T.Properties.UserData)
-        T.Properties.UserData = struct('sheet', '', 'inner_file', '', ...
-            'sampled', n, 'n_orig', n_orig);
-    else
-        T.Properties.UserData.sampled = n;
-        T.Properties.UserData.n_orig  = n_orig;
-    end
-end
+% de__record_sampled is defined in de__record_sampled.m
 
 
 % ── se_profile ───────────────────────────────────────────────────────────────
@@ -2093,50 +1994,8 @@ else
     tf = false;
 end
 end
-function zip_extract_entry(zippath, entry_name, outdir)
-% Extract one named entry using the system unzip tool (-j junks paths).
-    cmd = sprintf('unzip -j -d "%s" "%s" "%s"', outdir, zippath, entry_name);
-    [status, out] = system(cmd);
-    if status ~= 0
-        error('DataExplorer:zipExtractFailed', ...
-            'unzip failed for entry "%s":\n%s', entry_name, out);
-    end
-    % Some ZIP tools encode filenames with trailing whitespace.  unzip
-    % preserves that in the output filename; rename to the clean version.
-    [~, base, ext] = fileparts(entry_name);
-    raw_base   = [base ext];
-    clean_base = strtrim(raw_base);
-    if ~strcmp(raw_base, clean_base)
-        src = fullfile(outdir, raw_base);
-        dst = fullfile(outdir, clean_base);
-        if exist(src, 'file') && ~exist(dst, 'file')
-            movefile(src, dst);
-        end
-    end
-end
+% de__zip_extract is defined in de__zip_extract.m
 
 
 % ── zip_list_entries ──────────────────────────────────────────────────────────
-function entries = zip_list_entries(filepath)
-% Return struct array (.name, .bytes) for all non-directory ZIP entries.
-% Uses system unzip -l — fast even for archives with 20 000+ entries.
-[status, out] = system(sprintf('unzip -l "%s" 2>/dev/null', filepath));
-entries = struct('name', {}, 'bytes', {});
-if status ~= 0, return; end
-lines = strsplit(out, newline);
-% Data lines: leading spaces, byte count, date MM-DD-YY[YY], time HH:MM, name
-pat = '^\s*(\d+)\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$';
-buf = repmat(struct('name', '', 'bytes', 0), 1, numel(lines));
-ne = 0;
-for k = 1:numel(lines)
-    tok = regexp(lines{k}, pat, 'tokens', 'once');
-    if isempty(tok), continue; end
-    name = tok{2};
-    if isempty(name), continue; end
-    if name(end) == '/', continue; end  % skip directory entries
-    ne = ne + 1;
-    buf(ne).name  = name;
-    buf(ne).bytes = str2double(tok{1});
-end
-entries = buf(1:ne);
-end
+% de__zip_list is defined in de__zip_list.m
