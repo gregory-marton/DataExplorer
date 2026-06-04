@@ -73,20 +73,24 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function modes = all_timeseries_modes(~)
-            % Return cell array of all modes found across all time-series figures.
+            % Return cell array of the time-series modes present across figures.
             figs = findall(0, 'Type', 'figure');
-            modes = {};
+            has_stacked = false;
+            has_overlaid = false;
             for k = 1:numel(figs)
                 name = get(figs(k), 'Name');
                 if contains(lower(name), 'time series')
                     ax = findall(figs(k), 'Type', 'axes');
                     if ~isempty(ax)
                         t = get(get(ax(1), 'Title'), 'String');
-                        if contains(t, 'stacked area'),   modes{end+1} = 'stacked area';   end
-                        if contains(t, 'overlaid lines'), modes{end+1} = 'overlaid lines'; end
+                        has_stacked  = has_stacked  || contains(t, 'stacked area');
+                        has_overlaid = has_overlaid || contains(t, 'overlaid lines');
                     end
                 end
             end
+            modes = {};
+            if has_stacked,  modes = [modes, {'stacked area'}];   end
+            if has_overlaid, modes = [modes, {'overlaid lines'}]; end
         end
 
         function n = figure_count(~)
@@ -219,7 +223,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_matlab_version(testCase)
             % DataExplorer targets R2025b (25.2). Running older versions risks
             % silent failures in DataTipTemplate, boxchart, arguments blocks, etc.
-            testCase.verifyFalse(verLessThan('matlab', '25.2'), ...
+            testCase.verifyFalse(isMATLABReleaseOlderThan('R2025b'), ...
                 sprintf('R2025b (25.2) required; this session is running %s (%s)', ...
                     version, version('-release')));
         end
@@ -653,11 +657,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             T = table(repmat(states,4,1), repmat(fips,4,1), ...
                 'VariableNames', {'StateName','StateCode'});
             [~, prof] = de_profile(T);
-            si = find(strcmp(prof.name, 'StateName'));
-            ci = find(strcmp(prof.name, 'StateCode'));
-            testCase.verifyEqual(prof.geo_grid{si}, 'us-states', ...
+            testCase.verifyEqual(prof.geo_grid{strcmp(prof.name, 'StateName')}, 'us-states', ...
                 'StateName (recognizable names) should be detected as us-states');
-            testCase.verifyNotEqual(prof.geo_grid{ci}, 'us-states', ...
+            testCase.verifyNotEqual(prof.geo_grid{strcmp(prof.name, 'StateCode')}, 'us-states', ...
                 'FIPS-number StateCode must not be assigned us-states by name alone');
         end
 
@@ -1980,7 +1982,6 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_tilegrid_scatter_cat_draws_points(testCase)
             % de_tilegrid with CellRenderer='scatter_cat' draws scatter points
             % (line objects with Tag='cat_scatter') for each non-empty tile.
-            n = 16;
             states = repelem(["ME";"NY"], 8);
             cats   = repmat(repelem(["A";"B"], 4), 2, 1);
             xv = (1:16)';  yv = randn(16,1);
@@ -2596,7 +2597,7 @@ end
 recipe_path = fullfile(hits(newest).folder, hits(newest).name);
 end
 
-function [T, prof] = se_profile_test_shim(T, missingStrings)
+function [T, prof] = se_profile_test_shim(T, ~)
 % Call se_profile via DataExplorer's local function namespace.
 % This requires DataExplorer.m to be on the path; se_profile is a local
 % function and cannot be called directly.  Work-around: run a headless
@@ -2620,7 +2621,7 @@ prof.skip = false(1, ncol);
 for k = 1:ncol
     col = T_out.(prof.name{k});
     if iscategorical(col)
-        if numel(categories(col)) == 1
+        if isscalar(categories(col))
             prof.skip(k) = true;
         end
     end
