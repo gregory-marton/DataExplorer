@@ -31,6 +31,7 @@ arguments
     options.CLim             (1,2) double  = [NaN NaN]
     options.ValueCols        (1,:) string  = string([])
     options.LegendNote       (1,1) string  = ""
+    options.ConfoundNote     (1,1) string  = ""
     options.Scale            (1,1) string  = "auto"
 end
 
@@ -54,5 +55,6 @@ end
     'CLim',            options.CLim, ...
     'ValueCols',       options.ValueCols, ...
     'LegendNote',      options.LegendNote, ...
+    'ConfoundNote',    options.ConfoundNote, ...
     'Scale',           options.Scale);
 end

@@ -1197,6 +1197,24 @@ idxs = idxs(~is_const & ~is_time_name & ~is_coord & ~is_id & ~is_fam_nonrep);
 end
 
 
+% ── se_confound_note_arg ──────────────────────────────────────────────────────
+function s = se_confound_note_arg(T, prof, target_name, geo_name, region_word)
+%SE_CONFOUND_NOTE_ARG  Return ", 'ConfoundNote','…'" when a per-region mean of
+%   target_name is strongly confounded by a categorical too high-cardinality to
+%   facet cleanly (so it stays a plain mean map), else ''.  Reached only after the
+%   faceable pick (cardinality ≤ 15) found nothing, so this catches the >15-level
+%   strong stratifiers and warns rather than silently misleading.
+s = '';
+[~, ~, cn, cw] = de_pick_stratifier(T, prof, target_name, geo_name, ...
+    'MaxCard', Inf, 'Floor', 0.5);
+if isempty(cw), return; end
+[emax, im] = max(cw);
+note = sprintf('per-%s mean of %s mixes %s (eta2=%d%%); interpret with care', ...
+    region_word, char(target_name), char(cn(im)), round(100*emax));
+s = sprintf(', ''ConfoundNote'',''%s''', note);
+end
+
+
 % ── se_scale_arg ──────────────────────────────────────────────────────────────
 function s = se_scale_arg(prof, idx)
 %SE_SCALE_ARG  Return ", 'Scale','log'" for strongly-skewed numeric columns,
@@ -1624,11 +1642,14 @@ else
                     '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), tcn, ncn, char(strat));
             end
-        elseif isempty(time_idx)
-            si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
-            tcn = prof.name{time_idx};
-            si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
+            cna = se_confound_note_arg(T, prof, string(ncn), string(catname), 'state');
+            if isempty(time_idx)
+                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
+            else
+                tcn = prof.name{time_idx};
+                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
+            end
         end
         si = si+1; sub{si} = '';
     end
@@ -1696,11 +1717,14 @@ else
                     '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), tcn, ncn, char(strat));
             end
-        elseif isempty(time_idx)
-            si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, ncn, sca);
         else
-            tcn = prof.name{time_idx};
-            si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s);', catname, ncn, tcn, ncn, sca);
+            cna = se_confound_note_arg(T, prof, string(ncn), string(catname), 'country');
+            if isempty(time_idx)
+                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
+            else
+                tcn = prof.name{time_idx};
+                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
+            end
         end
         si = si+1; sub{si} = '';
     end

@@ -75,6 +75,7 @@ arguments
     options.CLim             (1,2) double  = [NaN NaN]
     options.ValueCols        (1,:) string  = string([])
     options.LegendNote       (1,1) string  = ""
+    options.ConfoundNote     (1,1) string  = ""
     options.Scale            (1,1) string  = "auto"
 end
 
@@ -194,6 +195,7 @@ g.is_overflow = IS_OVERFLOW;
     'CLim',          options.CLim, ...
     'ValueCols',     options.ValueCols, ...
     'LegendNote',    options.LegendNote, ...
+    'ConfoundNote',  options.ConfoundNote, ...
     'Scale',         options.Scale);
 
 end % de_geobins

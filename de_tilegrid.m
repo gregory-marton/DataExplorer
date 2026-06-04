@@ -52,6 +52,7 @@ arguments
     options.CLim              (1,2) double  = [NaN NaN]
     options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
     options.LegendNote        (1,1) string  = ""
+    options.ConfoundNote      (1,1) string  = ""      % small red in-figure caveat
     options.Scale             (1,1) string  = "auto"   % "linear"|"log"|"auto"; color axis (choropleth) or bar axis (value_ladder)
 end
 
@@ -401,6 +402,17 @@ end
 title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', F.page, 'Interpreter', 'none');
+
+% Confound caveat: small red note in the bottom margin (the plot is still shown;
+% it just warns that a per-region mean mixes sub-populations).
+if strlength(options.ConfoundNote) > 0
+    annotation(fig, 'textbox', [0.02 0.005 0.96 0.045], ...
+        'String', "! " + options.ConfoundNote, ...
+        'Color', [0.75 0 0], 'FontSize', F.subtitle, 'FontWeight', 'bold', ...
+        'EdgeColor', 'none', 'HorizontalAlignment', 'center', ...
+        'VerticalAlignment', 'bottom', 'Interpreter', 'none', 'Tag', 'confound_note', ...
+        'FitBoxToText', 'off');
+end
 
 %% ── Sparklines (per-tile time series) ───────────────────────────────────────
 if has_spark && has_choro && ~is_heatmap_cat

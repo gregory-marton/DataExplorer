@@ -540,6 +540,22 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEqual(s, "");
         end
 
+        function test_tilegrid_confound_note_renders(testCase)
+            % ConfoundNote draws a tagged red caveat in the figure (still plots).
+            rng(0);
+            State = categorical(repmat({'AL';'CA';'TX';'FL'}, 25, 1));
+            Val   = randn(100, 1);
+            T = table(State, Val);
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cl = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            de_statebins(T, 'StateCol', 'State', 'ColorCol', 'Val', ...
+                'ConfoundNote', 'mixes Foo (eta2=88%)');
+            ann = findall(0, 'Tag', 'confound_note');
+            testCase.verifyNotEmpty(ann, 'ConfoundNote must render a tagged annotation');
+            testCase.verifyTrue(contains(string(ann(1).String), 'mixes Foo'));
+        end
+
         function test_de_load_zip_single_file_opens(testCase)
             % A ZIP with exactly one data file just opens (the common case).
             f = fullfile(testCase.EXAMPLES_DIR, 'annual_aqi_by_county_2025.zip');

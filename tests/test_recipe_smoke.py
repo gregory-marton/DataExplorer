@@ -9,6 +9,7 @@ missed.
 import os
 import tempfile
 import textwrap
+import uuid
 from pathlib import Path
 
 from conftest import ROOT, run_matlab
@@ -21,12 +22,14 @@ def _gen_recipe(csv_text: str, matlab_bin: str, extra: str = "") -> str:
     geo stratifier choice is otherwise random, so tests pin it for reproducibility).
     """
     tmp = Path(tempfile.mkdtemp())
-    csv = tmp / "smoke.csv"
+    # Unique csv stem → unique recipe filename (dataexplorer_<stem>.m).  All
+    # recipe-smoke fixtures once used "smoke.csv", so a concurrent run (a deferred
+    # integration pass also running these tests) wrote the SAME shared
+    # dataexplorer_smoke.m in MATLAB's tempdir and clobbered ours.  A per-call
+    # uuid makes the recipe path unique across processes.
+    csv = tmp / f"smoke_{uuid.uuid4().hex[:8]}.csv"
     csv.write_text(csv_text)
     out = tmp / "recipe_out.m"
-    # Copy this csv's specific recipe (dataexplorer_<stem>.m), NOT the newest
-    # dataexplorer_*.m — the deferred integration run writes its own recipes to
-    # the same tempdir concurrently, so "newest" can grab the wrong one.
     script = (
         "set(0,'DefaultFigureVisible','off');"
         f"DataExplorer('{csv}'{extra});"
@@ -180,6 +183,34 @@ def test_recipe_stratifies_single_numeric_choropleth(matlab_bin):
         f"stratifier must be the qualifying categorical Standard, not Junk.\n{recipe}"
     )
     assert "'CatCol','Junk'" not in recipe, "near-zero η² Junk must be below floor"
+
+
+def _confound_highcard_csv(n=420):
+    """State + a 20-level categorical (Site) that strongly stratifies a numeric but
+    is too high-cardinality (>15) to facet cleanly → plain map + confound warning."""
+    import random
+
+    random.seed(8)
+    states = ["Alabama", "California", "Texas", "Florida", "Ohio", "NewYork"]
+    rows = ["StateName,Site,Val"]
+    for i in range(n):
+        st = states[i % len(states)]
+        site_idx = random.randrange(20)          # 20 levels, independent of state
+        val = site_idx * 5 + random.gauss(0, 1)  # strongly determined by Site
+        rows.append(f"{st},Site{site_idx:02d},{val:.4f}")
+    return "\n".join(rows) + "\n"
+
+
+def test_recipe_confound_warning_when_unfaceable(matlab_bin):
+    # A numeric strongly confounded by a categorical too high-cardinality to facet
+    # stays a plain choropleth but must carry a ConfoundNote (never silently mislead).
+    recipe = _gen_recipe(_confound_highcard_csv(), matlab_bin, extra=", 'RandSeed', 1")
+    assert "ConfoundNote" in recipe, (
+        f"a high-cardinality confounder should trigger a warning.\n{recipe}"
+    )
+    assert "'CatCol','Site'" not in recipe, (
+        f"a 20-level stratifier is too high-card to facet — warn, don't facet.\n{recipe}"
+    )
 
 
 def test_recipe_logscale_for_skewed_choropleth(matlab_bin):
