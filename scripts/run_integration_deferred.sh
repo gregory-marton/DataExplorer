@@ -1,27 +1,50 @@
 #!/usr/bin/env bash
 # Deferred integration runner.
 # Usage: run_integration_deferred.sh <uuid>
-# Launched by conftest.py after a successful smoke run. Sleeps 15 minutes,
-# then checks that the sentinel UUID still matches before running the full suite.
+# Launched by conftest.py after a successful smoke run. Sleeps, then runs the full
+# suite only if (a) the sentinel UUID still matches — a newer smoke run supersedes
+# this one — and (b) no other DI is already running (single-flight lock), so runs
+# never overlap.
 #
 # Live output: streamed to deferred_integration.log (tail -f friendly).
 # On failure:  overwrites .cache/last_full_run.txt with this run only.
 # On success:  archives to .cache/last_full_run_passed_<timestamp>.txt.
+#
+# Env overrides (for tests): DI_SLEEP (sleep seconds), DI_CMD (command to run).
 
 set -uo pipefail
 
 UUID="${1:?UUID argument required}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${DI_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 SENTINEL="$ROOT/.cache/integration_sentinel.txt"
 LAST_RUN="$ROOT/.cache/last_full_run.txt"
 LIVE_LOG="$ROOT/deferred_integration.log"
+LOCKFILE="$ROOT/.cache/di.lock"
 
-sleep 900
+# Window long enough that ordinary dev pauses (edits, MATLAB probes) don't trip it;
+# the deferred run is meant for genuine dry spells.  Overridable for tests.
+SLEEP_SECS="${DI_SLEEP:-1800}"
+DI_CMD="${DI_CMD:-python3 -m pytest tests/ --override-ini=addopts= --tb=short -v}"
 
-# Check sentinel is still ours — a newer smoke run would have written a new UUID
+sleep "$SLEEP_SECS"
+
+# Supersede: a newer smoke run would have written a new sentinel UUID.
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$UUID" ]; then
     exit 0
 fi
+
+# Single-flight: never let two DI runs overlap.  noclobber makes "> file" an
+# atomic create-or-fail that also records the owner PID, so there is no window
+# where the lock exists without an owner.  If the owner is alive, skip; if it is
+# dead (a killed run), the lock is stale — steal it.
+if ! ( set -o noclobber; echo "$$" > "$LOCKFILE" ) 2>/dev/null; then
+    if kill -0 "$(cat "$LOCKFILE" 2>/dev/null)" 2>/dev/null; then
+        exit 0
+    fi
+    rm -f "$LOCKFILE"
+    ( set -o noclobber; echo "$$" > "$LOCKFILE" ) 2>/dev/null || exit 0
+fi
+trap 'rm -f "$LOCKFILE"' EXIT
 
 cd "$ROOT"
 TMPOUT=$(mktemp)
@@ -30,7 +53,7 @@ printf '\n=== DI run started: %s ===\n' "$(date)" >> "$LIVE_LOG"
 printf '\a'
 
 # Stream to live log in real-time; capture a copy in TMPOUT for .cache/ bookkeeping
-if python3 -m pytest tests/ --override-ini="addopts=" --tb=short -v 2>&1 | tee -a "$LIVE_LOG" > "$TMPOUT"; then
+if $DI_CMD 2>&1 | tee -a "$LIVE_LOG" > "$TMPOUT"; then
     TS=$(date +%Y%m%d_%H%M%S)
     { printf '=== %s ===\n' "$(date)"; cat "$TMPOUT"; printf '\n'; } > "$ROOT/.cache/last_full_run_passed_${TS}.txt"
     rm -f "$SENTINEL" "$LAST_RUN"
