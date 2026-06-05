@@ -1,9 +1,19 @@
 function [T, prof, recipe] = DataExplorer(source, options)
-%SMARTEXPLORE  Forgiving data exploration for mixed-type tables.
+%DATAEXPLORER  Forgiving data exploration for mixed-type tables.
 %
 %   T = DataExplorer()                  file picker dialog
-%   T = DataExplorer(filename)          load CSV, TSV, TXT, XLSX, or ZIP
-%   T = DataExplorer(T_in)             explore an existing table
+%   T = DataExplorer(filename)          load CSV, TSV, TXT, XLSX, ZIP, or NetCDF
+%   T = DataExplorer(T_in)              explore an existing table
+%
+%   Outputs
+%   ───────
+%   [T, prof, recipe] = DataExplorer(...)
+%     T       loaded, profiled table
+%     prof    profile struct (column types, roles, skip flags, skewness, …)
+%     recipe  the generated recipe as a string array (one line per element)
+%   Requesting the recipe (the 3rd output) returns the code WITHOUT running it —
+%   no figures are drawn.  T = DataExplorer(...) and [T,prof] = DataExplorer(...)
+%   render as usual.
 %
 %   Optional name-value arguments
 %   ─────────────────────────────
@@ -49,12 +59,9 @@ arguments
     options.RandSeed        (1,1) double  = NaN         % seed stratifier choice for a reproducible recipe
 end
 
-% Outputs: [T, prof, recipe].  recipe is the generated recipe as a string array
-% (one line per element).  Requesting it changes behavior: when the recipe IS
-% requested (nargout>=3), DataExplorer returns the code WITHOUT running it (no
-% figures) — "give me the recipe", not "run it".  T = DataExplorer(...) and
-% [T,prof] = DataExplorer(...) render as usual.  Initialized here so every
-% early-return path (NetCDF multi-variable fast-path, empty table) defines them.
+% prof and recipe are produced by the pipeline below; initialize them here so
+% every early-return path (NetCDF multi-variable fast-path, empty table) still
+% defines all three outputs.  (Requesting the recipe skips rendering — see help.)
 prof   = struct([]);
 recipe = strings(0, 1);
 
@@ -252,13 +259,13 @@ T = load_netcdf(filepath, options);
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-% load_from_zip moved to de_read.m (de_read_from_zip)
+% load_from_zip is now de_load's local de_load_from_zip
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-% load_excel moved to de_read.m (de_read_excel)
+% load_excel is now de_load's local de_load_excel
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-% load_text moved to de_read.m (de_read_text)
+% load_text is now de_load's local de_load_text
 
 
 

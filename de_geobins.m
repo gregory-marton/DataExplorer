@@ -33,8 +33,9 @@ function [fig, ax] = de_geobins(T, options)
 %   Optional name-value arguments
 %   ─────────────────────────────
 %   GeoCol           Column of codes / names in T
-%   ColorCol         Numeric column for tile fill
-%   TimeCol          Time axis — activates slider
+%   ColorCol         Numeric column for tile fill (choropleth / heatmap_cat)
+%   TimeCol          Time axis — encoded as a per-tile heatmap x-axis or sparkline
+%                    (never a slider); wide year columns are pivoted to long form
 %   Title            Figure title
 %   Colormap         Name or Nx3 matrix (default 'parula')
 %   Grid             Grid specification (see above, default 'us-states')
@@ -43,9 +44,15 @@ function [fig, ax] = de_geobins(T, options)
 %   MapLabel         Label shown in legend/title (default: Grid name)
 %   FontSize         Tile font size (default 7)
 %   CLim             Fix color axis [lo, hi]
-%   CellRenderer     'color' (default) or 'heatmap_cat'
+%   Scale            'auto' (default) | 'log' | 'linear' — quantitative axis of the
+%                    active renderer (choropleth color, or value_ladder bar height)
+%   CellRenderer     'color' (default) | 'heatmap_cat' | 'scatter_cat' | 'value_ladder'
+%   ValueCols        value_ladder: numeric columns drawn as per-tile bars
+%   ConfoundNote     Small red caveat drawn in the figure body (e.g. a mean that
+%                    mixes sub-populations); empty = none
+%   LegendNote       Extra legend text
 %   CatCol, TopK, SharedYLim, CatColors, XCol, YCol, SharedXLim
-%                    Passed through to de_tilegrid
+%                    Passed through to de_tilegrid (CatCol drives heatmap_cat/scatter_cat)
 %
 %   Returns
 %   ───────

@@ -18,10 +18,16 @@ function [fig, ax] = de_tilegrid(T, grid, normed, options)
 %   grid   struct with fields: codes (cell), rows, cols, is_overflow
 %   normed (:,1) string — normalized tile codes, same length as T
 %
-%   Name-value options
+%   Name-value options (see the arguments block for the full set)
 %   ──────────────────
 %   ColorCol          numeric column for tile fill
-%   TimeCol           time axis → slider
+%   TimeCol           time axis — drawn as a per-tile heatmap x-axis or sparkline
+%                     (never a slider)
+%   CellRenderer      'color' (default) | 'heatmap_cat' | 'scatter_cat' | 'value_ladder'
+%   CatCol            categorical for heatmap_cat / scatter_cat
+%   ValueCols         value_ladder: numeric columns drawn as per-tile bars
+%   Scale             'auto' | 'log' | 'linear' — color / bar quantitative axis
+%   ConfoundNote      small red caveat drawn in the figure body
 %   Title             figure / window title
 %   Colormap          colormap name or Nx3 matrix (default 'parula')
 %   OverflowEdgeColor RGB for orphan tile border (default amber)

@@ -60,25 +60,28 @@ The function executes a linear pipeline:
    - String→numeric conversion if ≥70% of values parse successfully
    - Flags columns >80% missing or with all-unique values (IDs) as skippable
 
-3. **Echo Load Code** (`se_echo_load_code`)
-   - Prints copy-pasteable MATLAB code to the console to reproduce the load step programmatically
+3. **Assemble recipe** (`se_assemble_recipe` + `cg_*` code generators)
+   - Builds a complete, self-contained MATLAB script (load + clean + every plot) as a string, writes it to `tempdir/dataexplorer_<name>.m`, and echoes it to the console. This is the canonical code path (see "Code generation is the primitive").
+   - Returned as DataExplorer's 3rd output (`[T, prof, recipe]`); **requesting the recipe skips execution** (no figures).
 
-4. **Report** (`se_report`)
-   - Prints compact variable summary table to console
+4. **Execute** (eval the recipe's plot sections)
+   - When the recipe is *not* requested, DataExplorer `eval`s the plot sections to render figures (T and prof are already loaded, so the load/clean sections are skipped).
 
-5. **Plot** (`se_plot` + specialized sub-functions)
-   - **Overview figure** (`se_plot_overview`): paginated 5×3 grid of diagnostic tiles for every column
-   - **Geo figure** (`se_plot_geo`): auto-detects lat/lon columns (case-insensitive) and renders an interactive map
-   - **Time series** (`se_plot_timeseries`): activated when datetime or "year" columns are found
-   - **Pairplot/scatter matrix** (`se_plot`): np×np grid for selected columns with type-aware dispatch per cell (scatter, boxplot, violin, heatmap, histogram, bar)
+5. **Plots** (standalone `de_*` functions, invoked by the recipe — there is no `se_plot`)
+   - **Overview** (`de_overview`): paginated 4×2 grid of per-column diagnostic tiles
+   - **Pairplot** (`de_pairplot`): np×np scatter matrix, type-aware per cell (scatter, boxplot, violin, heatmap, histogram, bar); capped at `MaxVars`
+   - **Choropleths** (`de_statebins`/`de_countrybins`/`de_geobins` → `de_tilegrid`): plain color, state×level `heatmap_cat`, or `value_ladder`; single-numeric maps are stratified by a weighted-random categorical, and a small red `ConfoundNote` flags a mean that mixes sub-populations
+   - **Time series** (`de_timeseries`): overlaid lines and/or stacked area
+   - **Geo scatter** (`de_geoscatter`): lat/lon point map
+   - **Categorical associations / drill-down** (`de_plot_cat_association`, grouped time series)
 
 ## Key Design Principles
 
-**Type-aware plotting dispatch:** Off-diagonal pairplot cells call different sub-functions (`plot_num_num`, `plot_num_cat`, `plot_cat_cat`, etc.) based on the type pair of the two variables. Diagonal cells call `plot_num_diag` or `plot_cat_diag`. There is also awareness of temporal and geographic axes, so automatically tries to show timelines, statebins or geos, all colored by categoricals and tracking numeric values. Totals are often detected and treated specially. 
+**Type-aware plotting dispatch:** `de_pairplot` chooses each cell's plot from the type pair of its two variables — numeric×numeric scatter, numeric×categorical box/violin or ranked-median dot plot, categorical×categorical co-occurrence heatmap, datetime×numeric time-ordered scatter; diagonal cells are histograms or bar charts (via its `pp_*` local helpers). Beyond the pairplot there is awareness of temporal and geographic axes, so the recipe also emits timelines, statebins/choropleths, and geo scatters, colored by categoricals and tracking numeric values. Totals are often detected and treated specially.
 
 **Forgiving data handling:** Heuristics are intentionally lenient (70% numeric threshold, 20+ missing sentinels, delimiter auto-detection). When modifying the profiler, preserve this tolerance.
 
-**Smart column selection** (`se_select_columns`): Prefers numeric columns for the pairplot, avoids ID-like columns (all-unique values). `MaxVars` (default 8) caps the pairplot size; `Columns` overrides the selection entirely.
+**Smart column selection** (`de_select_columns`): Prefers numeric columns for the pairplot, avoids ID-like columns (all-unique values), and collapses correlated families to one representative. `MaxVars` (default 8) caps the pairplot size; `Columns` overrides the selection entirely.
 
 **Emphasis on information density with readability:** Axes are labelled, titles and legends provided, units shown where available, tooltips show categories as well as values, central tendencies are accompanied by bootstrapped confidence regions, labels show data cardinality and group cardinality. Axis limits are consistent across patches in larger visualizations to allow for comparisons, and other good visualization practices.
 
@@ -89,7 +92,7 @@ The function executes a linear pipeline:
 ## Optional Toolbox Dependencies
 
 - **Statistics and Machine Learning Toolbox:** Checked at runtime via `ver('stats')`. Enables violin plots and advanced distribution features. Code must degrade gracefully when absent.
-- **Mapping Toolbox:** Used for geo figure rendering.
+- **Mapping Toolbox:** Used only by `de_usamap` (a teaching demo). The production geo plots — `de_statebins`/`de_countrybins`/`de_geobins`/`de_geoscatter` — need no toolbox.
 
 `de_reservoir_sample.m` and `de_stride_sample.m` use only base MATLAB.
 

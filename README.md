@@ -61,7 +61,7 @@ Plots produced include:
 
 - **Overview** — paginated 4 × 2 grid of per-variable diagnostic tiles
 - **Time series** — overlaid lines and stacked-area views; detects year-columns and datetime columns automatically
-- **Geographic** — US state choropleth (`de_statebins`), world choropleth (`de_countrybins`), lat/lon scatter map
+- **Geographic** — US state / world tile choropleths (`de_statebins`, `de_countrybins`) and lat/lon scatter maps. A single-variable map is shown *stratified* by a categorical (a state × level heatmap) when one explains the values — a bare per-region mean mixes sub-populations — and a small red caveat flags any mean that stays confounded
 - **Pairplot** — type-aware scatter matrix (scatter, boxplot, violin, histogram, heatmap) for selected columns
 - **Categorical drill-down** — grouped time series and scatter-by-category for each categorical grouping column
 
@@ -84,12 +84,17 @@ The standalone `de_*` functions can be used independently of DataExplorer:
 
 | Function | Purpose |
 |----------|---------|
+| `de_load(file, ...)` | Load CSV/TSV/TXT/Excel/ZIP and profile it → `[T, prof]`; the shared loader |
 | `de_profile(T)` | Profile a table: classify columns, recode missing values, convert types |
 | `de_overview(T, prof)` | Paginated per-variable diagnostic tile grid |
+| `de_pairplot(T, prof, sel)` | Type-aware scatter matrix for the selected columns |
 | `de_histogram(x, name)` | Publication-quality histogram with KDE and summary stats |
 | `de_statebins(T, ...)` | US state tile choropleth (no Mapping Toolbox required) |
 | `de_countrybins(T, ...)` | World tile choropleth |
-| `de_geoscatter(T, ...)` | Lat/lon scatter map |
+| `de_geobins(T, ...)` | Tile choropleth for any region/grid (the engine behind the two above) |
+| `de_geoscatter(lon, lat, color, size, ...)` | Lat/lon scatter map (color + size encode values) |
+| `de_variance_explained(x, g)` | One-way ANOVA η²: how strongly categorical `g` stratifies numeric `x` |
+| `de_pick_stratifier(T, prof, ...)` | Weighted-random pick of a categorical to stratify a numeric by |
 | `de_pivot_wide_years(T, yr_cols)` | Pivot wide year-columns to long format |
 | `de_reservoir_sample(file, n)` | Random reservoir sample from a large file |
 | `de_stride_sample(file, ...)` | Deterministic stride sample; supports NetCDF |
@@ -257,8 +262,8 @@ Hard-won, in roughly the order they bit us:
 
 - **A browser variant.** A JavaScript port deployable to GitHub Pages — zero
   install, runs entirely client-side (file reading in the browser, no server). The
-  same five-phase pipeline, with the recipe becoming a self-contained HTML file the
-  student edits. The leaning is toward [Observable Plot](https://observablehq.com/plot/)
+  same load → profile → echo → show pipeline, with the recipe becoming a
+  self-contained HTML file the student edits. The leaning is toward [Observable Plot](https://observablehq.com/plot/)
   (a lighter spiritual successor to D3) for the generated charts.
 - **One mental model across languages.** Whatever the host (MATLAB today, JS and
   potentially Python later), the contract stays the same: load → profile → echo a
