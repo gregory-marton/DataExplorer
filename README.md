@@ -37,10 +37,13 @@ disp(recipe(1:5))                                  % peek at the first lines
 
 After the run, the console shows a copy-pasteable MATLAB script that reproduces
 everything DataExplorer just did — the same code returned as `recipe` above.
-Save it with:
+Save it with `save_recipe` — pass the returned `recipe` (preferred), or call it
+bare to grab the most recent run's recipe from the temp directory:
 
 ```matlab
-save_recipe('my_analysis.m')
+[T, prof, recipe] = DataExplorer('mydata.csv');
+save_recipe('my_analysis.m', recipe);   % preferred — writes exactly this recipe
+save_recipe('my_analysis.m')            % fallback — most recent run's recipe
 ```
 
 ## What it does

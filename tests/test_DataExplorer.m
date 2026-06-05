@@ -1229,6 +1229,18 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyTrue(exist(dest, 'file') == 2);
         end
 
+        function test_save_recipe_writes_passed_recipe(testCase)
+            % An explicitly-passed recipe (DataExplorer's 3rd output) is written
+            % directly — no reliance on the newest-file-in-tempdir guess.
+            delete(fullfile(tempdir, 'dataexplorer_*.m'));   % prove independence
+            recipe = ["% header"; "de_overview(T, prof);"; "x = 1;"];
+            dest = [tempname '.m'];
+            cleanup = onCleanup(@() delete(dest));
+            save_recipe(dest, recipe);
+            written = readlines(dest);
+            testCase.verifyTrue(any(contains(written, "de_overview(T, prof);")));
+        end
+
     end
 
     % ─────────────────────────────────────────────────────────────────────────
