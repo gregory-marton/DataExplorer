@@ -15,12 +15,23 @@ from pathlib import Path
 from conftest import ROOT, run_matlab
 
 
+# Several tests assert different things about the SAME fixture's recipe (e.g. the
+# CamelCase fixture feeds 4 tests).  Generating it is the expensive step (a full
+# headless DataExplorer run), so cache by (csv_text, extra) and reuse within a
+# session — turns 4 identical camelcase runs into 1.
+_RECIPE_CACHE: dict[tuple[str, str], str] = {}
+
+
 def _gen_recipe(csv_text: str, matlab_bin: str, extra: str = "") -> str:
     """Write csv_text to a temp file, run DataExplorer headless, return recipe text.
 
     extra — additional DataExplorer name-value args, e.g. ", 'RandSeed', 1" (the
     geo stratifier choice is otherwise random, so tests pin it for reproducibility).
+    Result is cached by (csv_text, extra) for the session.
     """
+    cache_key = (csv_text, extra)
+    if cache_key in _RECIPE_CACHE:
+        return _RECIPE_CACHE[cache_key]
     tmp = Path(tempfile.mkdtemp())
     # Unique csv stem → unique recipe filename (dataexplorer_<stem>.m).  All
     # recipe-smoke fixtures once used "smoke.csv", so a concurrent run (a deferred
@@ -38,7 +49,9 @@ def _gen_recipe(csv_text: str, matlab_bin: str, extra: str = "") -> str:
     res = run_matlab(script, timeout=240, matlab=matlab_bin)
     assert res.returncode == 0, f"MATLAB failed:\n{res.stderr}\n{res.stdout}"
     assert out.exists(), f"No recipe produced:\n{res.stdout}"
-    return out.read_text()
+    recipe_text = out.read_text()
+    _RECIPE_CACHE[cache_key] = recipe_text
+    return recipe_text
 
 
 def _camelcase_csv(n=120):
