@@ -33,11 +33,20 @@ T = de_stride_sample('climate.nc', Variable='prcp', MaxRows=10000)
 
 The function executes a linear pipeline:
 
-1. **Load** (`se_load` + format dispatchers)
-   - `load_from_zip`: interactive file selection from ZIP archives
-   - `load_netcdf`: auto-iterates all data variables (skipping coordinates); heuristic for >2D reduction (flatten if small, mean over time dim otherwise); interactive only when neither `NCVariable` nor `AutoSelect` is set
-   - `load_excel`: multi-sheet detection with size-based selection prompt
-   - `load_text`: delimiter auto-detection, header sniffing, UTF-8/ASCII fallback
+1. **Load**
+   - Tabular formats (ZIP / Excel / text) go through the shared **`de_load`** library
+     (the single loader; also usable standalone — `T = de_load('file.csv')`).
+     `de_load` loads + profiles and returns `[T, prof]`. Ambiguity (multi-file ZIP,
+     multi-sheet workbook) resolves by `Interactive`: DataExplorer passes
+     `Interactive=true` (prompt); the default is an error listing the candidates +
+     the `InnerFile=`/`Sheet=` option to add and re-run; `AutoSelect=true` picks the
+     default. ZIP entry selection, Excel multi-sheet detection, delimiter sniffing,
+     and header re-sniffing all live in `de_load`'s local functions.
+   - NetCDF stays in DataExplorer (`se_load` → `load_netcdf` + the `nc_*` family):
+     auto-iterates all data variables (skipping coordinates); heuristic for >2D
+     reduction (flatten if small, mean over time dim otherwise); interactive only
+     when neither `NCVariable` nor `AutoSelect` is set. This is the multi-variable
+     orchestration that produces several explorations, so it sits above `de_load`.
 
 2. **Profile & Clean** (`se_profile`)
    - Classifies columns as: numeric, categorical, datetime, duration, logical, unknown
