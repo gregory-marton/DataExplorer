@@ -48,11 +48,14 @@ The function executes a linear pipeline:
      the `InnerFile=`/`Sheet=` option to add and re-run; `AutoSelect=true` picks the
      default. ZIP entry selection, Excel multi-sheet detection, delimiter sniffing,
      and header re-sniffing all live in `de_load`'s local functions.
-   - NetCDF stays in DataExplorer (`se_load` → `load_netcdf` + the `nc_*` family):
-     auto-iterates all data variables (skipping coordinates); heuristic for >2D
-     reduction (flatten if small, mean over time dim otherwise); interactive only
-     when neither `NCVariable` nor `AutoSelect` is set. This is the multi-variable
-     orchestration that produces several explorations, so it sits above `de_load`.
+   - NetCDF also goes through `de_load` (no separate path): data variables sharing
+     a coordinate grid are **conformable** and combine into one table — each is
+     stride-sampled (`de_stride_sample`) identically and hstacked as a column
+     (coordinates + one column per variable). A file mixing differently-shaped
+     variables is treated like a multi-sheet workbook: `NCVariable=` picks that
+     variable's group, `AutoSelect` the largest, else it errors/prompts with the
+     listing. "Conformable or ask" — one single-table contract for every source.
+     (Loading non-conformable variables *together* as multiple tables is future work.)
 
 2. **Profile & Clean** (`se_profile`)
    - Classifies columns as: numeric, categorical, datetime, duration, logical, unknown
@@ -106,7 +109,7 @@ The function executes a linear pipeline:
 
 `examples/` contains 13 datasets covering the full format range used for manual testing and (eventually) regression testing: Excel (multi-sheet), ZIP (CSV inside), NetCDF, ASC. Notable:
 - `Prod_dataset.xlsx` — US State Energy Data System (EIA/SEDS). 4 sheets; the **Data** sheet is `A1:BO1780` with `(Data_Status, StateCode, MSN, 1960, 1961, …, 2023)` — year columns across the top, ~50 states × ~35 MSN energy-type codes per row. Drives tasks 3, 4, and 5.
-- `ncdd-202501-grd-scaled.nc` — NetCDF gridded climate data; auto-iterates data variables, averaging over the time dimension (too large to flatten).
+- `ncdd-202501-grd-scaled.nc` — NetCDF gridded climate data; conformable data variables combine into one stride-sampled table (coords + a column per variable).
 - `LLCP2024.ASC` and `LLCP2024ASC.zip` — same dataset in raw and zipped form; pick one.
 - ZIP files containing multiple files trigger the interactive file picker.
 
@@ -169,7 +172,7 @@ amendment: `se_profile` does **not** attempt numeric sentinel replacement (the -
 
 The generated script must be self-contained — includes full load + clean code, runs without DataExplorer installed.
 
-Also: fix and test the existing `se_echo_load_code` — it gets subsumed into the new load section.
+~~Also: fix and test the existing `se_echo_load_code` — it gets subsumed into the new load section.~~ **Done (2026-06-05):** `se_echo_load_code` and `se_report` were deleted; `cg_load_code` inside the assembled recipe is now the single load-code path. No non-recipe output paths remain.
 
 amendment — Decide library vs. vanilla code in recipes
 Recipe output is currently vanilla MATLAB (portable, no dependency). The alternative: expose DataExplorer internals as a named library (`de_profile`, `de_histogram`, etc.) and use those in recipe code. This produces cleaner, more readable output and gives students reusable vocabulary, but adds a dependency. Decide this question before finalizing Task 7 recipe format — the baseline session (Task 1) is the right moment to look at actual recipe output and judge readability. Candidate library functions to brainstorm: `se_select_columns`/interestingness ranker, `se_profile`, best-plot generators, outlier/sentinel detection.

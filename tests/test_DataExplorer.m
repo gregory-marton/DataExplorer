@@ -2489,12 +2489,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_netcdf_spatial_recipe_contains_geoscatter(testCase)
-            % Recipe for a spatial grid NetCDF must call de_stride_sample and de_geoscatter.
-            % Clean up any stale recipe files before running so the "newest" check is reliable.
-            stale = dir(fullfile(tempdir, 'dataexplorer_*.m'));
-            for si = 1:numel(stale)
-                delete(fullfile(stale(si).folder, stale(si).name));
-            end
+            % Recipe for a spatial grid NetCDF must call de_stride_sample,
+            % aggregate per grid cell with groupsummary, and call de_geoscatter.
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
             nlon = 8; nlat = 6; ntime = 3;
@@ -2507,17 +2503,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             ncwrite(tmp,'time',      (1:ntime)');
             ncwrite(tmp,'prcp',      rand(nlon,nlat,ntime));
 
-            old_vis = get(0,'DefaultFigureVisible');
-            set(0,'DefaultFigureVisible','off');
-            cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
-
-            DataExplorer(tmp);
-
-            hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
-            testCase.assertNotEmpty(hits, 'Expected a recipe file in tempdir');
-            [~, newest] = max([hits.datenum]);
-            recipe_path = fullfile(hits(newest).folder, hits(newest).name);
-            recipe_text = fileread(recipe_path);
+            % nargout>=3 returns the recipe as a string array without rendering.
+            [~, ~, recipe] = DataExplorer(tmp);
+            recipe_text = strjoin(recipe, newline);
 
             testCase.verifyTrue(contains(recipe_text, 'de_stride_sample'), ...
                 'Recipe must call de_stride_sample');
@@ -2526,6 +2514,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyTrue(contains(recipe_text, 'de_geoscatter'), ...
                 'Recipe must call de_geoscatter');
 
+            recipe_path = [tempname '.m'];
+            clr = onCleanup(@() delete(recipe_path));
+            writelines(recipe, recipe_path);
             info = checkcode(recipe_path, '-string');
             n    = numel(regexp(info, 'L \d+', 'match'));
             testCase.verifyEqual(n, 0, ...
@@ -2533,8 +2524,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_load_netcdf_large_3d_uses_slice_not_mean(testCase)
-            % A 3D variable larger than MaxRows×10 must load without hanging.
-            % raw='1' (mean over full array) hangs; raw='2' (middle slice) reads dim_a×dim_b only.
+            % A large 3D variable must load without hanging. de_load routes the
+            % selected variable through de_stride_sample, which strides each
+            % dimension down to MaxRows rather than reading/averaging the whole grid.
             % Neutral dim names (dim_a, dim_b, dim_c) avoid geo/timeseries plot detectors.
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
@@ -2552,8 +2544,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0,'DefaultFigureVisible','off');
             cl2 = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            % NCVariable bypasses fast-path, goes through load_netcdf heuristic.
-            % MaxRows=100 forces total_elems (16000) >> MaxRows*10 (1000) → raw='2' heuristic fires.
+            % NCVariable selects 'value'; de_load stride-samples it to MaxRows rows.
             T = DataExplorer(tmp, NCVariable='value', MaxRows=100);
             testCase.verifyClass(T, 'table');
             testCase.verifyGreaterThan(height(T), 0);

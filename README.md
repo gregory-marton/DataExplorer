@@ -285,5 +285,25 @@ All core functionality runs without optional toolboxes.
 | CSV / TSV / TXT | Delimiter auto-detected; header sniffed |
 | Excel (`.xlsx`, `.xls`, `.xlsm`) | Multi-sheet detection; prompts when ambiguous |
 | ZIP | Extracts and loads the relevant file inside |
-| NetCDF (`.nc`, `.nc4`) | Auto-iterates data variables; handles 2-D and 3-D grids |
+| NetCDF (`.nc`, `.nc4`) | Variables sharing a grid load together as columns of one table; otherwise pick one (see below) |
 | ASC fixed-width | BRFSS-style fixed-width text |
+
+### NetCDF: conformable or ask
+
+Data variables that share a coordinate grid (e.g. `temp` and `prcp`, both on
+`lon × lat × time`) are **conformable**: they are stride-sampled identically and
+combined into a single table — coordinate columns plus one column per variable.
+This keeps cross-variable analysis (pairplots, correlations, gridded mean/std
+maps) working across all of them.
+
+When a file mixes differently-shaped variables, it is treated exactly like a
+multi-sheet workbook or a multi-file ZIP — **pick one**:
+
+- `NCVariable='name'` loads that variable's conformable group;
+- `AutoSelect=true` picks the largest group;
+- otherwise DataExplorer lists the variables (with their dimensions) and asks.
+
+> **Future work — multi-table sources.** Loading *several* Excel sheets / ZIP
+> CSVs / non-conformable NetCDF variables *together* (as an array of tables,
+> exploring each) is a deliberate future direction, not yet supported. Today every
+> source resolves to a single table ("conformable or ask").

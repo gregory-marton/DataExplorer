@@ -15,20 +15,25 @@ function [T, prof, recipe] = DataExplorer(source, options)
 %   no figures are drawn.  T = DataExplorer(...) and [T,prof] = DataExplorer(...)
 %   render as usual.
 %
+%   NetCDF
+%   ──────
+%   Data variables sharing a coordinate grid load together as columns of one
+%   table (coordinates + one column per variable), so cross-variable views
+%   (pairplots, correlations, gridded maps) work across them.  A file mixing
+%   differently-shaped variables is treated like a multi-sheet workbook: pick
+%   one with NCVariable= (or the largest group with AutoSelect).
+%
 %   Optional name-value arguments
 %   ─────────────────────────────
 %   MaxRows        (10000)   random-sample large files to this many rows
 %   MaxVars        (8)       columns shown in the plot matrix; prefers numeric
 %   Columns        ([])      override: specific names or indices to plot
 %   MissingStrings (list)    extra strings to recode as missing (see defaults)
-%   AutoSelect     (false)   skip all interactive prompts; pick defaults
-%                            (largest sheet/file; NetCDF: largest variable, flatten 3D+)
+%   AutoSelect     (false)   skip all interactive prompts; pick defaults (largest
+%                            sheet/file; NetCDF: combine all conformable variables)
 %   Sheet          ("")      load a specific Excel sheet by name (bypasses prompt)
 %   InnerFile      ("")      load a specific file from a ZIP by name (bypasses prompt)
 %   NCVariable     ("")      NetCDF: variable name to load (bypasses variable prompt)
-%   NCReduction    ("")      NetCDF 3D+: "flatten" | "mean" | "slice" (bypasses reduction prompt)
-%   NCDimension    (1)       NetCDF: dimension index for "mean" or "slice" reduction
-%   NCSliceIndex   (1)       NetCDF: element index along NCDimension when NCReduction="slice"
 %   RandSeed       (NaN)     seed for the (otherwise random) stratifier choice in
 %                            geo plots; set for a reproducible recipe, leave unset
 %                            to get a different valid stratification on each run
@@ -53,15 +58,12 @@ arguments
     options.Sheet           (1,1) string  = ""          % load a specific Excel sheet by name
     options.InnerFile       (1,1) string  = ""          % load a specific file from a ZIP
     options.NCVariable      (1,1) string  = ""          % NetCDF: variable name to load
-    options.NCReduction     (1,1) string  = ""          % NetCDF 3D+: "flatten"|"mean"|"slice"
-    options.NCDimension     (1,1) double  = 1           % NetCDF: dimension index for mean/slice
-    options.NCSliceIndex    (1,1) double  = 1           % NetCDF: element index when NCReduction="slice"
     options.RandSeed        (1,1) double  = NaN         % seed stratifier choice for a reproducible recipe
 end
 
 % prof and recipe are produced by the pipeline below; initialize them here so
-% every early-return path (NetCDF multi-variable fast-path, empty table) still
-% defines all three outputs.  (Requesting the recipe skips rendering — see help.)
+% every early-return path (no file selected, empty table) still defines all
+% three outputs.  (Requesting the recipe skips rendering — see help.)
 prof   = struct([]);
 recipe = strings(0, 1);
 
