@@ -582,6 +582,22 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEqual(height(T), 5);
         end
 
+        function test_de_load_excel_multisheet_errors_with_options(testCase)
+            % A multi-sheet workbook with no Sheet pinned → informative error
+            % (non-interactive by default), not a silent guess.
+            f = fullfile(testCase.EXAMPLES_DIR, 'Prod_dataset.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('Prod_dataset.xlsx not found'); end
+            testCase.verifyError(@() de_load(f), 'de_load:multipleSheets');
+        end
+
+        function test_de_load_excel_sheet_by_index(testCase)
+            % de_load supports a 1-based numeric Sheet index.
+            f = fullfile(testCase.EXAMPLES_DIR, 'Prod_dataset.xlsx');
+            if ~exist(f, 'file'), testCase.assumeFail('Prod_dataset.xlsx not found'); end
+            T = de_load(f, 'Sheet', 1, 'MaxRows', 50);
+            testCase.verifyGreaterThan(width(T), 0);
+        end
+
         function test_select_columns_excludes_family_nonreps(testCase)
             % When a family is provided, de_select_columns keeps only the
             % representative (first member) and excludes the rest.
