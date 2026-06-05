@@ -153,8 +153,18 @@ if ischar(source) || isstring(source)
     end
 end
 
+%% ── 1+2.  Load & profile ──────────────────────────────────────────────────
 if ischar(source) || isstring(source)
-    T = se_load(string(source), options);
+    [~, ~, e_] = fileparts(string(source));
+    if ismember(lower(string(e_)), [".nc", ".nc4", ".netcdf"])
+        T = se_load(string(source), options);              % NetCDF (multi-var path)
+        [T, prof] = se_profile(T, options.MissingStrings);
+    else
+        [T, prof] = de_load(string(source), ...            % tabular: load + profile
+            'Interactive', true, 'AutoSelect', options.AutoSelect, ...
+            'MaxRows', options.MaxRows, 'Sheet', options.Sheet, ...
+            'InnerFile', options.InnerFile, 'MissingStrings', options.MissingStrings);
+    end
 elseif istable(source)
     T = source;
     if height(T) == 0
@@ -162,13 +172,11 @@ elseif istable(source)
         return
     end
     fprintf('  Using existing table: %d × %d\n', height(T), width(T));
+    [T, prof] = se_profile(T, options.MissingStrings);
 else
     error('DataExplorer:badInput', ...
         'source must be a filename (string/char) or a table.');
 end
-
-%% ── 2.  Profile & clean ───────────────────────────────────────────────────
-[T, prof] = se_profile(T, options.MissingStrings);
 
 % Attach a display name for the figure title
 if ischar(source) || isstring(source)
@@ -213,21 +221,20 @@ end % ── DataExplorer ──────────────────
 
 % ── se_load ─────────────────────────────────────────────────────────────────
 function T = se_load(filepath, options)
-%SE_LOAD  NetCDF is handled here (multi-variable orchestration lives in
-%   DataExplorer); all tabular formats (ZIP/Excel/text) go through the shared
-%   de_read loader.
+%SE_LOAD  NetCDF loader (multi-variable orchestration lives in DataExplorer).
+%   Tabular formats (ZIP/Excel/text) go through the shared de_load library.
 if ~isfile(filepath)
     error('DataExplorer:fileNotFound', ...
         'File not found: %s\n(current folder: %s)', filepath, pwd);
 end
 [~, basename, ext] = fileparts(filepath);
 ext = string(lower(ext));
-if ismember(ext, [".nc", ".nc4", ".netcdf"])
-    fprintf('\n  Loading: %s%s\n', basename, ext);
-    T = load_netcdf(filepath, options);
-    return
+if ~ismember(ext, [".nc", ".nc4", ".netcdf"])
+    error('DataExplorer:notNetCDF', ...
+        'se_load handles only NetCDF; use de_load for %s', ext);
 end
-T = de_read(filepath, options);
+fprintf('\n  Loading: %s%s\n', basename, ext);
+T = load_netcdf(filepath, options);
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─

@@ -1,143 +1,469 @@
 function [T, prof] = de_load(filepath, options)
-%DE_LOAD  Load a tabular file, optionally sample it, and profile it.
+%DE_LOAD  Load a tabular file (CSV/TSV/TXT/XLSX/ZIP), optionally sample, profile.
+%   The single loader shared by DataExplorer and direct/student use.  NetCDF is
+%   handled by DataExplorer (its multi-variable orchestration sits above this).
 %
 %   T          = de_load('data.csv')
-%   T          = de_load('data.xlsx', Sheet='Data')
-%   T          = de_load('data.xlsx', Sheet=7)
+%   T          = de_load('data.xlsx', Sheet='Data')      % name or 1-based index
 %   [T, prof]  = de_load('bigfile.csv', MaxRows=50000)
-%   [T, prof]  = de_load('Prod_dataset.xlsx', Sheet='Data', MaxRows=10000)
+%   T          = de_load('annual_aqi_by_county_2025.zip')      % single file → opens it
+%   T          = de_load('multi.zip', InnerFile='the_one.csv') % pick from several
 %
-%   For text files (CSV/TSV/TXT) with MaxRows set, uses de_reservoir_sample so
-%   every row has equal probability regardless of file size.
-%   For Excel with MaxRows set, loads the sheet first then draws a uniform
-%   random subsample (Excel cannot be streamed).
-%
-%   ZIP archives are opened directly when they contain exactly one data file.
-%   When several are present de_load does NOT guess — it errors with the list of
-%   candidates (the same information the interactive loader shows) so you can add
-%   InnerFile="…" to the call and re-run:
-%
-%   T = de_load('annual_aqi_by_county_2025.zip')              % single file → opens it
-%   T = de_load('multi.zip', InnerFile='the_one_i_want.csv')  % pick from several
+%   Ambiguity (multi-file ZIP, multi-sheet workbook) resolves three ways:
+%     Interactive=false (default)  → error listing the candidates + the option to
+%                                    add (InnerFile=…/Sheet=…) and re-run.
+%     Interactive=true             → prompt (what DataExplorer uses).
+%     AutoSelect=true              → pick the default (largest) without asking.
 %
 %   Name-value options
 %   ──────────────────
-%   Sheet                Sheet name (string) or 1-based index (integer) for xlsx (default: first sheet)
-%   InnerFile            Which file to read from a multi-file ZIP (default: "" → must be unambiguous)
-%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx, default: auto-detect)
-%   DataRange            Data start cell, e.g. 'A2' (xlsx, default: auto-detect)
+%   Sheet                Sheet name (string) or 1-based index (integer) for xlsx
+%   InnerFile            Which file to read from a multi-file ZIP
+%   AutoSelect           Pick the default on ambiguity without prompting
+%   Interactive          Prompt on ambiguity (default false)
+%   MissingStrings       Extra strings to recode as missing (passed to de_profile)
+%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx)
+%   DataRange            Data start cell, e.g. 'A2' (xlsx)
 %   MaxRows              Row budget. Inf = load everything (default).
 
 arguments
     filepath (1,1) string
     options.Sheet               = ""
-    options.InnerFile           (1,1) string = ""
-    options.VariableNamesRange  (1,1) string = ""
-    options.DataRange           (1,1) string = ""
-    options.MaxRows             (1,1) double = Inf
+    options.InnerFile           (1,1) string  = ""
+    options.AutoSelect          (1,1) logical = false
+    options.Interactive         (1,1) logical = false
+    options.MissingStrings      (1,:) string  = string([])
+    options.VariableNamesRange  (1,1) string  = ""
+    options.DataRange           (1,1) string  = ""
+    options.MaxRows             (1,1) double  = Inf
 end
 
-% ZIP: resolve to a single inner data file (or fail with the candidate list).
-[~, ~, ext0] = fileparts(filepath);
-if lower(string(ext0)) == ".zip"
-    filepath = de_load_pick_zip_member(filepath, options.InnerFile);
+T = de_load_dispatch(filepath, options);
+
+if isempty(options.MissingStrings)
+    [T, prof] = de_profile(T);
+else
+    [T, prof] = de_profile(T, options.MissingStrings);
+end
 end
 
-[~, ~, ext] = fileparts(filepath);
-is_excel = ismember(lower(string(ext)), [".xlsx", ".xls", ".xlsm", ".xlsb"]);
 
-if is_excel
-    io_args = {};
+% ── de_load_dispatch ──────────────────────────────────────────────────────────
+function T = de_load_dispatch(filepath, options)
+%DE_LOAD_DISPATCH  Detect format and load a raw (unprofiled) table.
+if ~isfile(filepath)
+    error('DataExplorer:fileNotFound', ...
+        'File not found: %s\n(current folder: %s)', filepath, pwd);
+end
+
+[~, basename, ext] = fileparts(filepath);
+ext = string(lower(ext));
+fprintf('\n  Loading: %s%s\n', basename, ext);
+
+if ext == ".zip"
+    T = de_load_from_zip(filepath, options);
+    return
+end
+if ismember(ext, [".xlsx", ".xls", ".xlsm"])
+    T = de_load_excel(filepath, options);
+    return
+end
+T = de_load_text(filepath, options);
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function T = de_load_from_zip(filepath, options)
+    tmpdir = tempname;
+    mkdir(tmpdir);
+    cleanup_tmp = onCleanup(@() rmdir(tmpdir, 's'));
+
+    ok_exts = {'.csv', '.tsv', '.txt', '.xlsx', '.xls', '.asc'};
+    SMALL_FILE_BYTES = 5000;
+
+    % Try Java listing first: avoids full extraction of large archives (e.g.
+    % DWCA zips with 20 000 files).  Entry names may have trailing spaces
+    % (common in some zip tools) — use strtrim for extension checks but keep
+    % the raw name for Java lookups, then strtrim when writing to disk.
+    did_selective = false;
+    zip_entries   = de__zip_list(filepath);   % struct array: .name, .bytes
+
+    if ~isempty(zip_entries)
+        % Filter to data-file candidates
+        keep = false(1, numel(zip_entries));
+        for k = 1:numel(zip_entries)
+            [~, ~, ext] = fileparts(strtrim(zip_entries(k).name));
+            keep(k) = ismember(lower(ext), ok_exts);
+        end
+        cand = zip_entries(keep);   % struct array: .name, .bytes
+
+        if ~isempty(cand)
+            % InnerFile override — compare trimmed names
+            if strlength(options.InnerFile) > 0
+                target = char(options.InnerFile);
+                idx    = find(strcmp(strtrim({cand.name}), strtrim(target)), 1);
+                if isempty(idx)
+                    error('de_load:innerFileNotFound', ...
+                        'InnerFile "%s" not found inside ZIP. Available: %s', ...
+                        target, strjoin(strtrim({cand.name}), ', '));
+                end
+                cand = cand(idx);
+            end
+
+            % If multiple candidates, pick ONE before extracting so we never
+            % decompress multi-GB archives we won't use.
+            if numel(cand) > 1
+                [sizes_s, ord] = sort([cand.bytes], 'ascend');
+                cand_s         = cand(ord);
+                names_s        = strtrim({cand_s.name});
+
+                if numel(cand) > 10
+                    shown_k      = find(sizes_s >= SMALL_FILE_BYTES);
+                    suppressed_n = sum(sizes_s < SMALL_FILE_BYTES);
+                else
+                    shown_k      = 1:numel(cand_s);
+                    suppressed_n = 0;
+                end
+
+                default_k = shown_k(end);
+
+                if options.AutoSelect
+                    pick_idx = default_k;
+                    fprintf('  AutoSelect: picking largest "%s"\n', names_s{default_k});
+                elseif ~options.Interactive
+                    de_load_zip_ambiguous_error(filepath, string(names_s), sizes_s);
+                else
+                    fprintf('  Files found inside ZIP (sorted by size):\n');
+                    for k = 1:numel(shown_k)
+                        sk = shown_k(k);
+                        sz = sizes_s(sk);
+                        if sz >= 1e6
+                            sz_str = sprintf('%.1f MB', sz/1e6);
+                        else
+                            sz_str = sprintf('%.0f KB', sz/1e3);
+                        end
+                        fprintf('    [%2d]  %-40s  %s\n', k, names_s{sk}, sz_str);
+                    end
+                    if suppressed_n > 0
+                        fprintf('  (%d lookup/admin files under 5 KB hidden)\n', suppressed_n);
+                    end
+                    fprintf('\n');
+                    fprintf('  Enter number (default %d = %s),\n', ...
+                        numel(shown_k), names_s{default_k});
+                    while true
+                        raw = input('  or filename for a hidden file: ', 's');
+                        if isempty(raw)
+                            pick_idx = default_k;
+                            break
+                        elseif all(ismember(raw, '0123456789'))
+                            n = str2double(raw);
+                            if n >= 1 && n <= numel(shown_k)
+                                pick_idx = shown_k(n);
+                                break
+                            else
+                                fprintf('  Please enter a number between 1 and %d.\n', numel(shown_k));
+                            end
+                        else
+                            match = find(strcmp(names_s, raw), 1);
+                            if ~isempty(match)
+                                pick_idx = match;
+                                break
+                            else
+                                fprintf('  File "%s" not found in ZIP.\n', raw);
+                            end
+                        end
+                    end
+                end
+                cand = cand_s(pick_idx);
+            end
+
+            % Extract only the chosen candidate(s)
+            selected_zip_entry = cand(1).name;   % original name (may have trailing space)
+            all_ok = true;
+            for k = 1:numel(cand)
+                try
+                    de__zip_extract(filepath, cand(k).name, tmpdir);
+                catch
+                    all_ok = false;
+                    break;
+                end
+            end
+            if all_ok
+                did_selective = true;
+            end
+        end
+    end
+
+    if ~did_selective
+        unzip(filepath, tmpdir);
+    end
+
+    % Collect extracted files (search root and subdirs; ** may miss root on macOS)
+    all_files = [dir(fullfile(tmpdir, '*.*')); dir(fullfile(tmpdir, '**', '*.*'))];
+    all_files = all_files(~[all_files.isdir]);
+    full_paths = fullfile({all_files.folder}, {all_files.name});
+    [~, ia]   = unique(full_paths);
+    all_files  = all_files(ia);
+    keep = false(1, numel(all_files));
+    for k = 1:numel(all_files)
+        [~, ~, ext] = fileparts(strtrim(all_files(k).name));  % strtrim defensive
+        keep(k) = ismember(lower(ext), ok_exts);
+    end
+    files = all_files(keep);
+
+    if isempty(files)
+        error('DataExplorer:emptyZip', 'No CSV/TSV/XLSX/ASC found inside the ZIP.');
+    end
+
+    if did_selective || isscalar(files)
+        choice_idx = 1;
+    else
+        % Fallback picker — only reached when Java listing failed and full
+        % unzip produced multiple data files.
+        [~, size_ord] = sort([files.bytes], 'ascend');
+        files_sorted  = files(size_ord);
+
+        if numel(files) > 10
+            shown      = find([files_sorted.bytes] >= SMALL_FILE_BYTES);
+            suppressed = find([files_sorted.bytes] <  SMALL_FILE_BYTES);
+        else
+            shown      = 1:numel(files_sorted);
+            suppressed = [];
+        end
+
+        default_num = numel(shown);
+
+        if options.AutoSelect
+            choice_idx = shown(default_num);
+            fprintf('  AutoSelect: picking default "%s"\n', files_sorted(choice_idx).name);
+        elseif ~options.Interactive
+            de_load_zip_ambiguous_error(filepath, string({files_sorted.name}), [files_sorted.bytes]);
+        else
+            fprintf('  Files found inside ZIP (sorted by size):\n');
+            for k = 1:numel(shown)
+                idx = shown(k);
+                sz  = files_sorted(idx).bytes;
+                if sz >= 1e6
+                    sz_str = sprintf('%.1f MB', sz/1e6);
+                else
+                    sz_str = sprintf('%.0f KB', sz/1e3);
+                end
+                fprintf('    [%2d]  %-40s  %s\n', k, files_sorted(idx).name, sz_str);
+            end
+            if ~isempty(suppressed)
+                fprintf('  (%d lookup/admin files under 5 KB hidden — enter filename to load one)\n', ...
+                    numel(suppressed));
+            end
+            fprintf('\n');
+            fprintf('  Enter number (default %d = %s),\n', ...
+                default_num, files_sorted(shown(default_num)).name);
+            while true
+                raw = input('  or filename for a hidden file: ', 's');
+                if isempty(raw)
+                    choice_idx = shown(default_num);
+                    break
+                elseif all(ismember(raw, '0123456789'))
+                    n = str2double(raw);
+                    if n >= 1 && n <= numel(shown)
+                        choice_idx = shown(n);
+                        break
+                    else
+                        fprintf('  Please enter a number between 1 and %d.\n', numel(shown));
+                    end
+                else
+                    match = find(strcmp({files_sorted.name}, raw), 1);
+                    if ~isempty(match)
+                        choice_idx = match;
+                        break
+                    else
+                        fprintf('  File "%s" not found in ZIP.\n', raw);
+                    end
+                end
+            end
+        end
+
+        files = files_sorted;
+    end
+
+    T = de_load_dispatch(fullfile(files(choice_idx).folder, files(choice_idx).name), options);
+    if isempty(T.Properties.UserData)
+        T.Properties.UserData = struct('sheet', '', 'inner_file', strtrim(files(choice_idx).name));
+    else
+        T.Properties.UserData.inner_file = strtrim(files(choice_idx).name);
+    end
+    % Preserve the original ZIP entry name (may have trailing whitespace) so
+    % the recipe's unzip command can reference it exactly.
+    if did_selective && exist('selected_zip_entry', 'var')
+        T.Properties.UserData.inner_file_zip = selected_zip_entry;
+    end
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function T = de_load_excel(filepath, options)
+    sheets = sheetnames(filepath);
+
+    % Sheet pinned by name or 1-based index?
+    sheet_val   = options.Sheet;
+    sheet_given = (isnumeric(sheet_val) && isscalar(sheet_val) && sheet_val > 0) || ...
+                  (~isnumeric(sheet_val) && strlength(string(sheet_val)) > 0);
+
+    if sheet_given
+        if isnumeric(sheet_val)
+            if sheet_val > numel(sheets)
+                error('DataExplorer:sheetNotFound', ...
+                    'Sheet index %d out of range (1–%d).', sheet_val, numel(sheets));
+            end
+            sheetname = sheets{sheet_val};
+        else
+            if ~ismember(string(sheet_val), sheets)
+                error('DataExplorer:sheetNotFound', ...
+                    'Sheet "%s" not found. Available: %s', ...
+                    string(sheet_val), strjoin(sheets, ', '));
+            end
+            sheetname = char(string(sheet_val));
+        end
+    elseif isscalar(sheets)
+        sheetname = sheets{1};
+    else
+        % Multiple sheets — count rows for a size-ranked listing.
+        fprintf('  Counting rows in each sheet…\n');
+        nrows = zeros(numel(sheets), 1);
+        ncols = zeros(numel(sheets), 1);
+        for k = 1:numel(sheets)
+            try
+                o = detectImportOptions(filepath, 'Sheet', sheets{k});
+                ncols(k) = numel(o.VariableNames);
+                if ncols(k) > 0
+                    o.SelectedVariableNames = o.VariableNames(1);
+                    tmp = readtable(filepath, o, 'Sheet', sheets{k});
+                    nrows(k) = height(tmp);
+                end
+            catch
+                nrows(k) = 0;
+                ncols(k) = 0;
+            end
+        end
+
+        [~, ord] = sort(nrows, 'ascend');
+        sheets_s = sheets(ord);
+        nrows_s  = nrows(ord);
+        ncols_s  = ncols(ord);
+        default_num = numel(sheets_s);
+
+        if options.AutoSelect
+            sheetname = sheets_s{default_num};
+            fprintf('  AutoSelect: picking largest sheet "%s"\n', sheetname);
+        elseif ~options.Interactive
+            lines = strings(numel(sheets_s), 1);
+            for k = 1:numel(sheets_s)
+                lines(k) = sprintf('  %s  (%d rows × %d columns)', ...
+                    sheets_s{k}, nrows_s(k), ncols_s(k));
+            end
+            error('de_load:multipleSheets', ...
+                ['%s has %d sheets; de_load will not guess. Re-run with Sheet set ' ...
+                 'to one of:\n%s\ne.g.  de_load("%s", Sheet="%s")'], ...
+                filepath, numel(sheets_s), strjoin(lines, newline), ...
+                filepath, sheets_s{default_num});
+        else
+            fprintf('  Sheets found in workbook (sorted by row count):\n');
+            for k = 1:numel(sheets_s)
+                fprintf('    [%2d]  %-35s  %d rows × %d columns\n', ...
+                    k, sheets_s{k}, nrows_s(k), ncols_s(k));
+            end
+            fprintf('\n');
+            while true
+                raw = input(sprintf('  Which sheet? (name or number, Enter = %d = %s): ', ...
+                    default_num, sheets_s{default_num}), 's');
+                if isempty(raw)
+                    sheetname = sheets_s{default_num};
+                    break
+                elseif all(ismember(raw, '0123456789'))
+                    idx = str2double(raw);
+                    if idx >= 1 && idx <= numel(sheets_s)
+                        sheetname = sheets_s{idx};
+                        break
+                    else
+                        fprintf('  Please enter a number between 1 and %d.\n', numel(sheets_s));
+                    end
+                elseif ismember(raw, sheets_s)
+                    sheetname = raw;
+                    break
+                else
+                    fprintf('  Sheet "%s" not found. Options: %s\n', raw, strjoin(sheets_s, ', '));
+                end
+            end
+        end
+    end
+
+    fprintf('  Reading sheet "%s"…\n', sheetname);
+    io_args = {'Sheet', sheetname};
     if strlength(options.VariableNamesRange) > 0
         io_args = [io_args, {'VariableNamesRange', char(options.VariableNamesRange)}];
     end
     if strlength(options.DataRange) > 0
         io_args = [io_args, {'DataRange', char(options.DataRange)}];
     end
-    sheet_val = options.Sheet;
-    sheet_given = (isnumeric(sheet_val) && isscalar(sheet_val) && sheet_val > 0) || ...
-                  (~isnumeric(sheet_val) && strlength(string(sheet_val)) > 0);
-    if sheet_given
-        io_args = [io_args, {'Sheet', sheet_val}];
+    opts = detectImportOptions(filepath, io_args{:});
+    opts.MissingRule = 'fill';
+    T = readtable(filepath, opts, 'Sheet', sheetname);
+    T.Properties.UserData = struct('sheet', sheetname, 'inner_file', '');
+    names_before = T.Properties.VariableNames;
+    T = de__fix_names(T, filepath, '.xlsx', sheetname);
+    if ~isequal(names_before, T.Properties.VariableNames)
+        T.Properties.UserData.explicit_header = true;
     end
-    io = detectImportOptions(filepath, io_args{:});
-    io.MissingRule = 'fill';
-    T = readtable(filepath, io);
-    if isfinite(options.MaxRows) && height(T) > options.MaxRows
-        n_total = height(T);
-        idx     = sort(randperm(n_total, options.MaxRows));
-        T       = T(idx, :);
-        fprintf('  de_load: sampled %d of %d rows (uniform random).\n', ...
-            options.MaxRows, n_total);
+    T = de__sample(T, options.MaxRows);
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function T = de_load_text(filepath, options)
+    % Sniff delimiter from the first line
+    fid = fopen(filepath, 'r', 'n', 'UTF-8');
+    if fid == -1
+        fid = fopen(filepath, 'r');
     end
-else
-    if isfinite(options.MaxRows)
-        T = de_reservoir_sample(filepath, options.MaxRows);
+    firstline = fgetl(fid);
+    fclose(fid);
+
+    ntabs   = sum(firstline == char(9));
+    ncommas = sum(firstline == ',');
+    nsemis  = sum(firstline == ';');
+    npipes  = sum(firstline == '|');
+
+    [~, delim_char] = max([ncommas, ntabs, nsemis, npipes]);
+    delims = {',', '\t', ';', '|'};
+    delim  = delims{delim_char};
+
+    delim_names = {'comma-separated','tab-separated','semicolon-separated','pipe-separated'};
+    fprintf('  Detected: %s\n', delim_names{delim_char});
+
+    % Check file size — use reservoir sampling for files over threshold
+    LARGE_FILE_MB = 100;
+    info = dir(filepath);
+    file_mb = info.bytes / 1e6;
+
+    if file_mb > LARGE_FILE_MB && isfinite(options.MaxRows)
+        fprintf('  ℹ Large file (%.0f MB) — using reservoir sampling to read %d rows.\n', ...
+            file_mb, options.MaxRows);
+        fprintf('    This avoids loading the full file into memory.\n');
+        T = de_reservoir_sample(filepath, options.MaxRows, Verbose=true);
+        T = de__record_sampled(T, height(T));
     else
-        T = readtable(filepath, 'TextType', 'string');
+        opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
+        opts.MissingRule = 'fill';
+        T = readtable(filepath, opts);
+        n_before = height(T);
+        T = de__sample(T, options.MaxRows);
+        if height(T) < n_before
+            T = de__record_sampled(T, height(T), n_before);
+        end
     end
+
+    T = de__fix_names(T, filepath, '.csv', []);
 end
 
-[T, prof] = de_profile(T);
-end
-
-
-function inner_path = de_load_pick_zip_member(zip_path, inner_file)
-%DE_LOAD_PICK_ZIP_MEMBER  Resolve a single data file inside a ZIP, or error with
-%   the candidate list so the caller can re-run with InnerFile set.  Non-
-%   interactive by design (see de_load).  (Provisional: when DataExplorer's
-%   interactive loader is unified into de_load, this becomes the Interactive=false
-%   branch of one shared zip handler.)
-ok_exts = [".csv", ".tsv", ".txt", ".xlsx", ".xls", ".asc"];
-
-tmpdir    = tempname;
-mkdir(tmpdir);
-extracted = string(unzip(char(zip_path), tmpdir));   % extracts all; returns full paths
-extracted = extracted(:);
-
-% Keep data-file candidates; drop macOS resource forks (__MACOSX/._*).
-keep = false(numel(extracted), 1);
-for k = 1:numel(extracted)
-    [~, nm, e] = fileparts(extracted(k));
-    keep(k) = ~contains(extracted(k), "__MACOSX") ...
-        && ~startsWith(string(nm), "._") ...
-        && ismember(lower(string(e)), ok_exts);
-end
-cand = extracted(keep);
-
-if isempty(cand)
-    error('de_load:noDataFileInZip', ...
-        'No data file (%s) found inside %s.', strjoin(ok_exts, ', '), zip_path);
-end
-
-names = strings(numel(cand), 1);
-for k = 1:numel(cand)
-    [~, nm, e] = fileparts(cand(k));
-    names(k) = strtrim(string(nm) + string(e));
-end
-
-if inner_file ~= ""
-    idx = find(strcmpi(names, strtrim(inner_file)), 1);
-    if isempty(idx)
-        error('de_load:innerFileNotFound', ...
-            'InnerFile "%s" not found in %s. Available: %s', ...
-            inner_file, zip_path, strjoin(names, ', '));
-    end
-    inner_path = cand(idx);
-    return
-end
-
-if isscalar(cand)
-    inner_path = cand(1);
-    return
-end
-
-% Several candidates, no InnerFile → fail with the listing (never guess).
-bytes = zeros(numel(cand), 1);
-for k = 1:numel(cand)
-    d = dir(cand(k));
-    if ~isempty(d), bytes(k) = d(1).bytes; end
-end
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function de_load_zip_ambiguous_error(zip_path, names, bytes)
+%DE_LOAD_ZIP_AMBIGUOUS_ERROR  Error listing ZIP data files + the InnerFile hint.
 [~, ord] = sort(bytes, 'descend');
 lines = strings(numel(ord), 1);
 for k = 1:numel(ord)
@@ -152,5 +478,5 @@ end
 error('de_load:multipleFilesInZip', ...
     ['%s contains %d data files; de_load will not guess. Re-run with InnerFile ' ...
      'set to one of:\n%s\ne.g.  de_load("%s", InnerFile="%s")'], ...
-    zip_path, numel(cand), strjoin(lines, newline), zip_path, names(ord(1)));
+    zip_path, numel(names), strjoin(lines, newline), zip_path, names(ord(1)));
 end
