@@ -25,10 +25,19 @@ T = DataExplorer(T_existing)
 % Limit rows / columns for speed:
 T = DataExplorer('bigfile.csv', MaxRows=10000, MaxVars=8)
 T = DataExplorer('data.xlsx', Columns={'State','Year','Value'})
+
+% Outputs are [T, prof, recipe].  Asking for the recipe (the 3rd output) hands
+% you the generated code WITHOUT running it — no figures.  Plain calls still plot:
+T                 = DataExplorer('mydata.csv');   % loads, profiles, and plots
+[T, prof]         = DataExplorer('mydata.csv');   % …plus the profile struct
+[T, prof, recipe] = DataExplorer('mydata.csv');   % the code only — no plots
+% recipe is a string array (one line per element):
+disp(recipe(1:5))                                  % peek at the first lines
 ```
 
 After the run, the console shows a copy-pasteable MATLAB script that reproduces
-everything DataExplorer just did.  Save it with:
+everything DataExplorer just did — the same code returned as `recipe` above.
+Save it with:
 
 ```matlab
 save_recipe('my_analysis.m')
