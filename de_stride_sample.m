@@ -1,5 +1,5 @@
 function T = de_stride_sample(filepath, options)
-%STRIDESAMPLE  Deterministic stride sample from a CSV/TSV or 3-D NetCDF file.
+%STRIDESAMPLE  Deterministic stride sample from a CSV/TSV or NetCDF file.
 %
 %   Uses stride sampling — reads every Nth row/element — so the sample covers
 %   the full extent of the file deterministically (same result each run).
@@ -14,9 +14,9 @@ function T = de_stride_sample(filepath, options)
 %   DataExplorer(de_stride_sample('climate.nc'))
 %
 %   For tabular files the stride is estimated from file size + a 64 KB probe.
-%   For NetCDF files the variable must have exactly 3 dimensions; stride is
-%   the same for every dimension so each contributes an equal fraction of
-%   samples; total stays within MaxRows.
+%   For NetCDF files any gridded variable (1-D or more) is flattened to a
+%   long-format table; the stride is the same for every dimension so each
+%   contributes an equal fraction of samples; total stays within MaxRows.
 %
 %   Optional arguments
 %   ──────────────────
@@ -196,9 +196,9 @@ end
 v         = info.Variables(var_idx);
 sz        = double(v.Size);
 ndim      = numel(sz);
-if ndim ~= 3
+if ndim < 1 || prod(sz) == 0
     error('de_stride_sample:unsupported', ...
-        'Variable "%s" has %d dimensions; de_stride_sample requires exactly 3.', varname, ndim);
+        'Variable "%s" has no griddable dimensions.', varname);
 end
 dim_names = {v.Dimensions.Name};
 
@@ -253,11 +253,16 @@ for k = 1:ndim
     strided_coords{k} = c(1:count_idx(k));
 end
 
-%% ── Flatten to long-format table ─────────────────────────────────────────────
-[G1, G2, G3] = ndgrid(strided_coords{1}, strided_coords{2}, strided_coords{3});
-vname_safe   = matlab.lang.makeValidName(varname);
-T = table(G1(:), G2(:), G3(:), data(:), ...
-    'VariableNames', {dim_names{1}, dim_names{2}, dim_names{3}, vname_safe});
+%% ── Flatten to long-format table (any dimensionality) ────────────────────────
+grids = cell(1, ndim);
+[grids{:}] = ndgrid(strided_coords{:});
+vname_safe = matlab.lang.makeValidName(varname);
+cols = cell(1, ndim + 1);
+for k = 1:ndim
+    cols{k} = grids{k}(:);
+end
+cols{ndim + 1} = data(:);
+T = table(cols{:}, 'VariableNames', [dim_names, {vname_safe}]);
 
 %% ── Normalise lat/lon/time column names ──────────────────────────────────────
 rename_map = {'lat|latitude|^y$', 'latitude'; ...

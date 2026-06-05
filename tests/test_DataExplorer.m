@@ -2551,6 +2551,29 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             end
         end
 
+        function test_stridesample_netcdf_2d_variable(testCase)
+            % Non-3-D variables are supported now (here a 2-D lon/lat grid):
+            % flattened to long format, not rejected.
+            tmp = [tempname '.nc'];
+            cl  = onCleanup(@() delete(tmp));
+            nlon = 8; nlat = 6;
+            nccreate(tmp,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(tmp,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(tmp,'elev','Dimensions',{'longitude',nlon,'latitude',nlat},'Format','classic');
+            ncwrite(tmp,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(tmp,'latitude',  linspace(25,55,nlat)');
+            ncwrite(tmp,'elev',      rand(nlon,nlat));
+
+            T = de_stride_sample(string(tmp), Variable='elev', MaxRows=100, Verbose=false);
+            testCase.verifyClass(T, 'table');
+            testCase.verifyEqual(height(T), nlon*nlat, ...
+                'Small 2-D grid should flatten without striding');
+            for c = ["longitude","latitude","elev"]
+                testCase.verifyTrue(ismember(c, string(T.Properties.VariableNames)), ...
+                    sprintf('Expected column "%s"', c));
+            end
+        end
+
         function test_stridesample_netcdf_latrange_filters_rows(testCase)
             tmp = [tempname '.nc'];
             cl  = onCleanup(@() delete(tmp));
