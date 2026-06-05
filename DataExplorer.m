@@ -87,100 +87,13 @@ if isempty(source) && ~istable(source)
     source = fullfile(fpath, fname);
 end
 
-%% ── 1a.  NetCDF multi-variable fast-path ─────────────────────────────────
-if ischar(source) || isstring(source)
-    [~, ~, nc_ext_] = fileparts(string(source));
-    if ismember(lower(string(nc_ext_)), [".nc", ".nc4", ".netcdf"]) && ...
-            strlength(options.NCVariable) == 0
-        nc_info_   = ncinfo(string(source));
-        data_vars_ = nc_list_data_vars(nc_info_);
-        if ~isempty(data_vars_)
-            n_plot_ = min(options.MaxVars, numel(data_vars_));
-            fprintf('  NetCDF: %d data variable(s) found; plotting %d.\n', ...
-                numel(data_vars_), n_plot_);
-            T = table();
-            [~, fn_, fe_] = fileparts(string(source));
-
-            % ── Pass 1: load all spatial-grid variables into one table ────────
-            sp_vars_ = data_vars_(cellfun(@(v) nc_is_spatial_grid(nc_info_, v), ...
-                data_vars_(1:n_plot_)));
-            T_sp_ = table();
-            if ~isempty(sp_vars_)
-                fprintf('  Loading %d spatial grid variable(s): %s\n', ...
-                    numel(sp_vars_), strjoin(sp_vars_, ', '));
-                try
-                    T_sp_ = de_stride_sample(string(source), ...
-                        Variable=string(sp_vars_{1}), ...
-                        MaxRows=options.MaxRows, Verbose=true);
-                    for sp_k_ = 2:numel(sp_vars_)
-                        try
-                            T_extra_ = de_stride_sample(string(source), ...
-                                Variable=string(sp_vars_{sp_k_}), ...
-                                MaxRows=options.MaxRows, Verbose=false);
-                            vn_ = matlab.lang.makeValidName(sp_vars_{sp_k_});
-                            if height(T_extra_) == height(T_sp_)
-                                T_sp_.(vn_) = T_extra_.(vn_);
-                            end
-                        catch ME_
-                            if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
-                            fprintf('  ⚠ Skipping "%s": %s\n', sp_vars_{sp_k_}, ME_.message);
-                        end
-                    end
-                catch ME_
-                    if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
-                    fprintf('  ⚠ Could not load spatial grid: %s\n', ME_.message);
-                    T_sp_ = table();
-                end
-            end
-            if height(T_sp_) > 0
-                % Fully recipe-driven (no direct render path): the spatial recipe
-                % loads, profiles, overviews, and geo-scatters every spatial var.
-                recipe_sp_ = cg_netcdf_spatial_recipe(string(source), sp_vars_);
-                T_ret_ = T_sp_; run(recipe_sp_); T_sp_ = T_ret_;
-                T = T_sp_;
-            end
-
-            % ── Pass 2: non-spatial-grid variables, one at a time ────────────
-            for nc_vi_ = 1:n_plot_
-                vname_vi_ = data_vars_{nc_vi_};
-                if nc_is_spatial_grid(nc_info_, vname_vi_), continue; end
-                opts_vi_            = options;
-                opts_vi_.NCVariable = string(vname_vi_);
-                try
-                    T_vi_ = se_load(string(source), opts_vi_);
-                catch ME_
-                    if strcmp(ME_.identifier, 'MATLAB:interrupt'), rethrow(ME_); end
-                    fprintf('  ⚠ Skipping "%s": %s\n', vname_vi_, ME_.message);
-                    continue
-                end
-                [T_vi_, prof_vi_] = se_profile(T_vi_, options.MissingStrings);
-                prof_vi_.source_name = sprintf('%s%s [%s]', fn_, fe_, vname_vi_);
-                se_echo_load_code(string(source), T_vi_);
-                se_report(T_vi_, prof_vi_);
-                panel_vi_  = prof_vi_.panel;
-                T = T_vi_; prof = prof_vi_;
-                [~, recipe_vi_] = se_assemble_recipe(string(source), T, prof, panel_vi_, opts_vi_);
-                idx_ = strfind(recipe_vi_, '%% === Overview ===');
-                if ~isempty(idx_), eval(recipe_vi_(idx_(1):end)); else, eval(recipe_vi_); end
-            end
-            return
-        end
-        % No data vars found — fall through to normal single-variable path
-    end
-end
-
 %% ── 1+2.  Load & profile ──────────────────────────────────────────────────
 if ischar(source) || isstring(source)
-    [~, ~, e_] = fileparts(string(source));
-    if ismember(lower(string(e_)), [".nc", ".nc4", ".netcdf"])
-        T = se_load(string(source), options);              % NetCDF (multi-var path)
-        [T, prof] = se_profile(T, options.MissingStrings);
-    else
-        [T, prof] = de_load(string(source), ...            % tabular: load + profile
-            'Interactive', true, 'AutoSelect', options.AutoSelect, ...
-            'MaxRows', options.MaxRows, 'Sheet', options.Sheet, ...
-            'InnerFile', options.InnerFile, 'MissingStrings', options.MissingStrings);
-    end
+    [T, prof] = de_load(string(source), ...                % all formats incl. NetCDF
+        'Interactive', true, 'AutoSelect', options.AutoSelect, ...
+        'MaxRows', options.MaxRows, 'Sheet', options.Sheet, ...
+        'InnerFile', options.InnerFile, 'NCVariable', options.NCVariable, ...
+        'MissingStrings', options.MissingStrings);
 elseif istable(source)
     T = source;
     if height(T) == 0
@@ -948,15 +861,25 @@ elseif ismember(ext, [".xlsx", ".xls", ".xlsm"])
     L{end+1} = 'opts.MissingRule = ''fill'';';
     L{end+1} = sprintf('T = readtable(''%s'', opts, ''Sheet'', ''%s'');', filepath, sheet);
 elseif ismember(ext, [".nc", ".nc4", ".netcdf"])
-    nc_var = '';
-    if isstruct(ud) && isfield(ud, 'nc_varname') && ~isempty(ud.nc_varname)
-        nc_var = char(ud.nc_varname);
+    % Conformable NetCDF variables were combined into one table by de_load;
+    % reproduce that: stride-sample the first, then add each other variable's
+    % column (identical striding → aligned rows).
+    nc_vars = {};
+    if isstruct(ud) && isfield(ud, 'nc_vars') && ~isempty(ud.nc_vars)
+        nc_vars = ud.nc_vars;
     end
-    if ~isempty(nc_var)
-        L{end+1} = sprintf('T = de_stride_sample(''%s'', Variable=''%s'');', filepath, nc_var);
-    else
+    if isempty(nc_vars)
         L{end+1} = sprintf('T = de_stride_sample(''%s'');', filepath);
-        L{end+1} = sprintf('%% Available variables: see ncinfo(''%s'').Variables', filepath);
+    else
+        L{end+1} = sprintf('T = de_stride_sample(''%s'', Variable=''%s'', Verbose=false);', ...
+            filepath, nc_vars{1});
+        extra = cell(1, numel(nc_vars) - 1);
+        for vi = 2:numel(nc_vars)
+            vk = matlab.lang.makeValidName(nc_vars{vi});
+            extra{vi-1} = sprintf('T.%s = de_stride_sample(''%s'', Variable=''%s'', Verbose=false).%s;', ...
+                vk, filepath, nc_vars{vi}, vk);
+        end
+        L = [L, extra];
     end
 else
     sampled_n = 0;
@@ -1387,11 +1310,11 @@ end
 
 % ── cg_geoscatter_code ───────────────────────────────────────────────────────
 function code = cg_geoscatter_code(T, prof)
-%CG_GEOSCATTER_CODE  Recipe code for a lat/lon point map (tabular data).
-%   Colors points by the first numeric data column, sizes by the second (if any).
-%   Skipped for NetCDF spatial grids (those get their own de_geoscatter recipe).
+%CG_GEOSCATTER_CODE  Recipe code for a lat/lon map.
+%   NetCDF grids (a combined stride-sample with a time axis) are aggregated by
+%   grid cell — color = temporal mean, size = temporal std — one map per variable.
+%   Tabular lat/lon data gets a point map colored/sized by its numeric columns.
 code = '';
-if isfield(prof, 'nc_spatial_grid') && prof.nc_spatial_grid, return; end
 
 LAT_NAMES = ["lat","latitude","lat_","latitude_dd","decimallatitude"];
 LON_NAMES = ["lon","long","longitude","lon_","longitude_dd","decimallongitude"];
@@ -1404,13 +1327,31 @@ lat = double(T.(prof.name{lat_i}));
 lon = double(T.(prof.name{lon_i}));
 if sum(~isnan(lat) & ~isnan(lon)) < 2, return; end
 
-% Numeric data columns to encode (exclude the coordinates themselves)
+latn = prof.name{lat_i};
+lonn = prof.name{lon_i};
+
+% NetCDF grid: aggregate over time per cell → a mean/std map per variable.
+ud = T.Properties.UserData;
+if isstruct(ud) && isfield(ud, 'nc_vars') && ~isempty(ud.nc_vars) && any(nl == "time")
+    nc_vars   = ud.nc_vars;
+    safe      = cellfun(@matlab.lang.makeValidName, nc_vars, 'UniformOutput', false);
+    vars_cell = ['{''', strjoin(safe, ''','''), '''}'];
+    L    = cell(1, numel(safe) + 1);
+    L{1} = sprintf('T_agg = groupsummary(T, {''%s'',''%s''}, {''mean'',''std''}, %s);', ...
+        lonn, latn, vars_cell);
+    for k = 1:numel(safe)
+        L{k+1} = sprintf(['de_geoscatter(T_agg.%s, T_agg.%s, T_agg.mean_%s, T_agg.std_%s, ' ...
+            'ColorLabel=''mean(%s)'', SizeLabel=''std(%s)'', MinSize=5, MaxSize=150, Title=''%s'');'], ...
+            lonn, latn, safe{k}, safe{k}, nc_vars{k}, nc_vars{k}, nc_vars{k});
+    end
+    code = strjoin(L, newline);
+    return
+end
+
+% Tabular point map: color by the first numeric data column, size by the second.
 num = find(prof.type == "numeric" & ~prof.skip);
 num = num(~ismember(num, [lat_i, lon_i]));
 if isempty(num), return; end
-
-latn = prof.name{lat_i};
-lonn = prof.name{lon_i};
 ccol = prof.name{num(1)};
 if numel(num) >= 2
     scol = prof.name{num(2)};
