@@ -21,6 +21,12 @@ T = DataExplorer(T_in)
 % Key optional arguments
 T = DataExplorer('bigfile.csv', MaxRows=10000, MaxVars=8, Columns={'col1','col2'})
 
+% Outputs: [T, prof, recipe].  recipe is the generated recipe as a string array
+% (one line per element).  IMPORTANT: requesting the recipe (3rd output) returns
+% the code WITHOUT running it — no figures.  T = DataExplorer(...) and
+% [T, prof] = DataExplorer(...) render as usual.
+[T, prof, recipe] = DataExplorer('mydata.csv');   % code only, no plots
+
 % Random reservoir sample for large files (equal probability, any order)
 T = de_reservoir_sample('bigfile.csv', 50000)
 
