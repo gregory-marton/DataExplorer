@@ -30,6 +30,7 @@ arguments
     filepath (1,1) string
     options.Sheet               = ""
     options.InnerFile           (1,1) string  = ""
+    options.NCVariable          (1,1) string  = ""
     options.AutoSelect          (1,1) logical = false
     options.Interactive         (1,1) logical = false
     options.MissingStrings      (1,:) string  = string([])
@@ -66,6 +67,10 @@ if ext == ".zip"
 end
 if ismember(ext, [".xlsx", ".xls", ".xlsm"])
     T = de_load_excel(filepath, options);
+    return
+end
+if ismember(ext, [".nc", ".nc4", ".netcdf"])
+    T = de_load_netcdf(filepath, options);
     return
 end
 T = de_load_text(filepath, options);
@@ -479,4 +484,146 @@ error('de_load:multipleFilesInZip', ...
     ['%s contains %d data files; de_load will not guess. Re-run with InnerFile ' ...
      'set to one of:\n%s\ne.g.  de_load("%s", InnerFile="%s")'], ...
     zip_path, numel(names), strjoin(lines, newline), zip_path, names(ord(1)));
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function T = de_load_netcdf(filepath, options)
+%DE_LOAD_NETCDF  Load NetCDF into one table.  Data variables sharing a dimension
+%   signature are conformable and combine into one long-format table (coordinate
+%   columns + one column per variable) via de_stride_sample.  A file mixing
+%   differently-shaped variables is resolved like a multi-sheet workbook:
+%   NCVariable= picks one; AutoSelect picks the largest; otherwise the
+%   non-interactive default errors with the variable list, or an interactive
+%   prompt asks.
+info = ncinfo(char(filepath));
+dv   = de_load_nc_data_vars(info);
+if isempty(dv)
+    error('de_load:ncNoData', 'No data variables found in %s.', filepath);
+end
+
+% Dimension signature + element count per data variable.
+sigs  = strings(1, numel(dv));
+elems = zeros(1, numel(dv));
+for k = 1:numel(dv)
+    vi = find(strcmp({info.Variables.Name}, dv{k}), 1);
+    dn = string({info.Variables(vi).Dimensions.Name});
+    sigs(k)  = strjoin(sort(dn), '|');
+    elems(k) = prod(double(info.Variables(vi).Size));
+end
+
+if strlength(options.NCVariable) > 0
+    if ~ismember(char(options.NCVariable), dv)
+        error('de_load:ncVarNotFound', ...
+            'NetCDF variable "%s" not found. Available: %s', ...
+            options.NCVariable, strjoin(dv, ', '));
+    end
+    sel = {char(options.NCVariable)};
+else
+    groups = unique(sigs, 'stable');
+    if isscalar(groups)
+        sel = dv;                                  % all conformable → combine all
+    else
+        [~, big] = max(elems);                     % largest variable's group
+        big_grp  = dv(sigs == sigs(big));
+        if options.AutoSelect
+            sel = big_grp;
+            fprintf('  AutoSelect: largest NetCDF group "%s" (%d variable(s))\n', ...
+                strjoin(big_grp, ', '), numel(big_grp));
+        elseif ~options.Interactive
+            de_load_nc_ambiguous_error(filepath, dv, sigs, elems);
+        else
+            sel = de_load_nc_prompt(dv, sigs, elems);
+        end
+    end
+end
+
+% Combine the chosen variables into one table (identical striding → aligned rows).
+T = de_stride_sample(filepath, Variable=string(sel{1}), MaxRows=options.MaxRows, Verbose=false);
+for k = 2:numel(sel)
+    vk = matlab.lang.makeValidName(sel{k});
+    Tk = de_stride_sample(filepath, Variable=string(sel{k}), MaxRows=options.MaxRows, Verbose=false);
+    if height(Tk) == height(T) && ismember(vk, Tk.Properties.VariableNames)
+        T.(vk) = Tk.(vk);
+    else
+        fprintf('  ⚠ Skipping non-conformable variable "%s".\n', sel{k});
+    end
+end
+
+ud = T.Properties.UserData;
+if ~isstruct(ud), ud = struct('sheet', '', 'inner_file', ''); end
+ud.nc_vars = sel;
+T.Properties.UserData = ud;
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function data_vars = de_load_nc_data_vars(info)
+%DE_LOAD_NC_DATA_VARS  Names of data (non-coordinate) variables in a NetCDF file.
+%   A coordinate variable is one whose name matches a dimension name.
+dim_per_var = cell(1, numel(info.Variables));
+for k = 1:numel(info.Variables)
+    d = info.Variables(k).Dimensions;
+    if ~isempty(d), dim_per_var{k} = {d.Name}; end
+end
+all_dims = unique([dim_per_var{:}]);
+nv = numel(info.Variables);
+data_vars = cell(1, nv);
+nd = 0;
+for k = 1:nv
+    v = info.Variables(k);
+    if ~ismember(v.Name, all_dims) && ~isempty(v.Size) && prod(v.Size) > 0
+        nd = nd + 1;
+        data_vars{nd} = v.Name;
+    end
+end
+data_vars = data_vars(1:nd);
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function de_load_nc_ambiguous_error(filepath, dv, sigs, elems)
+%DE_LOAD_NC_AMBIGUOUS_ERROR  Error listing NetCDF variables + the NCVariable hint.
+[~, ord] = sort(elems, 'descend');
+lines = strings(numel(ord), 1);
+for k = 1:numel(ord)
+    lines(k) = sprintf('  %s  [%s]  (%d elems)', dv{ord(k)}, ...
+        strrep(sigs(ord(k)), '|', char(215)), elems(ord(k)));
+end
+error('de_load:multipleNCGroups', ...
+    ['%s mixes differently-shaped variables; de_load will not guess. Re-run with ' ...
+     'NCVariable set to one of (or AutoSelect=true for the largest):\n%s\n' ...
+     'e.g.  de_load("%s", NCVariable="%s")'], ...
+    filepath, strjoin(lines, newline), filepath, dv{ord(1)});
+end
+
+% ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+function sel = de_load_nc_prompt(dv, sigs, elems)
+%DE_LOAD_NC_PROMPT  Ask which NetCDF variable to load; return its conformable group.
+[~, ord] = sort(elems, 'ascend');
+fprintf('  Variables in NetCDF file (sorted by size):\n');
+for k = 1:numel(ord)
+    fprintf('    [%2d]  %-24s  [%s]  (%d elems)\n', k, dv{ord(k)}, ...
+        strrep(sigs(ord(k)), '|', char(215)), elems(ord(k)));
+end
+default_k = numel(ord);   % largest
+fprintf('\n');
+pick = '';
+while isempty(pick)
+    raw = input(sprintf('  Which variable? (number or name, Enter = %d = %s): ', ...
+        default_k, dv{ord(default_k)}), 's');
+    if isempty(raw)
+        pick = dv{ord(default_k)};
+    elseif all(ismember(raw, '0123456789'))
+        n = str2double(raw);
+        if n >= 1 && n <= numel(ord)
+            pick = dv{ord(n)};
+        else
+            fprintf('  Please enter a number between 1 and %d.\n', numel(ord));
+        end
+    elseif ismember(raw, dv)
+        pick = raw;
+    else
+        fprintf('  Variable "%s" not found. Options: %s\n', raw, strjoin(dv, ', '));
+    end
+end
+pidx = find(strcmp(dv, pick), 1);
+sel  = dv(sigs == sigs(pidx));
 end

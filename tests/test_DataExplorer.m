@@ -190,6 +190,38 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             z = [tempname '.zip'];
             zip(z, {'one.csv', 'two.csv'}, d);
         end
+
+        function f = make_multivar_nc()
+            % Two CONFORMABLE variables on one lon/lat/time grid (combine → 1 table).
+            f = [tempname '.nc'];
+            nlon = 6; nlat = 5; ntime = 3;
+            nccreate(f,'longitude','Dimensions',{'longitude',nlon},'Format','classic');
+            nccreate(f,'latitude', 'Dimensions',{'latitude', nlat},'Format','classic');
+            nccreate(f,'time',     'Dimensions',{'time',     ntime},'Format','classic');
+            nccreate(f,'temp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            nccreate(f,'prcp','Dimensions',{'longitude',nlon,'latitude',nlat,'time',ntime},'Format','classic');
+            ncwrite(f,'longitude', linspace(-130,-60,nlon)');
+            ncwrite(f,'latitude',  linspace(25,55,nlat)');
+            ncwrite(f,'time',      (1:ntime)');
+            ncwrite(f,'temp',      rand(nlon,nlat,ntime));
+            ncwrite(f,'prcp',      rand(nlon,nlat,ntime));
+        end
+
+        function f = make_hetero_nc()
+            % Two NON-conformable variables (different dimensions): a 2-D grid and
+            % a 1-D profile → de_load must ask / pick, not force-combine.
+            f = [tempname '.nc'];
+            nccreate(f,'longitude','Dimensions',{'longitude',6},'Format','classic');
+            nccreate(f,'latitude', 'Dimensions',{'latitude', 5},'Format','classic');
+            nccreate(f,'depth',    'Dimensions',{'depth',    4},'Format','classic');
+            nccreate(f,'grid2d',   'Dimensions',{'longitude',6,'latitude',5},'Format','classic');
+            nccreate(f,'profile1d','Dimensions',{'depth',4},'Format','classic');
+            ncwrite(f,'longitude', linspace(-130,-60,6)');
+            ncwrite(f,'latitude',  linspace(25,55,5)');
+            ncwrite(f,'depth',     (1:4)');
+            ncwrite(f,'grid2d',    rand(6,5));
+            ncwrite(f,'profile1d', rand(4,1));
+        end
     end
 
     % ─────────────────────────────────────────────────────────────────────────
@@ -597,6 +629,43 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             if ~exist(f, 'file'), testCase.assumeFail('Prod_dataset.xlsx not found'); end
             T = de_load(f, 'Sheet', 1, 'MaxRows', 50);
             testCase.verifyGreaterThan(width(T), 0);
+        end
+
+        function test_de_load_nc_combines_conformable_vars(testCase)
+            % Conformable nc variables combine into ONE table (a column each).
+            f = test_DataExplorer.make_multivar_nc();
+            cl = onCleanup(@() delete(f));
+            T = de_load(f);
+            cols = string(T.Properties.VariableNames);
+            testCase.verifyTrue(all(ismember(["temp","prcp"], cols)), ...
+                'Conformable nc variables must combine into one table');
+            testCase.verifyTrue(any(ismember(["longitude","latitude","time"], cols)), ...
+                'Coordinate columns expected');
+        end
+
+        function test_de_load_nc_heterogeneous_errors(testCase)
+            % Mixed-shape variables, no NCVariable/AutoSelect → informative error.
+            f = test_DataExplorer.make_hetero_nc();
+            cl = onCleanup(@() delete(f));
+            testCase.verifyError(@() de_load(f), 'de_load:multipleNCGroups');
+        end
+
+        function test_de_load_nc_ncvariable_selects(testCase)
+            f = test_DataExplorer.make_hetero_nc();
+            cl = onCleanup(@() delete(f));
+            T = de_load(f, 'NCVariable', 'profile1d');
+            cols = string(T.Properties.VariableNames);
+            testCase.verifyTrue(ismember("profile1d", cols));
+            testCase.verifyFalse(ismember("grid2d", cols));
+        end
+
+        function test_de_load_nc_autoselect_largest(testCase)
+            f = test_DataExplorer.make_hetero_nc();
+            cl = onCleanup(@() delete(f));
+            T = de_load(f, 'AutoSelect', true);
+            cols = string(T.Properties.VariableNames);
+            testCase.verifyTrue(ismember("grid2d", cols), ...
+                'AutoSelect should pick the largest group (grid2d, 30 elems)');
         end
 
         function test_select_columns_excludes_family_nonreps(testCase)
