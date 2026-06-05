@@ -33,20 +33,21 @@ classdef test_DataExplorer < matlab.unittest.TestCase
     % ─────────────────────────────────────────────────────────────────────────
     methods (Access = private)
 
-        function assert_recipe_valid(testCase, recipe_path)
-            testCase.verifyTrue(~isempty(recipe_path), 'Recipe path is empty');
-            testCase.verifyTrue(exist(recipe_path, 'file') == 2, ...
-                sprintf('Recipe file not found: %s', recipe_path));
-            info = checkcode(recipe_path, '-string');
+        function assert_recipe_valid(testCase, recipe)
+            % recipe is the string array returned by DataExplorer (one line per
+            % element).  checkcode needs a file, so write it to a unique temp .m.
+            testCase.verifyNotEmpty(recipe, 'Recipe is empty');
+            tmp = [tempname '.m'];
+            writelines(recipe, tmp);
+            cl = onCleanup(@() delete(tmp));
+            info = checkcode(tmp, '-string');
             n_errors = numel(regexp(info, 'L \d+', 'match'));
             testCase.verifyEqual(n_errors, 0, ...
                 sprintf('checkcode found %d issue(s) in recipe:\n%s', n_errors, info));
         end
 
-        function assert_recipe_self_contained(testCase, recipe_path)
-            fid = fopen(recipe_path, 'r');
-            content = fread(fid, '*char')';
-            fclose(fid);
+        function assert_recipe_self_contained(testCase, recipe)
+            content = char(join(recipe, newline));
             testCase.verifyEmpty(regexp(content, '\bDataExplorer\b'), ...
                 'Recipe calls DataExplorer — not self-contained');
             testCase.verifyEmpty(regexp(content, '\bsave_recipe\b'), ...
@@ -751,15 +752,13 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cd(testCase.EXAMPLES_DIR);
             dir_cleanup = onCleanup(@() cd(orig_dir));
 
-            DataExplorer('State_Tobacco_Related_Disparities_Dashboard_Data.csv', ...
-                'MaxRows', 100);
+            % Request the recipe (3rd output) → returned without rendering.
+            [~, ~, recipe] = DataExplorer( ...
+                'State_Tobacco_Related_Disparities_Dashboard_Data.csv', 'MaxRows', 100);
 
-            cd(orig_dir);   % restore before reading recipe so any remaining test code runs fine
+            cd(orig_dir);   % restore before assertions so any remaining test code runs fine
 
-            recipe_path = se_find_latest_recipe();
-            testCase.assumeTrue(~isempty(recipe_path), 'No recipe was written — skip path check');
-
-            content = fileread(recipe_path);
+            content = char(join(recipe, newline));
             % The relative filename must not appear bare in the recipe
             testCase.verifyEmpty( ...
                 strfind(content, '''State_Tobacco_Related_Disparities_Dashboard_Data.csv'''), ...
@@ -1454,10 +1453,10 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyGreaterThanOrEqual(testCase.figure_count(), 4, ...
                 'Expected at least 4 figures');
 
-            % ── Recipe ────────────────────────────────────────────────────
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            % ── Recipe (requested → returned without re-rendering) ─────────
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 1000, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
         end
 
         % ── Flint CSV  (not yet baselined) ────────────────────────────────
@@ -1476,9 +1475,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyGreaterThan(height(T), 0, 'Table is empty');
             testCase.verifyGreaterThan(width(T), 0, 'Table has no columns');
             testCase.assert_all_figures_nonempty();
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 1000, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
         end
 
         % ── Prod_dataset.xlsx  (not yet baselined; blocked on Task 3) ─────
@@ -1517,9 +1516,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 testCase.verifyNotEmpty(figs_choro, ...
                     'Choropleth not produced despite Mapping Toolbox being available');
             end
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
         end
 
         % ── Prod_dataset.xlsx — second-largest sheet ──────────────────────
@@ -1564,9 +1563,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             % verify time series fires as STACKED AREA (unlike the tobacco CSV).
             testCase.verifyGreaterThan(height(T), 0);
             testCase.assert_all_figures_nonempty();
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 1000, 'AutoSelect', true, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
         end
 
         % ── AQI zip  (not yet baselined) ──────────────────────────────────
@@ -1583,9 +1582,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             % TODO (baseline): single CSV inside zip — should not prompt.
             testCase.verifyGreaterThan(height(T), 0);
             testCase.assert_all_figures_nonempty();
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 1000, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
         end
 
         % ── Conc monitor zip  (not yet baselined) ─────────────────────────
@@ -1601,22 +1600,22 @@ classdef test_DataExplorer < matlab.unittest.TestCase
 
             testCase.verifyGreaterThan(height(T), 0);
             testCase.assert_all_figures_nonempty();
-            recipe_path = se_find_latest_recipe();
-            testCase.assert_recipe_valid(recipe_path);
-            testCase.assert_recipe_self_contained(recipe_path);
+            [~, ~, recipe] = DataExplorer(f, 'MaxRows', 200, 'RandSeed', 1);
+            testCase.assert_recipe_valid(recipe);
+            testCase.assert_recipe_self_contained(recipe);
 
-            recipe = string(fileread(recipe_path));
+            % recipe is a string array (one line per element) → any(contains(...)).
             % Correlated-family figures must be wired into the recipe.
-            testCase.verifyTrue(contains(recipe, "de_corr_families"), ...
+            testCase.verifyTrue(any(contains(recipe, "de_corr_families")), ...
                 'Recipe must compute correlated families');
-            testCase.verifyTrue(contains(recipe, "fam_cols"), ...
+            testCase.verifyTrue(any(contains(recipe, "fam_cols")), ...
                 'Recipe must emit per-family plots driven by an editable fam_cols list');
             % Identifier columns must never be a choropleth color variable.
             for idname = ["StateCode","CountyCode","SiteNum","ParameterCode", ...
                           "State Code","County Code","Site Num","Parameter Code"]
                 testCase.verifyFalse( ...
-                    contains(recipe, "'ColorCol','" + idname + "'") || ...
-                    contains(recipe, "'ColorCol', '" + idname + "'"), ...
+                    any(contains(recipe, "'ColorCol','" + idname + "'")) || ...
+                    any(contains(recipe, "'ColorCol', '" + idname + "'")), ...
                     sprintf('Choropleth must not be colored by id column %s', idname));
             end
         end
@@ -2602,16 +2601,6 @@ end
 % ─────────────────────────────────────────────────────────────────────────────
 %  File-local helpers
 % ─────────────────────────────────────────────────────────────────────────────
-
-function recipe_path = se_find_latest_recipe()
-hits = dir(fullfile(tempdir, 'dataexplorer_*.m'));
-if isempty(hits)
-    recipe_path = '';
-    return
-end
-[~, newest] = max([hits.datenum]);
-recipe_path = fullfile(hits(newest).folder, hits(newest).name);
-end
 
 function [T, prof] = se_profile_test_shim(T, ~)
 % Call se_profile via DataExplorer's local function namespace.

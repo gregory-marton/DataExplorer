@@ -1,4 +1,4 @@
-function T = DataExplorer(source, options)
+function [T, prof, recipe] = DataExplorer(source, options)
 %SMARTEXPLORE  Forgiving data exploration for mixed-type tables.
 %
 %   T = DataExplorer()                  file picker dialog
@@ -48,6 +48,15 @@ arguments
     options.NCSliceIndex    (1,1) double  = 1           % NetCDF: element index when NCReduction="slice"
     options.RandSeed        (1,1) double  = NaN         % seed stratifier choice for a reproducible recipe
 end
+
+% Outputs: [T, prof, recipe].  recipe is the generated recipe as a string array
+% (one line per element).  Requesting it changes behavior: when the recipe IS
+% requested (nargout>=3), DataExplorer returns the code WITHOUT running it (no
+% figures) — "give me the recipe", not "run it".  T = DataExplorer(...) and
+% [T,prof] = DataExplorer(...) render as usual.  Initialized here so every
+% early-return path (NetCDF multi-variable fast-path, empty table) defines them.
+prof   = struct([]);
+recipe = strings(0, 1);
 
 %% ── 0.  Version check ────────────────────────────────────────────────────
 % Developed and tested on R2025b (25.2). Features like DataTipTemplate,
@@ -208,8 +217,13 @@ if ischar(source) || isstring(source)
     src_str_ = string(source);
 end
 [~, recipe_text] = se_assemble_recipe(src_str_, T, prof, panel, options);
-idx_ = strfind(recipe_text, '%% === Overview ===');
-if ~isempty(idx_), eval(recipe_text(idx_(1):end)); else, eval(recipe_text); end
+recipe = splitlines(string(recipe_text));   % return as one-line-per-element array
+% Run the recipe to produce figures — UNLESS the caller asked for it (nargout>=3),
+% in which case they want the code, not its side effects.
+if nargout < 3
+    idx_ = strfind(recipe_text, '%% === Overview ===');
+    if ~isempty(idx_), eval(recipe_text(idx_(1):end)); else, eval(recipe_text); end
+end
 
 end % ── DataExplorer ──────────────────────────────────────────────────────
 
