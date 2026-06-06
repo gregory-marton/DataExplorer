@@ -2073,6 +2073,61 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'de_statebins should forward CellRenderer and produce cat_heat patch');
         end
 
+        function test_heatmap_cat_names_time_axis(testCase)
+            % The heatmap_cat x-axis is the auto-picked TimeCol, which can be a
+            % datetime that isn't a meaningful trend axis (e.g. a "first max
+            % date").  The on-plot key must name WHICH column the x-axis is so a
+            % viewer can judge it — DataExplorer can't know it's not a real timeline.
+            states = repelem(["ME";"NY"], 6);
+            cats   = repmat(repelem(["A";"B"], 3), 2, 1);
+            dts    = repmat(datetime(2020,1,1) + calmonths([0;1;2]), 4, 1);
+            vals   = (1:12)';
+            T = table(string(states), categorical(cats), dts, double(vals), ...
+                'VariableNames', {'State','Cat','FirstMaxDate','Value'});
+            g.codes = {'ME','NY'}; g.rows = [0,1]; g.cols = [0,0];
+            g.is_overflow = [false;false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, 'ColorCol','Value', ...
+                'TimeCol','FirstMaxDate', 'CellRenderer','heatmap_cat', ...
+                'CatCol','Cat', 'TopK',5);
+            cl2 = onCleanup(@() close(fig));
+            key = findobj(fig, 'Tag','cat_legend');
+            testCase.assertNotEmpty(key, 'heatmap_cat must draw a key');
+            key_txt = strjoin(string(key(1).String), ' ');
+            testCase.verifyTrue(contains(key_txt, 'FirstMaxDate'), ...
+                sprintf('Key must name the time/x column; got: %s', key_txt));
+        end
+
+        function test_sparkline_names_time_axis(testCase)
+            % The per-tile sparkline x-axis is the auto-picked TimeCol; the
+            % legend key must name which column it is (same concern as heatmap_cat).
+            states = repelem(["ME";"NY"], 3);
+            dts    = repmat(datetime(2020,1,1) + calmonths([0;1;2]), 2, 1);
+            vals   = (1:6)';
+            T = table(string(states), dts, double(vals), ...
+                'VariableNames', {'State','FirstMaxDate','Value'});
+            g.codes = {'ME','NY'}; g.rows = [0,1]; g.cols = [0,0];
+            g.is_overflow = [false;false];
+            normed = string(T.State);
+
+            old_vis = get(0,'DefaultFigureVisible');
+            set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+
+            fig = de_tilegrid(T, g, normed, 'ColorCol','Value', 'TimeCol','FirstMaxDate');
+            cl2 = onCleanup(@() close(fig));
+            key = findobj(fig, 'Tag','legend_key');
+            testCase.assertNotEmpty(key, 'sparkline must draw a legend key');
+            key_txt = strjoin(string(key(1).String), ' ');
+            testCase.verifyTrue(contains(key_txt, 'FirstMaxDate'), ...
+                sprintf('Sparkline key must name the time axis; got: %s', key_txt));
+        end
+
         function test_geo_multicategorical_produces_figure(testCase)
             % Post-inversion (Task 6): geo × categorical tile figure is recipe-only.
             % For StateCode × MSN + wide year columns, the recipe must include

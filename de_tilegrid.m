@@ -454,7 +454,8 @@ end
 if has_spark && has_choro && ~is_heatmap_cat
     t1s = tg_yr_str(t_vals, 1, is_year_axis);
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
-    key_str = ['color: mean  |  spark: ' t1s char(8594) tns];
+    tcn = strrep(char(options.TimeCol), '_', ' ');
+    key_str = ['color: mean  |  spark x = ' tcn ': ' t1s char(8594) tns];
     text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
         'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
         'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
@@ -596,6 +597,16 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
         cb.FontSize = F.subtitle;
         key_lines = [{'rows:'}, arrayfun(@(k) sprintf('%d  %s', k, top_cat_levels{k}), ...
             (1:K)', 'UniformOutput', false)'];
+        % Name the x-axis: it is the (auto-picked) TimeCol, which may be an
+        % arbitrary datetime — say which column it is and its span so a viewer
+        % isn't left guessing whether it is a meaningful timeline.
+        if has_time && n_t > 1
+            tcn    = strrep(char(options.TimeCol), '_', ' ');
+            x_line = sprintf('x = %s: %s%s%s', tcn, ...
+                tg_yr_str(t_vals, 1, is_year_axis), char(8594), ...
+                tg_yr_str(t_vals, numel(t_vals), is_year_axis));
+            key_lines = [{x_line}, key_lines];
+        end
         cat_key = strjoin(key_lines, newline);
         text(ax, -MARGIN+0.05, -MARGIN+0.1, cat_key, ...
             'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
