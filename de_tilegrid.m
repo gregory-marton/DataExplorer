@@ -25,9 +25,7 @@ function [fig, ax] = de_tilegrid(T, grid, normed, options)
 %                     (never a slider)
 %   CellRenderer      'color' (default) | 'heatmap_cat' | 'scatter_cat' | 'value_ladder'
 %   CatCol            categorical for heatmap_cat / scatter_cat
-%   ValueCols         value_ladder: numeric columns drawn as per-tile bars,
-%                     left→right in this order (decoded by the legend, NOT a
-%                     time axis)
+%   ValueCols         value_ladder: numeric columns drawn as per-tile bars
 %   Scale             'auto' | 'log' | 'linear' — color / bar quantitative axis
 %   ConfoundNote      small red caveat drawn in the figure body
 %   Title             figure / window title
@@ -261,11 +259,8 @@ if is_scatter_cat
 end
 
 %% ── Value-ladder data (CellRenderer='value_ladder') ──────────────────────────
-% Per tile: mean of each family member, drawn as a bar.  Bars run left→right in
-% ValueCols order (one color per member, decoded by the legend) on a y-scale
-% shared by every tile (so heights compare across patches).  The horizontal
-% arrangement is member order, NOT a time axis — the legend title says so, since
-% a family of year-like columns would otherwise read as a trend.
+% Per tile: mean of each family member, drawn as a sparkline across the members
+% on a y-scale shared by every tile (so heights compare across patches).
 ladder = []; lad_lo = NaN; lad_hi = NaN; K_lad = 0; use_log_ladder = false;
 if is_value_ladder
     K_lad  = numel(val_cols);
@@ -534,19 +529,14 @@ if is_value_ladder && K_lad > 0 && ~isnan(lad_lo) && lad_hi > lad_lo
             'Location', 'eastoutside', 'FontSize', F.subtitle, ...
             'Interpreter', 'none', 'Box', 'off');
         % Legend title doubles as the vertical scale: the value range a full bar
-        % spans (un-logged), plus log/omission notes.  It also decodes the
-        % horizontal arrangement: bars run left→right in legend order (one per
-        % member), which is NOT a time axis — members may happen to be year-like
-        % columns, but DataExplorer can't assume they are ordered in time.
+        % spans (un-logged), plus log/omission notes.
         if use_log_ladder
-            hgt = sprintf('bar height: %.3g to %.3g (log)', 10^base_lo, 10^lad_hi);
+            note = sprintf('bar height: %.3g to %.3g (log)', 10^base_lo, 10^lad_hi);
         else
-            hgt = sprintf('bar height: %.3g to %.3g', base_lo, lad_hi);
+            note = sprintf('bar height: %.3g to %.3g', base_lo, lad_hi);
         end
-        note = string(hgt) + newline + ...
-            "bars left" + char(8594) + "right: legend order (not a time axis)";
         if options.LegendNote ~= ""
-            note = note + newline + options.LegendNote;
+            note = note + "  |  " + options.LegendNote;
         end
         lg.Title.String = char(note);
         lg.Title.FontSize = FSZ_LEGEND;
