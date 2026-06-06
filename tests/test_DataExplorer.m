@@ -501,6 +501,36 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyNotEmpty(axn,  'value_ladder must draw a labeled axis');
         end
 
+        function test_value_ladder_notes_x_axis_not_time(testCase)
+            % The bars run left→right by family member (decoded only by the
+            % legend colors), which is easily misread as a time axis — for a
+            % family of year-like columns it looks exactly like a trend.  The
+            % legend title must state the horizontal arrangement is the legend
+            % order, not a time axis.
+            rng(9);
+            n = 180;
+            states = repmat(["AL";"CA";"TX";"NY";"FL";"OH"], n/6, 1);
+            latent = abs(randn(n,1)) + 1;
+            A = latent + 0.05*randn(n,1);
+            B = latent*1.4 + 0.05*randn(n,1);
+            C = latent*0.8 + 0.05*randn(n,1);
+            T = table(categorical(states), A, B, C, ...
+                'VariableNames', {'State','MeasureA','MeasureB','MeasureC'});
+
+            old_vis = get(0, 'DefaultFigureVisible');
+            set(0, 'DefaultFigureVisible', 'off');
+            cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
+            close all;
+
+            de_statebins(T, 'StateCol','State', 'CellRenderer','value_ladder', ...
+                'ValueCols', ["MeasureA","MeasureB","MeasureC"]);
+            lg = findobj(0, 'Type', 'legend');
+            testCase.assertNotEmpty(lg, 'value_ladder must draw a legend');
+            title_txt = strjoin(string(lg(1).Title.String), ' ');
+            testCase.verifyTrue(contains(lower(title_txt), 'not a time axis'), ...
+                sprintf('Legend title must note the horizontal axis is not time; got: %s', title_txt));
+        end
+
         function test_corr_families_ignores_independent_cols(testCase)
             % Five truly independent columns → no family.
             rng(2);
