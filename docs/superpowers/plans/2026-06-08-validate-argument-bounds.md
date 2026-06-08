@@ -1,7 +1,16 @@
 # Validate argument bounds (MaxRows and beyond) — Plan
 
-> **Status:** captured 2026-06-08; **not yet prioritized / not started.** Design-level; per-task
-> `- [ ]` checkboxes to be added when picked up.
+> **Status:** **CORE DONE 2026-06-08.** Implemented on the user-facing surface: `MaxRows`/`nrows`
+> budget (`de__must_be_row_budget`, `Inf`=no limit); ranges (`de__must_be_range`) on
+> CLim/SharedXLim/SharedYLim (de_tilegrid), ColorLim/SizeLim (de_geoscatter),
+> Lat/Lon/TimeRange (de_stride_sample); enums (`mustBeMember`) on CellRenderer/Scale
+> (de_tilegrid + de_geobins); positive counts (`mustBePositive`) on MaxVars (DataExplorer),
+> TopK (de_tilegrid + de_geobins), MinSize/MaxSize (de_geoscatter). 10 unit tests + checkcode +
+> recipe-smoke green.
+> **REMAINING (internal-only, lower value):** ChunkSize (de_reservoir_sample); de_corr_families
+> (Threshold[0,1], MinSize>0, Method enum); de_pick_stratifier (Floor[0,1], MaxCard>0);
+> de_plot_cat_association (MaxPairs>0, VThresh[0,1], Figure/ForcePlot enums — verify allowed sets).
+> The clearer `GeoCol`-not-found message lives in the complain-ignored-options plan.
 > **Related:** [2026-06-08-complain-ignored-options.md] — complementary: that plan *warns* when a
 > **valid** option is ignored by the active mode; this plan *errors* when an option's **value** is
 > out of bounds. Enum validation here overlaps the CellRenderer silent-typo-fallback noted there.

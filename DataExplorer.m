@@ -47,8 +47,8 @@ function [T, prof, recipe] = DataExplorer(source, options)
 
 arguments
     source = []
-    options.MaxRows         (1,1) double  = 10000
-    options.MaxVars         (1,1) double  = 8
+    options.MaxRows         (1,1) double {de__must_be_row_budget} = 10000
+    options.MaxVars         (1,1) double {mustBePositive} = 8
     options.Columns                       = []          % names (string/char/cell) or indices
     options.MissingStrings  (1,:) string  = [...
         "Suppressed", "N/A", "NA", "n/a", "--", "-", ...

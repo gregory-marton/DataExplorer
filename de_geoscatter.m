@@ -48,10 +48,10 @@ arguments
     options.SizeLabel  (1,1) string  = "Size"
     options.Title      (1,1) string  = ""
     options.Source     (1,1) string  = ""
-    options.MinSize    (1,1) double  = 5
-    options.MaxSize    (1,1) double  = 200
-    options.ColorLim   (1,2) double  = [NaN NaN]
-    options.SizeLim    (1,2) double  = [NaN NaN]
+    options.MinSize    (1,1) double {mustBePositive} = 5
+    options.MaxSize    (1,1) double {mustBePositive} = 200
+    options.ColorLim   (1,2) double {de__must_be_range} = [NaN NaN]
+    options.SizeLim    (1,2) double {de__must_be_range} = [NaN NaN]
     options.Colormap                 = 'parula'
     options.FontSize   (1,1) double  = NaN
     options.Parent                   = []

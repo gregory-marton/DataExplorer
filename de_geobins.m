@@ -71,9 +71,9 @@ arguments
     options.Aliases                        = []
     options.MapLabel         (1,1) string  = ""
     options.FontSize         (1,1) double  = 7
-    options.CellRenderer     (1,1) string  = "color"
+    options.CellRenderer     (1,1) string {mustBeMember(options.CellRenderer, ["color","heatmap_cat","scatter_cat","value_ladder"])} = "color"
     options.CatCol           (1,1) string  = ""
-    options.TopK             (1,1) double  = 5
+    options.TopK             (1,1) double {mustBePositive} = 5
     options.SharedYLim       (1,2) double  = [NaN NaN]
     options.CatColors                      = []
     options.XCol             (1,1) string  = ""
@@ -83,7 +83,7 @@ arguments
     options.ValueCols        (1,:) string  = string([])
     options.LegendNote       (1,1) string  = ""
     options.ConfoundNote     (1,1) string  = ""
-    options.Scale            (1,1) string  = "auto"
+    options.Scale            (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"
 end
 
 fig = []; ax = [];

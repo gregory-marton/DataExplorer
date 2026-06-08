@@ -2743,6 +2743,68 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyGreaterThan(height(T), 0, 'Expected non-empty output');
         end
 
+        % ── Plan D: argument-bounds validation ──────────────────────────────
+        function test_row_budget_validator(testCase)
+            % de__must_be_row_budget rejects 0 / negatives (pointing at Inf) and
+            % accepts Inf (no limit) and positive counts.
+            testCase.verifyError(@() de__must_be_row_budget(0),  'DataExplorer:badMaxRows');
+            testCase.verifyError(@() de__must_be_row_budget(-5), 'DataExplorer:badMaxRows');
+            de__must_be_row_budget(Inf);     % must not error
+            de__must_be_row_budget(1000);    % must not error
+        end
+
+        function test_maxrows_zero_errors_cleanly(testCase)
+            % MaxRows=0 must fail at the argument boundary with the budget error —
+            % not the opaque "Row index exceeds table dimensions" crash.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w'); fprintf(fid, 'a,b\n1,2\n3,4\n5,6\n'); fclose(fid);
+            testCase.verifyError(@() de_load(string(tmp), MaxRows=0), 'DataExplorer:badMaxRows');
+        end
+
+        function test_maxrows_inf_loads_all_rows(testCase)
+            % MaxRows=Inf is the "no limit" sentinel — every row loads.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w'); fprintf(fid, 'a,b\n');
+            for i = 1:7, fprintf(fid, '%d,%d\n', i, i*2); end
+            fclose(fid);
+            T = de_load(string(tmp), MaxRows=Inf);
+            testCase.verifyEqual(height(T), 7, 'MaxRows=Inf must load every row');
+        end
+
+        function test_range_validator(testCase)
+            % de__must_be_range rejects reversed [hi lo]; accepts ordered, auto, infinite.
+            testCase.verifyError(@() de__must_be_range([10 1]), 'DataExplorer:badRange');
+            de__must_be_range([1 10]);       % ok
+            de__must_be_range([NaN NaN]);    % ok (auto / unset)
+            de__must_be_range([-Inf Inf]);   % ok
+        end
+
+        function test_clim_reversed_errors(testCase)
+            % A reversed CLim must error at the de_tilegrid boundary (no figure).
+            T = table(string(["ME";"NY"]), [1;2], 'VariableNames', {'State','Value'});
+            g.codes = {'ME','NY'}; g.rows = [0,1]; g.cols = [0,0]; g.is_overflow = [false;false];
+            testCase.verifyError(@() de_tilegrid(T, g, string(T.State), ...
+                'ColorCol','Value', 'CLim',[10 1]), 'DataExplorer:badRange');
+        end
+
+        function test_cellrenderer_typo_errors(testCase)
+            % A misspelled CellRenderer must error (not silently fall back to color).
+            T = table(string(["ME";"NY"]), [1;2], 'VariableNames', {'StateCode','Value'});
+            testCase.verifyError(@() de_statebins(T, 'StateCol','StateCode', ...
+                'ColorCol','Value', 'CellRenderer','heatmp'), 'MATLAB:validators:mustBeMember');
+        end
+
+        function test_topk_zero_errors(testCase)
+            % TopK must be positive.
+            T = table(string(["ME";"NY"]), categorical(["A";"B"]), [1;2], ...
+                'VariableNames', {'StateCode','Cat','Value'});
+            testCase.verifyError(@() de_statebins(T, 'StateCol','StateCode', ...
+                'ColorCol','Value', 'CatCol','Cat', 'CellRenderer','heatmap_cat', 'TopK',0), ...
+                'MATLAB:validators:mustBePositive');
+        end
+
     end
 
 end

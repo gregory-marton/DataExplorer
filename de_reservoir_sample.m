@@ -28,7 +28,7 @@ function T = de_reservoir_sample(filepath, nrows, options)
 
 arguments
     filepath  (1,1) string
-    nrows     (1,1) double = 10000
+    nrows     (1,1) double {de__must_be_row_budget} = 10000
     options.Seed      = []
     options.ChunkSize (1,1) double = 50000
     options.Verbose   (1,1) logical = true

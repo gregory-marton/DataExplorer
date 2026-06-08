@@ -30,10 +30,10 @@ function T = de_stride_sample(filepath, options)
 arguments
     filepath              (1,1) string
     options.Variable      (1,1) string  = ""
-    options.MaxRows       (1,1) double  = 10000
-    options.LatRange      (1,2) double  = [-Inf Inf]
-    options.LonRange      (1,2) double  = [-Inf Inf]
-    options.TimeRange     (1,2) double  = [1 Inf]
+    options.MaxRows       (1,1) double {de__must_be_row_budget} = 10000
+    options.LatRange      (1,2) double {de__must_be_range} = [-Inf Inf]
+    options.LonRange      (1,2) double {de__must_be_range} = [-Inf Inf]
+    options.TimeRange     (1,2) double {de__must_be_range} = [1 Inf]
     options.Verbose       (1,1) logical = true
 end
 

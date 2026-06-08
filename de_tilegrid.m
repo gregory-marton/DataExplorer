@@ -47,19 +47,19 @@ arguments
     options.OverflowEdgeColor (1,3) double  = [0.75 0.40 0.05]
     options.MapLabel          (1,1) string  = "Map"
     options.FontSize          (1,1) double  = 7
-    options.CellRenderer      (1,1) string  = "color"
+    options.CellRenderer      (1,1) string {mustBeMember(options.CellRenderer, ["color","heatmap_cat","scatter_cat","value_ladder"])} = "color"
     options.CatCol            (1,1) string  = ""
-    options.TopK              (1,1) double  = 5
-    options.SharedYLim        (1,2) double  = [NaN NaN]
+    options.TopK              (1,1) double {mustBePositive} = 5
+    options.SharedYLim        (1,2) double {de__must_be_range} = [NaN NaN]
     options.CatColors                       = []
     options.XCol              (1,1) string  = ""
     options.YCol              (1,1) string  = ""
-    options.SharedXLim        (1,2) double  = [NaN NaN]
-    options.CLim              (1,2) double  = [NaN NaN]
+    options.SharedXLim        (1,2) double {de__must_be_range} = [NaN NaN]
+    options.CLim              (1,2) double {de__must_be_range} = [NaN NaN]
     options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
     options.LegendNote        (1,1) string  = ""
     options.ConfoundNote      (1,1) string  = ""      % small red in-figure caveat
-    options.Scale             (1,1) string  = "auto"   % "linear"|"log"|"auto"; color axis (choropleth) or bar axis (value_ladder)
+    options.Scale             (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"   % color axis (choropleth) or bar axis (value_ladder)
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title

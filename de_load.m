@@ -36,7 +36,7 @@ arguments
     options.MissingStrings      (1,:) string  = string([])
     options.VariableNamesRange  (1,1) string  = ""
     options.DataRange           (1,1) string  = ""
-    options.MaxRows             (1,1) double  = Inf
+    options.MaxRows             (1,1) double {de__must_be_row_budget} = Inf
 end
 
 T = de_load_dispatch(filepath, options);
