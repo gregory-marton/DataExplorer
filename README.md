@@ -269,6 +269,14 @@ Hard-won, in roughly the order they bit us:
   potentially Python later), the contract stays the same: load → profile → echo a
   readable recipe → show. The recipe is the portable, editable artifact in every
   variant.
+- **Deeper automated analysis** (concrete plans in `docs/superpowers/plans/`):
+  - *Multi-dimensional outlier detection + sentinel surfacing* — fit a small GMM over the
+    densest numeric columns, rank rows by likelihood, attribute each surprise to specific
+    variables, and flag likely numeric sentinel values (far + repeated) with a printed,
+    reversible recode.
+  - *A signal-aware interestingness ranker* — rank columns by whether they actually
+    *stratify* the data (ANOVA F for categoricals; outlier-robust, bimodality-aware spread
+    for numerics) rather than by raw spread or entropy.
 
 ## Requirements
 

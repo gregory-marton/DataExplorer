@@ -115,7 +115,7 @@ The function executes a linear pipeline:
 
 ## Planned Work (as of 2026-05-05)
 
-These tasks were designed in conversation and not yet implemented. Read them before adding features — several are architecturally load-bearing.
+These tasks were designed in conversation and not yet implemented. Read them before adding features — several are architecturally load-bearing. (Two larger analysis features — multi-dimensional outlier detection + sentinel surfacing, and a signal-aware interestingness ranker — have moved to dedicated plans in `docs/superpowers/plans/`.)
 
 ### Task 1 — Automated regression testing
 Interactive baseline session: load each dataset in `examples/`, show resulting PNGs one page at a time, discuss what to assert for each before moving on. Then build a MATLAB (`matlab.unittest`) test harness around the agreed expectations. Pre-sampled small fixtures for large datasets. Visual correctness requires human sign-off; automated checks verify: syntactic validity (`checkcode`), headless execution without errors, expected figure count.
@@ -139,7 +139,7 @@ Three new figure types, in priority order:
 
 3. **Choropleth maps** — when a categorical matches a known geographic key pattern (2-letter state codes → `de_statebins`; ISO country codes → `de_countrybins`), produce one map per numeric variable. No Mapping Toolbox required. For lat/lon point data, `se_plot_geo` continues to handle that path. `de_countrybins` is not yet wired into DataExplorer — needs a `se_looks_like_countries` detector analogous to `se_looks_like_states`.
 
-All three figure types can generate many figures quickly. Apply the interestingness ranker from Task 6 to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
+All three figure types can generate many figures quickly. Apply the interestingness ranker (see `docs/superpowers/plans/2026-06-08-interestingness-ranker.md`) to select which categoricals and numerics to prioritize if the total would exceed a reasonable cap (e.g., 5 figures per type).
 
 **Stacked vs. line heuristic (already fixed 2026-05-20):** `se_plot_timeseries` now uses a compositional test — stacked area only when row-wise sums have CV < 0.2. Otherwise overlaid lines. Compositional data now generates both a stacked area figure AND an overlaid-lines figure with a dashed Total line.
 
@@ -157,11 +157,6 @@ All three figure types can generate many figures quickly. Apply the interestingn
 
 **Internal title prefix (2026-05-21):** `se_src_prefix(source_name, rest)` helper suppresses the "source —" prefix from axes titles when the source is "table input" (i.e., when T was passed directly rather than loaded from a file). Heatmap title format changed to "Time × CatName".
 
-
-### Task 4 — Multi-dimensional outlier detection with per-variable surprise attribution
-Fit a small GMM (k=3–5, `fitgmdist`) to the densest numeric columns (cap ~10, using same column selection as `se_select_columns`). Rank rows by log-likelihood; lowest = multi-dimensional outliers. Attribute surprise to specific variables via per-variable distance from nearest cluster centroid. Pre-filter rows that are mostly missing (already flagged by `se_profile`) — those are uninteresting. Output: ranked list of top ~20 surprising rows with variable-level attribution. Integrate as Phase 6 in DataExplorer when ≥3 numeric columns and ≥50 non-missing rows exist; skip silently otherwise.
-
-amendment: `se_profile` does **not** attempt numeric sentinel replacement (the -999/-9999 heuristic was removed). Missing text sentinels ("N/A", "NULL", etc.) are handled by `MissingStrings` before numeric conversion; that is sufficient for now. Task 6's outlier detection pass is the right place to surface candidate sentinel values: far AND repeated univariate outliers should be recoded automatically (the goal is a useful first pass with minimal input), but the recode must be printed so the user can review and undo post-hoc. Never silent. Constraint: some legitimate extremes are indistinguishable from sentinels by value alone (e.g., 0 or -1 as satellite dry mass at launch) — the printout is the safety net.
 
 ### Task 5 — save_recipe() / code-generation-as-primitive architecture
 **Architectural inversion:** code generation is the primitive; execution is a side effect.
@@ -182,14 +177,5 @@ Recipe output is currently vanilla MATLAB (portable, no dependency). The alterna
 2. **Time-series block** (lower priority): the overlaid+stacked block in `cg_best_plots_code` (~30 lines for compositional datasets) could become `de_timeseries(T, time_col, value_cols)` but that function doesn't yet exist.
 The NetCDF spatial recipe is already short (9 lines) thanks to `de_stride_sample` + `de_geoscatter`.
 
-### Task 6 — Improve se_select_columns interestingness ranker
-Current ranker (line 1832): numeric score = `std/range`; categorical score = Shannon entropy.
-
-**Known issues:**
-- `std/range`: sensitive to outliers (one extreme value inflates range, suppresses score); misses bimodality and heavy tails.
-- Shannon entropy: measures marginal diversity, not signal. High entropy can be noise (free-text field, high-cardinality code column). What matters is whether the variable *stratifies* something — a categorical column where all groups have similar numeric distributions is low-information regardless of entropy.
-- Candidate replacement for categorical: ANOVA F-statistic (`f_oneway` equivalent) measuring how much grouping by this column explains variance in numeric columns. Fall back to normalized entropy (`entropy / log2(cardinality)`) when no numeric columns exist.
-- Correlation pruning threshold 0.92 is high; Pearson only (misses monotone nonlinear relationships).
-
-Fix should be driven by concrete bad examples from the baseline session (task 1), not theory alone.
+_(Task 6 — the interestingness ranker — moved to `docs/superpowers/plans/2026-06-08-interestingness-ranker.md`.)_
 
