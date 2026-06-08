@@ -1,6 +1,8 @@
 # Student Tools Consolidation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **STATUS (reviewed 2026-06-08): DONE.** `SampleData`/`SampleNetCDF` replaced by `de_reservoir_sample.m`/`de_stride_sample.m` (the `de_` prefix superseded the bare `ReservoirSample`/`StrideSample` names here); `de_pivot_wide_years.m` added. Call sites updated; old files removed.
 
 **Goal:** Replace `SampleData` + `SampleNetCDF` with `ReservoirSample` (tabular random) + `StrideSample` (tabular/NetCDF deterministic), update all call sites, ensure every recipe always prints inline + offers `save_recipe()`, and document recipe abstraction opportunities.
 

@@ -1,6 +1,8 @@
 # Download Examples + Recipe Full Inversion Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **STATUS (reviewed 2026-06-08): DONE.** `scripts/download_examples.py` + `download_examples.sh` shipped; the recipe inversion landed (`cg_state_choropleth_code`/`cg_country_choropleth_code`/`cg_geo_multicategorical_code`; `se_plot` since retired; `se_echo_load_code` deleted). Names evolved: `sparkline_cat`→`heatmap_cat`. **OPEN:** two example download URLs (`FIADB_URBAN_ENTIRE_CSV.zip`, `xr_latest_dwca.zip`) remain `FILL_IN_URL` — the lone live loose end (see the large-example-files TODO).
 
 **Goal:** (Task 2) Add a download script for the 5 git-ignored large example datasets; (Task 5) extend the recipe system so the generated script includes all library-callable figures (choropleth, sparkline_cat), removing them from the direct render path so code generation is the primitive and execution is a side effect.
 

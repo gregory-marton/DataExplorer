@@ -1,6 +1,8 @@
 # Geo × Categorical × Numeric — Multi-Dimensional Tile Figures Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **STATUS (reviewed 2026-06-08): DONE.** `de_tilegrid` has `CellRenderer` + the per-tile render branches; `de_statebins`/`de_countrybins` pass them through. The `sparkline_cat` renderer described here became today's `heatmap_cat`; `scatter_cat` and `value_ladder` also landed.
 
 **Goal:** Produce a static geographic tile-grid figure (de_statebins / de_countrybins layout) where each state/country cell contains per-category sparklines (when time data exists) or a scatter (when multiple numerics exist but no time axis), firing automatically when two categoricals cross-index the rows and one is geographic.
 

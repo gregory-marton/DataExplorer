@@ -1,6 +1,8 @@
 # NetCDF Auto-Variable Iteration Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **STATUS (reviewed 2026-06-08): DONE, then SUPERSEDED.** Implemented as the multi-variable NetCDF fast-path (`nc_list_data_vars`, `load_netcdf` loop, NCVariable override, fixed recipe load code), then replaced this session by the "conformable or ask" `de_load` unification (commits 8b67efd, 1371691, c9eb563, bea399e) — `nc_list_data_vars`/`load_netcdf` were deleted. Kept for history; not actionable.
 
 **Goal:** DataExplorer automatically iterates all data variables in a NetCDF file (no user prompt), applies a size-based heuristic for >2D reduction, and emits `DataExplorer(filepath, NCVariable='...')` in the echo/recipe load code instead of the misleading `ncread(...)`.
 

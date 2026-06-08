@@ -1,6 +1,8 @@
 # NetCDF Spatial Grid Path Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **STATUS (reviewed 2026-06-08): DONE, evolved.** `de_geoscatter.m` shipped; `SampleNetCDF` shipped as `de_stride_sample.m` (now any-dimensional). The dedicated `nc_is_spatial_grid` + `cg_netcdf_spatial_recipe` were folded into today's `cg_geoscatter_code` gridded path (groupsummary mean/std) and then deleted. Capability intact; helpers superseded.
 
 **Goal:** Replace the hanging `mean(ncread(...))` path for large NetCDF spatial grids with stride sampling (`SampleNetCDF`) and a dedicated geo scatter visualization (`de_geoscatter`), while fixing fast-path control flow bugs.
 
