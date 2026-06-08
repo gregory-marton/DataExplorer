@@ -258,17 +258,8 @@ Hard-won, in roughly the order they bit us:
   comments, docstrings, or examples. Use clearly fictional names (Alice Apple,
   Beatrice Beachball).
 
-## Roadmap / vision
+## Roadmap
 
-- **A browser variant.** A JavaScript port deployable to GitHub Pages — zero
-  install, runs entirely client-side (file reading in the browser, no server). The
-  same load → profile → echo → show pipeline, with the recipe becoming a
-  self-contained HTML file the student edits. The leaning is toward [Observable Plot](https://observablehq.com/plot/)
-  (a lighter spiritual successor to D3) for the generated charts.
-- **One mental model across languages.** Whatever the host (MATLAB today, JS and
-  potentially Python later), the contract stays the same: load → profile → echo a
-  readable recipe → show. The recipe is the portable, editable artifact in every
-  variant.
 - **Deeper automated analysis** (concrete plans in `docs/superpowers/plans/`):
   - *Multi-dimensional outlier detection + sentinel surfacing* — fit a small GMM over the
     densest numeric columns, rank rows by likelihood, attribute each surprise to specific
