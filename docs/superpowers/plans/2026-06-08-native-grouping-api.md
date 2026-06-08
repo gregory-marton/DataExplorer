@@ -40,6 +40,17 @@ Our tile-grid API uses idiosyncratic names (`ColorCol`, `CatCol`, `TimeCol`, `Va
    per-group summary, then hand it to the plotter (already done in the NetCDF geoscatter recipe:
    `groupsummary(T,{lon,lat},{'mean','std'},vars)`).
 
+## Combined fill + bars (value_ladder + ColorVariable) — added 2026-06-08
+Today `value_ladder` forces `has_choro=false` (de_tilegrid.m:156), so it drops `ColorCol`
+entirely — you can't draw a ladder whose tiles are *also* tinted by a separate variable. Let the
+renderer accept BOTH a `ColorVariable` (tile-fill choropleth, e.g. mean MedianAQI per state) AND
+`DataVariables` (the per-member bars drawn on top). Implementation: stop zeroing `has_choro` for
+the ladder; keep bar colors as member identity (`lines`) but re-check bar/label contrast against a
+colored (parula) tile instead of gray; the legend then carries two encodings (colorbar = fill mean;
+bar colors = members) — label which is which, without over-claiming. Surfaced from a real attempt:
+`de_statebins(AQI, StateCol="State", CellRenderer="value_ladder", ValueCols=cols, ColorCol="MedianAQI")`
+— the `ColorCol` was silently dropped.
+
 ## Open questions
 - Clean rename vs deprecation aliases for the old option names (recipe text + test churn).
 - How far: just value+method, or full `heatmap`-signature parity.
