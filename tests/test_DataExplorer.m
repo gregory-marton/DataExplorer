@@ -2894,6 +2894,18 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'mean of equal values is degenerate → no colorbar (default behavior preserved)');
         end
 
+        % ── D/A secondary: clearer GeoCol-not-found message ─────────────────
+        function test_geobins_geocol_not_found_names_and_suggests(testCase)
+            % A wrong GeoCol must name the missing column AND suggest the closest
+            % real one (not the vague "need GeoCol + ColorVariable").
+            T = table([1;2], [3;4], 'VariableNames', {'State','ArithmeticMean'});
+            out = evalc("de_geobins(T, 'GeoCol','StateName', 'ColorVariable','ArithmeticMean');");
+            testCase.verifyTrue(contains(out, 'StateName'), ...
+                'message must name the missing GeoCol');
+            testCase.verifyTrue(contains(out, 'State'), ...
+                'message should suggest the closest column (State)');
+        end
+
     end
 
 end

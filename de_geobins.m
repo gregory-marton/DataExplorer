@@ -92,9 +92,18 @@ fig = []; ax = [];
 %% ── Validate ─────────────────────────────────────────────────────────────────
 varnames    = string(T.Properties.VariableNames);
 needs_color = options.CellRenderer == "color" || options.CellRenderer == "heatmap_cat";
-if options.GeoCol == "" || ~ismember(options.GeoCol, varnames) || ...
-   (needs_color && options.ColorVariable == "")
-    fprintf('  ℹ de_geobins: need GeoCol + ColorVariable — nothing to plot.\n');
+if options.GeoCol == ""
+    fprintf('  ℹ de_geobins: no GeoCol given — nothing to plot.\n');
+    return
+end
+if ~ismember(options.GeoCol, varnames)
+    fprintf('  ℹ de_geobins: GeoCol "%s" is not a column in the table%s\n      Available columns: %s\n', ...
+        options.GeoCol, gb_closest(options.GeoCol, varnames), strjoin(cellstr(varnames), ', '));
+    return
+end
+if needs_color && options.ColorVariable == ""
+    fprintf('  ℹ de_geobins: CellRenderer="%s" needs a ColorVariable — nothing to plot.\n', ...
+        options.CellRenderer);
     return
 end
 
@@ -208,6 +217,23 @@ g.is_overflow = IS_OVERFLOW;
     'ColorMethod',   options.ColorMethod);
 
 end % de_geobins
+
+
+%% ── gb_closest ───────────────────────────────────────────────────────────────
+function s = gb_closest(name, varnames)
+%GB_CLOSEST  ' — did you mean "X"?' for the nearest column name, else '.'.
+nl  = lower(name);
+vl  = lower(varnames);
+hit = vl == nl;                                                  % case-insensitive exact
+if ~any(hit), hit = startsWith(vl, nl) | startsWith(nl, vl); end % shared prefix
+if ~any(hit), hit = contains(vl, nl)   | contains(nl, vl);   end % substring either way
+cand = varnames(hit);
+if isempty(cand)
+    s = ".";
+else
+    s = sprintf(' — did you mean "%s"?', cand(1));
+end
+end
 
 
 %% ── gb_load_grid ─────────────────────────────────────────────────────────────
