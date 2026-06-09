@@ -262,12 +262,18 @@ if is_heatmap_cat
                 ['GroupVariable "%s" has a single level here — the map is effectively ' ...
                  'a plain choropleth.'], options.GroupVariable);
         else
-            lvl_spread = max(multi_heat, [], 3, 'omitnan') - min(multi_heat, [], 3, 'omitnan');
-            if max(lvl_spread(:), [], 'omitnan') < 0.01 * (sh_hi - sh_lo)
-                warning('de_tilegrid:flatStratification', ...
-                    ['GroupVariable "%s" barely changes %s across its levels — the ' ...
-                     'heatmap bands will look uniform.'], ...
-                    options.GroupVariable, options.ColorVariable);
+            % Compare across levels only in cells that actually have >=2 levels
+            % with data — otherwise sparse coverage (one level per tile) reads as
+            % "flat" but isn't.
+            cmp = sum(~isnan(multi_heat), 3) >= 2;
+            if any(cmp(:))
+                lvl_spread = max(multi_heat, [], 3, 'omitnan') - min(multi_heat, [], 3, 'omitnan');
+                if max(lvl_spread(cmp), [], 'omitnan') < 0.01 * (sh_hi - sh_lo)
+                    warning('de_tilegrid:flatStratification', ...
+                        ['GroupVariable "%s" barely changes %s across its levels — the ' ...
+                         'heatmap bands will look uniform.'], ...
+                        options.GroupVariable, options.ColorVariable);
+                end
             end
         end
     end
