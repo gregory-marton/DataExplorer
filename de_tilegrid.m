@@ -101,6 +101,31 @@ val_cols       = options.ValueCols(ismember(options.ValueCols, varnames));
 is_value_ladder = options.CellRenderer == "value_ladder" && ...
     numel(val_cols) >= 2 && numel(normed) == height(T) && height(T) > 0;
 
+%% ── Complain about options the active renderer can't use (Plan A) ─────────────
+% A typo'd / invalid value is already rejected by the arguments block (Plan D);
+% here we warn when a *valid* option simply isn't used by the active renderer, or
+% when value_ladder silently falls back for lack of columns.
+if options.CellRenderer == "value_ladder" && ~is_value_ladder
+    warning('de_tilegrid:valueLadderNeeds2', ...
+        ['CellRenderer="value_ladder" needs >=2 ValueCols present in the table ' ...
+         '(got %d); drawing a plain map instead.'], numel(val_cols));
+else
+    if is_value_ladder
+        tg_active = "value_ladder"; tg_consumed = ["ValueCols", "SharedYLim"];
+    elseif is_heatmap_cat
+        tg_active = "heatmap_cat";  tg_consumed = ["CatCol", "ColorCol", "TimeCol", "SharedYLim"];
+    elseif is_scatter_cat
+        tg_active = "scatter_cat";  tg_consumed = ["CatCol", "XCol", "YCol", "SharedXLim", "SharedYLim", "CatColors"];
+    else
+        tg_active = "color";        tg_consumed = ["ColorCol", "TimeCol"];
+    end
+    tg_ig = tg_ignored_options(options, tg_consumed);
+    if ~isempty(tg_ig)
+        warning('de_tilegrid:ignoredOptions', 'CellRenderer="%s" ignores: %s', ...
+            tg_active, strjoin(cellstr(tg_ig), ', '));
+    end
+end
+
 %% ── Time axis ────────────────────────────────────────────────────────────────
 t_vals = []; n_t = 1; is_year_axis = false;
 if has_time && (has_choro || is_heatmap_cat)
@@ -655,6 +680,17 @@ function cmap = tg_cmap(spec)
 CMAP_N = 256;
 if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
+end
+
+function ig = tg_ignored_options(options, consumed)
+%TG_IGNORED_OPTIONS  Non-default discriminating options not used by the active renderer.
+names = ["ColorCol", "TimeCol", "CatCol", "ValueCols", "XCol", "YCol", ...
+         "SharedYLim", "SharedXLim", "CatColors"];
+isset = [ options.ColorCol ~= "", options.TimeCol ~= "", options.CatCol ~= "", ...
+          ~isempty(options.ValueCols), options.XCol ~= "", options.YCol ~= "", ...
+          ~all(isnan(options.SharedYLim)), ~all(isnan(options.SharedXLim)), ...
+          ~isempty(options.CatColors) ];
+ig = names(isset & ~ismember(names, consumed));
 end
 
 function s = tg_fmt_tick(v)

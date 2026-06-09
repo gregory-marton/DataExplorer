@@ -2805,6 +2805,43 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'MATLAB:validators:mustBePositive');
         end
 
+        % ── Plan A: complain about options the active renderer ignores ──────
+        function test_value_ladder_warns_dropped_colorcol(testCase)
+            % value_ladder ignores ColorCol — must warn, not silently drop it.
+            T = table(string(["ME";"NY";"CA"]), [1;2;3], [4;5;6], ...
+                'VariableNames', {'State','A','B'});
+            g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
+            g.is_overflow = [false;false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
+                'CellRenderer','value_ladder', 'ValueCols',["A","B"], 'ColorCol','A'), ...
+                'de_tilegrid:ignoredOptions');
+        end
+
+        function test_value_ladder_one_col_warns(testCase)
+            % value_ladder with <2 ValueCols was a silent fallback — must warn.
+            T = table(string(["ME";"NY";"CA"]), [1;2;3], 'VariableNames', {'State','A'});
+            g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
+            g.is_overflow = [false;false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
+                'CellRenderer','value_ladder', 'ValueCols',"A"), 'de_tilegrid:valueLadderNeeds2');
+        end
+
+        function test_heatmap_cat_no_spurious_ignore_warning(testCase)
+            % A correct heatmap_cat call must NOT raise any warning.
+            T = table(string(["ME";"NY"]), categorical(["A";"B"]), [1;2], ...
+                'VariableNames', {'State','Cat','Value'});
+            g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0];
+            g.is_overflow = [false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            testCase.verifyWarningFree(@() de_tilegrid(T, g, string(T.State), ...
+                'ColorCol','Value', 'CatCol','Cat', 'CellRenderer','heatmap_cat'));
+        end
+
     end
 
 end

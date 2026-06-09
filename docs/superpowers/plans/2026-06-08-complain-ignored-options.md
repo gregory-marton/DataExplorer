@@ -1,8 +1,16 @@
 # Complain, don't silently ignore options — Plan
 
-> **Status:** captured 2026-06-08 from a design session; **not yet prioritized / not started.**
-> Design-level; per-task `- [ ]` checkboxes to be added when picked up (then use
-> superpowers:executing-plans or subagent-driven-development).
+> **Status:** **CORE DONE 2026-06-08.** Implemented in `de_tilegrid`: (1) `de_tilegrid:ignoredOptions`
+> warns when a non-default discriminating option (ColorCol/TimeCol/CatCol/ValueCols/XCol/YCol/
+> SharedXLim/SharedYLim/CatColors) isn't used by the active renderer — e.g. `ColorCol` passed to
+> `value_ladder`; (2) `de_tilegrid:valueLadderNeeds2` warns on the silent <2-ValueCols fallback.
+> Helper `tg_ignored_options` + per-renderer consumed-sets. 4 unit tests (incl. verifyWarningFree)
+> + checkcode + recipe-smoke green (no over-warning on real recipes).
+> **REMAINING:** the degenerate-TimeCol and flat-stratification warnings — deferred because they can
+> fire on legitimate recipe paths (single-year `n_t==1`, cad3bda; genuinely flat strata), so they
+> need gating + a recipe-smoke fixture audit before landing. Plus the secondary sweep
+> (de_countrybins FontSize/GridFile, de_overview MaxVars, de_plot_categorical_drilldown), and the
+> clearer `GeoCol`-not-found message (name the column + suggest the closest match).
 > **Related:** [2026-06-08-native-grouping-api.md] (renames the very options this plan
 > warns about — coordinate the consumed-sets), [2026-06-08-filter-during-read.md].
 
