@@ -11,8 +11,13 @@
 > by something" is delivered. 2 tests + checkcode + recipe-smoke green (recipe value_ladder has no
 > ColorCol → unchanged).
 > **REMAINING: B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
-> `CatCol`→`GroupVariable` (cosmetic, high-churn; NOTE `CatCol` is a substring of `CatColors`, so no
-> naive replace_all — word-boundary care needed; rewrites recipe text + tests + docs).
+> `CatCol`→`GroupVariable` (cosmetic, high-churn; rewrites recipe text + tests + docs). Do it WHOLE
+> (a partial rename leaves mixed vocabulary, worse than none). **De-risked order** (longest-superset
+> first, per file via replace_all): (1) `CatColors`→`GroupColors`, (2) `CatCol`→`GroupVariable`,
+> (3) `ColorCol`→`ColorVariable`, (4) `ValueCols`→`DataVariables` — across DataExplorer.m, de_tilegrid/
+> geobins/statebins/countrybins/usamap/geoscatter, tests, README, CLAUDE.md. Then full re-gate
+> (checkcode + recipe-smoke + the recipe-content slow tests, several of which assert option-name
+> tokens in the emitted recipe).
 > **Related:** [2026-06-08-complain-ignored-options.md] (renamed options change its consumed-sets —
 > do together or sequence carefully), [2026-06-08-filter-during-read.md] (shares the `rowfilter` idiom).
 
