@@ -113,7 +113,7 @@ if options.CellRenderer == "value_ladder" && ~is_value_ladder
          '(got %d); drawing a plain map instead.'], numel(val_cols));
 else
     if is_value_ladder
-        tg_active = "value_ladder"; tg_consumed = ["ValueCols", "SharedYLim"];
+        tg_active = "value_ladder"; tg_consumed = ["ValueCols", "SharedYLim", "ColorCol"];
     elseif is_heatmap_cat
         tg_active = "heatmap_cat";  tg_consumed = ["CatCol", "ColorCol", "TimeCol", "SharedYLim"];
     elseif is_scatter_cat
@@ -180,7 +180,7 @@ if ~any(isnan(options.CLim))
     vmax = options.CLim(2);
 end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
-if is_heatmap_cat || is_scatter_cat || is_value_ladder, has_choro = false; end
+if is_heatmap_cat || is_scatter_cat, has_choro = false; end   % value_ladder may keep a ColorCol tile fill (B2)
 
 % Log color scale.  Policy: callers (the recipe) pass Scale "log"/"linear" based on
 % the column's profiled skewness; "auto" falls back to a skewness test on the tile
@@ -450,7 +450,7 @@ if strlength(options.ConfoundNote) > 0
 end
 
 %% ── Sparklines (per-tile time series) ───────────────────────────────────────
-if has_spark && has_choro && ~is_heatmap_cat
+if has_spark && has_choro && ~is_heatmap_cat && ~is_value_ladder
     tile_h   = 1 - 2*GAP;
     SPARK_MX = 0.10;
     x_ticks  = linspace(0, 1, n_t);
@@ -475,7 +475,7 @@ if has_spark && has_choro && ~is_heatmap_cat
 end
 
 %% ── Legend key ───────────────────────────────────────────────────────────────
-if has_spark && has_choro && ~is_heatmap_cat
+if has_spark && has_choro && ~is_heatmap_cat && ~is_value_ladder
     t1s = tg_yr_str(t_vals, 1, is_year_axis);
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     tcn = strrep(char(options.TimeCol), '_', ' ');

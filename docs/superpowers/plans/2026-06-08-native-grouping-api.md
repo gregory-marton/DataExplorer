@@ -5,8 +5,12 @@
 > choropleth/heatmap_cat/value_ladder aggregation (`tg_agg`) with method-aware labels (colorbar,
 > title, heatmap colorbar, sparkline key). 2 unit tests + checkcode + recipe-smoke green; recipes
 > unaffected (default mean). Directly enables the PM25 insight: `ColorMethod="count"` shows coverage.
-> **REMAINING: B2** value_ladder + ColorVariable combined glyph (tile fill = a variable, bars =
-> members). **B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
+> **B2 DONE 2026-06-08:** value_ladder no longer forces `has_choro=false` — with a `ColorCol` set it
+> fills the tiles (colorbar) while drawing member bars on top (value_ladder excluded from sparklines;
+> `ColorCol` added to its consumed-set so Plan A no longer flags it). The original "ladder also colored
+> by something" is delivered. 2 tests + checkcode + recipe-smoke green (recipe value_ladder has no
+> ColorCol → unchanged).
+> **REMAINING: B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
 > `CatCol`→`GroupVariable` (cosmetic, high-churn; NOTE `CatCol` is a substring of `CatColors`, so no
 > naive replace_all — word-boundary care needed; rewrites recipe text + tests + docs).
 > **Related:** [2026-06-08-complain-ignored-options.md] (renamed options change its consumed-sets —

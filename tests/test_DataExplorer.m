@@ -2806,8 +2806,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         % ── Plan A: complain about options the active renderer ignores ──────
-        function test_value_ladder_warns_dropped_colorcol(testCase)
-            % value_ladder ignores ColorCol — must warn, not silently drop it.
+        function test_value_ladder_warns_ignored_xcol(testCase)
+            % value_ladder ignores scatter options like XCol — must warn.
+            % (ColorCol is NOT ignored anymore: B2 uses it as the tile fill.)
             T = table(string(["ME";"NY";"CA"]), [1;2;3], [4;5;6], ...
                 'VariableNames', {'State','A','B'});
             g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
@@ -2815,8 +2816,30 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
             testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
-                'CellRenderer','value_ladder', 'ValueCols',["A","B"], 'ColorCol','A'), ...
+                'CellRenderer','value_ladder', 'ValueCols',["A","B"], 'XCol','A'), ...
                 'de_tilegrid:ignoredOptions');
+        end
+
+        function test_value_ladder_colorcol_fills_tiles(testCase)
+            % B2: value_ladder + ColorCol = combined glyph — tiles filled by ColorCol
+            % (colorbar present) with member bars drawn on top.
+            rng(3);
+            states = repmat(["ME";"NY";"CA"], 10, 1);
+            fillv  = repelem([1;5;9], 10);     % varies per state -> non-degenerate fill
+            A = rand(30,1); B = rand(30,1);
+            T = table(string(states), fillv, A, B, ...
+                'VariableNames', {'State','Fill','A','B'});
+            g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
+            g.is_overflow = [false;false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            fig = de_tilegrid(T, g, string(T.State), 'CellRenderer','value_ladder', ...
+                'ValueCols',["A","B"], 'ColorCol','Fill');
+            cl2 = onCleanup(@() close(fig));
+            testCase.verifyNotEmpty(findobj(fig, 'Type','colorbar'), ...
+                'ColorCol must fill the tiles (colorbar present)');
+            testCase.verifyNotEmpty(findobj(fig, 'Tag','value_ladder'), ...
+                'member bars must still be drawn on top');
         end
 
         function test_value_ladder_one_col_warns(testCase)
