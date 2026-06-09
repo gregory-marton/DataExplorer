@@ -2842,6 +2842,35 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'ColorCol','Value', 'CatCol','Cat', 'CellRenderer','heatmap_cat'));
         end
 
+        % ── Plan B1: ColorMethod (aggregation, default mean) ────────────────
+        function test_colormethod_count_aggregates_by_count(testCase)
+            % ColorMethod='count' colors by per-tile observation count and the
+            % colorbar names the method. Equal values (mean degenerate) but
+            % differing row counts (3 vs 1) → count varies → choropleth appears.
+            T = table(string(["ME";"ME";"ME";"NY"]), [5;5;5;5], 'VariableNames', {'State','V'});
+            g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            fig = de_tilegrid(T, g, string(T.State), 'ColorCol','V', 'ColorMethod','count');
+            cl2 = onCleanup(@() close(fig));
+            cb = findobj(fig, 'Type','colorbar');
+            testCase.verifyNotEmpty(cb, 'count varies (3 vs 1) so a choropleth colorbar must appear');
+            testCase.verifyTrue(contains(string(cb(1).Label.String), 'count'), ...
+                sprintf('Colorbar must name the method; got "%s"', string(cb(1).Label.String)));
+        end
+
+        function test_colormethod_mean_is_default(testCase)
+            % Default stays mean: equal values are degenerate → no choropleth colorbar.
+            T = table(string(["ME";"ME";"NY"]), [5;5;5], 'VariableNames', {'State','V'});
+            g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            fig = de_tilegrid(T, g, string(T.State), 'ColorCol','V');
+            cl2 = onCleanup(@() close(fig));
+            testCase.verifyEmpty(findobj(fig, 'Type','colorbar'), ...
+                'mean of equal values is degenerate → no colorbar (default behavior preserved)');
+        end
+
     end
 
 end

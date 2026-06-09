@@ -84,6 +84,7 @@ arguments
     options.LegendNote       (1,1) string  = ""
     options.ConfoundNote     (1,1) string  = ""
     options.Scale            (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"
+    options.ColorMethod      (1,1) string  = "mean"
 end
 
 fig = []; ax = [];
@@ -203,7 +204,8 @@ g.is_overflow = IS_OVERFLOW;
     'ValueCols',     options.ValueCols, ...
     'LegendNote',    options.LegendNote, ...
     'ConfoundNote',  options.ConfoundNote, ...
-    'Scale',         options.Scale);
+    'Scale',         options.Scale, ...
+    'ColorMethod',   options.ColorMethod);
 
 end % de_geobins
 

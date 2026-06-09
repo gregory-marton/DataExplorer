@@ -1,7 +1,14 @@
 # Align the plot/group API with MATLAB-native vocabulary — Plan
 
-> **Status:** captured 2026-06-08 from a design session; **not yet prioritized / not started.**
-> Design-level; per-task `- [ ]` checkboxes to be added when picked up.
+> **Status:** **B1 DONE 2026-06-08.** `ColorMethod` (mean/count/median/sum, default mean) added to
+> `de_tilegrid` and plumbed through `de_geobins`/`de_statebins`/`de_countrybins`; threaded through the
+> choropleth/heatmap_cat/value_ladder aggregation (`tg_agg`) with method-aware labels (colorbar,
+> title, heatmap colorbar, sparkline key). 2 unit tests + checkcode + recipe-smoke green; recipes
+> unaffected (default mean). Directly enables the PM25 insight: `ColorMethod="count"` shows coverage.
+> **REMAINING: B2** value_ladder + ColorVariable combined glyph (tile fill = a variable, bars =
+> members). **B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
+> `CatCol`→`GroupVariable` (cosmetic, high-churn; NOTE `CatCol` is a substring of `CatColors`, so no
+> naive replace_all — word-boundary care needed; rewrites recipe text + tests + docs).
 > **Related:** [2026-06-08-complain-ignored-options.md] (renamed options change its consumed-sets —
 > do together or sequence carefully), [2026-06-08-filter-during-read.md] (shares the `rowfilter` idiom).
 

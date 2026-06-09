@@ -60,9 +60,11 @@ arguments
     options.LegendNote        (1,1) string  = ""
     options.ConfoundNote      (1,1) string  = ""      % small red in-figure caveat
     options.Scale             (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"   % color axis (choropleth) or bar axis (value_ladder)
+    options.ColorMethod       (1,1) string {mustBeMember(options.ColorMethod, ["mean","count","median","sum"])} = "mean"   % per-tile aggregation
 end
 
 F                 = de__font_sizes(options.FontSize);  % F.subtitle=cbar, F.axlabel=overflow, F.page=title
+mname             = char(options.ColorMethod);         % per-tile aggregation (mean/count/median/sum)
 TILE_PX           = 36;
 FIG_W_MIN         = 500;   FIG_W_MAX = 1600;
 FIG_H_MIN         = 380;   FIG_H_MAX = 1000;
@@ -163,7 +165,7 @@ if has_choro
             end
             vals = vals(~isnan(vals));
             if ~isempty(vals)
-                Heat(ti, tt)  = mean(vals);
+                Heat(ti, tt)  = tg_agg(vals, mname);
                 N_obs(ti, tt) = numel(vals);
             end
         end
@@ -236,7 +238,7 @@ if is_heatmap_cat
                     v_ki = ydata_sc(s_mask & k_mask);
                 end
                 v_ki = v_ki(~isnan(v_ki));
-                if ~isempty(v_ki), multi_heat(ti,tt,ki) = mean(v_ki); end
+                if ~isempty(v_ki), multi_heat(ti,tt,ki) = tg_agg(v_ki, mname); end
             end
         end
     end
@@ -296,7 +298,7 @@ if is_value_ladder
         for ki = 1:K_lad
             v = double(T.(char(val_cols(ki))));
             v = v(s_mask); v = v(~isnan(v));
-            if ~isempty(v), ladder(ti, ki) = mean(v); end
+            if ~isempty(v), ladder(ti, ki) = tg_agg(v, mname); end
         end
     end
     non_ov_lad = ladder(~IS_OVERFLOW, :);
@@ -413,7 +415,9 @@ if has_choro
     if has_spark
         t1s_cb = tg_yr_str(t_vals, 1, is_year_axis);
         tns_cb = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
-        lbl = sprintf('mean(%s, %s – %s)', lbl, t1s_cb, tns_cb);
+        lbl = sprintf('%s(%s, %s – %s)', mname, lbl, t1s_cb, tns_cb);
+    else
+        lbl = sprintf('%s(%s)', mname, lbl);
     end
     if use_log_color
         lbl = [lbl ' (log scale)'];
@@ -430,7 +434,7 @@ if has_choro
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
-title(ax, tg_title_str(options.ColorCol, options.MapLabel, ...
+title(ax, tg_title_str(mname, options.ColorCol, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', F.page, 'Interpreter', 'none');
 
@@ -475,7 +479,7 @@ if has_spark && has_choro && ~is_heatmap_cat
     t1s = tg_yr_str(t_vals, 1, is_year_axis);
     tns = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     tcn = strrep(char(options.TimeCol), '_', ' ');
-    key_str = ['color: mean  |  spark x = ' tcn ': ' t1s char(8594) tns];
+    key_str = ['color: ' mname '  |  spark x = ' tcn ': ' t1s char(8594) tns];
     text(ax, -MARGIN + 0.05, -MARGIN + 0.05, key_str, ...
         'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
         'FontSize', FSZ_LEGEND, 'Interpreter', 'none', 'Tag', 'legend_key', ...
@@ -603,7 +607,7 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
         cb = colorbar(ax, 'Position', [CBAR_X, 0.04, CBAR_W, 0.92]);
         val_lbl = strrep(char(options.ColorCol), '_', ' ');
         if n_t > 1
-            cb.Label.String = sprintf('mean(%s, %s%s%s)', val_lbl, ...
+            cb.Label.String = sprintf('%s(%s, %s%s%s)', mname, val_lbl, ...
                 tg_yr_str(t_vals, 1, is_year_axis), char(8211), ...
                 tg_yr_str(t_vals, numel(t_vals), is_year_axis));
         else
@@ -682,6 +686,16 @@ if ischar(spec) || isstring(spec), cmap = feval(char(spec), CMAP_N);
 else, cmap = spec; end
 end
 
+function v = tg_agg(x, method)
+%TG_AGG  Aggregate a vector by the chosen ColorMethod (default mean).
+switch method
+    case 'count',  v = numel(x);
+    case 'median', v = median(x);
+    case 'sum',    v = sum(x);
+    otherwise,     v = mean(x);
+end
+end
+
 function ig = tg_ignored_options(options, consumed)
 %TG_IGNORED_OPTIONS  Non-default discriminating options not used by the active renderer.
 names = ["ColorCol", "TimeCol", "CatCol", "ValueCols", "XCol", "YCol", ...
@@ -744,14 +758,14 @@ if ~has_choro || isnan(val), s = code;
 else, s = sprintf('%s\n%.3g', code, val); end
 end
 
-function s = tg_title_str(color_col, map_label, t_vals, is_year_axis, has_choro, has_spark)
+function s = tg_title_str(method, color_col, map_label, t_vals, is_year_axis, has_choro, has_spark)
 if ~has_choro, s = char(map_label); return; end
 if has_spark && numel(t_vals) >= 2
     t1 = tg_yr_str(t_vals, 1, is_year_axis);
     tn = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
-    s = sprintf('mean(%s)  —  %s to %s', char(color_col), t1, tn);
+    s = sprintf('%s(%s)  —  %s to %s', method, char(color_col), t1, tn);
 else
-    s = sprintf('mean(%s)', char(color_col));
+    s = sprintf('%s(%s)', method, char(color_col));
 end
 end
 

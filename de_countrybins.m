@@ -33,6 +33,7 @@ arguments
     options.LegendNote   (1,1) string = ""
     options.ConfoundNote (1,1) string = ""
     options.Scale        (1,1) string = "auto"
+    options.ColorMethod  (1,1) string = "mean"
 end
 
 % GridFile (legacy) overrides default; otherwise use 'world' preset
@@ -62,5 +63,6 @@ end
     'ValueCols',    options.ValueCols, ...
     'LegendNote',   options.LegendNote, ...
     'ConfoundNote', options.ConfoundNote, ...
-    'Scale',        options.Scale);
+    'Scale',        options.Scale, ...
+    'ColorMethod',  options.ColorMethod);
 end
