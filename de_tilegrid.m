@@ -251,6 +251,26 @@ if is_heatmap_cat
         sh_lo = options.SharedYLim(1);
         sh_hi = options.SharedYLim(2);
     end
+
+    % Flat stratification: if the levels barely change the value within each tile,
+    % the bands look uniform — the heatmap is no more informative than a plain
+    % choropleth (e.g. ArithmeticMean by PollutantStandard: the standard doesn't
+    % change the mean).  Warn rather than mislead.
+    if ~isnan(sh_lo) && sh_hi > sh_lo
+        if K == 1
+            warning('de_tilegrid:flatStratification', ...
+                ['GroupVariable "%s" has a single level here — the map is effectively ' ...
+                 'a plain choropleth.'], options.GroupVariable);
+        else
+            lvl_spread = max(multi_heat, [], 3, 'omitnan') - min(multi_heat, [], 3, 'omitnan');
+            if max(lvl_spread(:), [], 'omitnan') < 0.01 * (sh_hi - sh_lo)
+                warning('de_tilegrid:flatStratification', ...
+                    ['GroupVariable "%s" barely changes %s across its levels — the ' ...
+                     'heatmap bands will look uniform.'], ...
+                    options.GroupVariable, options.ColorVariable);
+            end
+        end
+    end
 end
 
 %% ── Scatter cat data ─────────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ arguments
     prof                struct
     target_names        (1,:) string
     geo_name            (1,1) string = ""
-    options.Floor       (1,1) double {mustBeInRange(options.Floor, 0, 1)} = 0.05
+    options.Floor       (1,1) double {mustBeGreaterThanOrEqual(options.Floor, 0), mustBeLessThanOrEqual(options.Floor, 1)} = 0.05
     options.MaxCard     (1,1) double {mustBePositive} = 15
 end
 

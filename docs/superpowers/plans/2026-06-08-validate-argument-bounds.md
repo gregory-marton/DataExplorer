@@ -7,10 +7,13 @@
 > (de_tilegrid + de_geobins); positive counts (`mustBePositive`) on MaxVars (DataExplorer),
 > TopK (de_tilegrid + de_geobins), MinSize/MaxSize (de_geoscatter). 10 unit tests + checkcode +
 > recipe-smoke green.
-> **REMAINING (internal-only, lower value):** ChunkSize (de_reservoir_sample); de_corr_families
-> (Threshold[0,1], MinSize>0, Method enum); de_pick_stratifier (Floor[0,1], MaxCard>0);
-> de_plot_cat_association (MaxPairs>0, VThresh[0,1], Figure/ForcePlot enums — verify allowed sets).
-> The clearer `GeoCol`-not-found message lives in the complain-ignored-options plan.
+> **Internal bounds DONE 2026-06-09:** ChunkSize>0; de_corr_families (Threshold∈[0,1], MinSize>0,
+> Method∈{spearman,pearson}); de_pick_stratifier (Floor∈[0,1], MaxCard>0); de_plot_cat_association
+> (MaxPairs>0, VThresh∈[0,1], Figure∈{all,pair,vmatrix}). Used
+> `mustBeGreaterThanOrEqual`+`mustBeLessThanOrEqual` for ranges — **`mustBeInRange` is deprecated in
+> R2026a** (checkcode flags it; the recommended `mustBeBetween` has inclusive/exclusive ambiguity, so
+> the two-bound chain is cleaner). ForcePlot enum left alone (accepted set not obvious). The clearer
+> `GeoCol`-not-found message landed in the complain-ignored-options plan. **Plan D complete.**
 > **Related:** [2026-06-08-complain-ignored-options.md] — complementary: that plan *warns* when a
 > **valid** option is ignored by the active mode; this plan *errors* when an option's **value** is
 > out of bounds. Enum validation here overlaps the CellRenderer silent-typo-fallback noted there.

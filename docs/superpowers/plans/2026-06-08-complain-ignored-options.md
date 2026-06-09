@@ -6,11 +6,15 @@
 > `value_ladder`; (2) `de_tilegrid:valueLadderNeeds2` warns on the silent <2-ValueCols fallback.
 > Helper `tg_ignored_options` + per-renderer consumed-sets. 4 unit tests (incl. verifyWarningFree)
 > + checkcode + recipe-smoke green (no over-warning on real recipes).
-> **REMAINING:** the degenerate-TimeCol and flat-stratification warnings — deferred because they can
-> fire on legitimate recipe paths (single-year `n_t==1`, cad3bda; genuinely flat strata), so they
-> need gating + a recipe-smoke fixture audit before landing. Plus the secondary sweep
-> (de_countrybins FontSize/GridFile, de_overview MaxVars, de_plot_categorical_drilldown), and the
-> clearer `GeoCol`-not-found message (name the column + suggest the closest match).
+> **flat-stratification DONE 2026-06-09:** `de_tilegrid:flatStratification` warns when heatmap_cat
+> category levels barely change the value (the PM25-by-PollutantStandard case) or there is only one
+> level — recipe-safe, since the recipe only emits non-flat stratifiers (de_pick_stratifier chooses
+> one with signal). **GeoCol-not-found message DONE:** de_geobins names the missing column + suggests
+> the closest real one (`gb_closest`). **degenerate-TimeCol SKIPPED (on purpose):** a single distinct
+> time value is indistinguishable from legitimate single-period data (the cad3bda single-year recipe),
+> so warning would over-fire and break the warning-free recipe gate — not worth the false positives.
+> **REMAINING (low value):** de_countrybins FontSize/GridFile override notices, de_overview
+> MaxVars-truncation notice, de_plot_categorical_drilldown truncation notice.
 > **Related:** [2026-06-08-native-grouping-api.md] (renames the very options this plan
 > warns about — coordinate the consumed-sets), [2026-06-08-filter-during-read.md].
 

@@ -23,7 +23,7 @@ function families = de_corr_families(T, prof, options)
 arguments
     T         table
     prof      struct
-    options.Threshold (1,1) double {mustBeInRange(options.Threshold, 0, 1)} = 0.80
+    options.Threshold (1,1) double {mustBeGreaterThanOrEqual(options.Threshold, 0), mustBeLessThanOrEqual(options.Threshold, 1)} = 0.80
     options.MinSize   (1,1) double {mustBePositive} = 3
     options.Method    (1,1) string {mustBeMember(options.Method, ["spearman","pearson"])} = "spearman"
 end

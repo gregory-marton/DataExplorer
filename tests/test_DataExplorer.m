@@ -2898,8 +2898,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         function test_geobins_geocol_not_found_names_and_suggests(testCase)
             % A wrong GeoCol must name the missing column AND suggest the closest
             % real one (not the vague "need GeoCol + ColorVariable").
-            T = table([1;2], [3;4], 'VariableNames', {'State','ArithmeticMean'});
-            out = evalc("de_geobins(T, 'GeoCol','StateName', 'ColorVariable','ArithmeticMean');");
+            % Build T inside the evalc string too, so checkcode sees it used.
+            out = evalc(['T = table([1;2], [3;4], ''VariableNames'', {''State'',''ArithmeticMean''}); ' ...
+                'de_geobins(T, ''GeoCol'',''StateName'', ''ColorVariable'',''ArithmeticMean'');']);
             testCase.verifyTrue(contains(out, 'StateName'), ...
                 'message must name the missing GeoCol');
             testCase.verifyTrue(contains(out, 'State'), ...
@@ -2911,7 +2912,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyError(@() de_corr_families(table(), struct(), MinSize=0), ...
                 'MATLAB:validators:mustBePositive');
             testCase.verifyError(@() de_corr_families(table(), struct(), Threshold=2), ...
-                'MATLAB:validators:mustBeInRange');
+                'MATLAB:validators:mustBeLessThanOrEqual');
             testCase.verifyError(@() de_corr_families(table(), struct(), Method="kendall"), ...
                 'MATLAB:validators:mustBeMember');
             testCase.verifyError(@() de_pick_stratifier(table(), struct(), "x", MaxCard=0), ...
@@ -2920,6 +2921,22 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'MATLAB:validators:mustBeMember');
             testCase.verifyError(@() de_reservoir_sample("nofile.csv", 100, ChunkSize=0), ...
                 'MATLAB:validators:mustBePositive');
+        end
+
+        function test_heatmap_cat_flat_stratification_warns(testCase)
+            % Category levels that don't change the value (e.g. ArithmeticMean by
+            % PollutantStandard) make a uniform heatmap — must warn.
+            states = [repmat("ME",4,1); repmat("NY",4,1)];
+            cats   = repmat(["s1";"s2";"s3";"s4"], 2, 1);
+            vals   = [repmat(3,4,1); repmat(7,4,1)];   % depends on state only, flat across levels
+            T = table(string(states), categorical(cats), vals, ...
+                'VariableNames', {'State','Cat','V'});
+            g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
+                'ColorVariable','V', 'GroupVariable','Cat', 'CellRenderer','heatmap_cat'), ...
+                'de_tilegrid:flatStratification');
         end
 
     end
