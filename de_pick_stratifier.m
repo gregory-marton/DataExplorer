@@ -27,8 +27,8 @@ arguments
     prof                struct
     target_names        (1,:) string
     geo_name            (1,1) string = ""
-    options.Floor       (1,1) double = 0.05
-    options.MaxCard     (1,1) double = 15
+    options.Floor       (1,1) double {mustBeInRange(options.Floor, 0, 1)} = 0.05
+    options.MaxCard     (1,1) double {mustBePositive} = 15
 end
 
 strat = "";  eta2 = 0;  cand_names = strings(0, 1);  cand_w = [];

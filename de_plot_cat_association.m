@@ -15,9 +15,9 @@ function de_plot_cat_association(T, prof, options)
 arguments
     T     table
     prof  struct
-    options.MaxPairs  (1,1) double = 3
-    options.VThresh   (1,1) double = 0.10
-    options.Figure    (1,1) string = "all"
+    options.MaxPairs  (1,1) double {mustBePositive} = 3
+    options.VThresh   (1,1) double {mustBeInRange(options.VThresh, 0, 1)} = 0.10
+    options.Figure    (1,1) string {mustBeMember(options.Figure, ["all","pair","vmatrix"])} = "all"
     options.Columns   (1,:) string = string([])
     options.ForcePlot (1,1) string = "auto"
 end

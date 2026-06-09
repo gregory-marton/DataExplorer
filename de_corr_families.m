@@ -23,9 +23,9 @@ function families = de_corr_families(T, prof, options)
 arguments
     T         table
     prof      struct
-    options.Threshold (1,1) double = 0.80
-    options.MinSize   (1,1) double = 3
-    options.Method    (1,1) string = "spearman"
+    options.Threshold (1,1) double {mustBeInRange(options.Threshold, 0, 1)} = 0.80
+    options.MinSize   (1,1) double {mustBePositive} = 3
+    options.Method    (1,1) string {mustBeMember(options.Method, ["spearman","pearson"])} = "spearman"
 end
 
 LAT_LON = ["lat","latitude","lat_","latitude_dd","decimallatitude", ...

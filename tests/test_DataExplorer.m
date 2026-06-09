@@ -2906,6 +2906,22 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'message should suggest the closest column (State)');
         end
 
+        function test_internal_option_bounds(testCase)
+            % Internal functions validate their numeric / enum option bounds too.
+            testCase.verifyError(@() de_corr_families(table(), struct(), MinSize=0), ...
+                'MATLAB:validators:mustBePositive');
+            testCase.verifyError(@() de_corr_families(table(), struct(), Threshold=2), ...
+                'MATLAB:validators:mustBeInRange');
+            testCase.verifyError(@() de_corr_families(table(), struct(), Method="kendall"), ...
+                'MATLAB:validators:mustBeMember');
+            testCase.verifyError(@() de_pick_stratifier(table(), struct(), "x", MaxCard=0), ...
+                'MATLAB:validators:mustBePositive');
+            testCase.verifyError(@() de_plot_cat_association(table(), struct(), Figure="bogus"), ...
+                'MATLAB:validators:mustBeMember');
+            testCase.verifyError(@() de_reservoir_sample("nofile.csv", 100, ChunkSize=0), ...
+                'MATLAB:validators:mustBePositive');
+        end
+
     end
 
 end
