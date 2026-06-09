@@ -18,7 +18,7 @@ function T_long = de_pivot_wide_years(T, yr_cols)
 %   yr = T.Properties.VariableNames(startsWith(...,'x'));
 %   T_long = de_pivot_wide_years(T, yr);
 %   de_statebins(T_long, 'StateCol','StateCode', ...
-%       'ColorCol','Value', 'TimeCol','Year', 'Title','Energy by state')
+%       'ColorVariable','Value', 'TimeCol','Year', 'Title','Energy by state')
 
 yr_cols = cellstr(yr_cols(:)');
 yr_vals = cellfun(@(c) str2double(regexprep(c, '^[xX]', '')), yr_cols);

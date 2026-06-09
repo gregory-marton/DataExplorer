@@ -494,7 +494,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             close all;
 
             de_statebins(T, 'StateCol','State', 'CellRenderer','value_ladder', ...
-                'ValueCols', ["MeasureA","MeasureB","MeasureC"]);
+                'DataVariables', ["MeasureA","MeasureB","MeasureC"]);
             bars = findobj(0, 'Tag', 'value_ladder');
             axn  = findobj(0, 'Tag', 'ladder_axis');
             testCase.verifyNotEmpty(bars, 'value_ladder must draw bars');
@@ -586,7 +586,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             old_vis = get(0, 'DefaultFigureVisible');
             set(0, 'DefaultFigureVisible', 'off');
             cl = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
-            de_statebins(T, 'StateCol', 'State', 'ColorCol', 'Val', ...
+            de_statebins(T, 'StateCol', 'State', 'ColorVariable', 'Val', ...
                 'ConfoundNote', 'mixes Foo (eta2=88%)');
             ann = findall(0, 'Tag', 'confound_note');
             testCase.verifyNotEmpty(ann, 'ConfoundNote must render a tagged annotation');
@@ -874,7 +874,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            [fig, ax] = de_usamap(T, 'StateCol', 'State', 'ColorCol', 'Value');
+            [fig, ax] = de_usamap(T, 'StateCol', 'State', 'ColorVariable', 'Value');
             fig_cleanup = onCleanup(@() close(fig));
 
             % ax is a plain axes handle, not a struct
@@ -913,7 +913,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            [fig, ~] = de_usamap(T, 'StateCol', 'State', 'ColorCol', 'Value', 'TimeCol', 'Year');
+            [fig, ~] = de_usamap(T, 'StateCol', 'State', 'ColorVariable', 'Value', 'TimeCol', 'Year');
             fig_cleanup = onCleanup(@() close(fig));
 
             sliders = findobj(fig, 'Style', 'slider');
@@ -972,7 +972,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            [fig, ax] = de_statebins(T, 'StateCol','State', 'ColorCol','Value', 'TimeCol','Year');
+            [fig, ax] = de_statebins(T, 'StateCol','State', 'ColorVariable','Value', 'TimeCol','Year');
             fig_cleanup = onCleanup(@() close(fig));
 
             testCase.verifyTrue(isgraphics(fig) && isgraphics(ax), ...
@@ -1028,7 +1028,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            [fig, ax] = de_countrybins(T, 'CountryCol','Country', 'ColorCol','Value');
+            [fig, ax] = de_countrybins(T, 'CountryCol','Country', 'ColorVariable','Value');
             fig_cleanup = onCleanup(@() close(fig));
 
             testCase.verifyTrue(isgraphics(fig) && isgraphics(ax), ...
@@ -1374,7 +1374,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0, 'DefaultFigureVisible', 'off');
             vis_cleanup = onCleanup(@() set(0, 'DefaultFigureVisible', old_vis));
 
-            [fig, ax] = de_statebins(T, 'StateCol','StateCode', 'ColorCol','Value');
+            [fig, ax] = de_statebins(T, 'StateCol','StateCode', 'ColorVariable','Value');
             fig_cleanup = onCleanup(@() close(fig));
 
             testCase.verifyTrue(isgraphics(fig), 'de_statebins should return a valid figure');
@@ -1695,8 +1695,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             for idname = ["StateCode","CountyCode","SiteNum","ParameterCode", ...
                           "State Code","County Code","Site Num","Parameter Code"]
                 testCase.verifyFalse( ...
-                    any(contains(recipe, "'ColorCol','" + idname + "'")) || ...
-                    any(contains(recipe, "'ColorCol', '" + idname + "'")), ...
+                    any(contains(recipe, "'ColorVariable','" + idname + "'")) || ...
+                    any(contains(recipe, "'ColorVariable', '" + idname + "'")), ...
                     sprintf('Choropleth must not be colored by id column %s', idname));
             end
         end
@@ -1938,7 +1938,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
         end
 
         function test_tilegrid_choropleth_no_datatip_error(testCase)
-            % de_tilegrid with ColorCol must not error on DataTipTemplate
+            % de_tilegrid with ColorVariable must not error on DataTipTemplate
             % (primitive Patch objects don't support it).
             states = ["ME";"NY";"CA"];
             vals   = [1; 2; 3];
@@ -1953,7 +1953,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            fig = de_tilegrid(T, g, normed, 'ColorCol','Value');
+            fig = de_tilegrid(T, g, normed, 'ColorVariable','Value');
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             close(fig);
         end
@@ -1979,8 +1979,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
             fig = de_tilegrid(T, g, normed, ...
-                'ColorCol','Value', 'TimeCol','Year', ...
-                'CellRenderer','heatmap_cat', 'CatCol','Cat', 'TopK',5);
+                'ColorVariable','Value', 'TimeCol','Year', ...
+                'CellRenderer','heatmap_cat', 'GroupVariable','Cat', 'TopK',5);
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
@@ -2008,8 +2008,8 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
             fig = de_tilegrid(T, g, normed, ...
-                'ColorCol','Value', ...
-                'CellRenderer','heatmap_cat', 'CatCol','Cat', 'TopK',5);
+                'ColorVariable','Value', ...
+                'CellRenderer','heatmap_cat', 'GroupVariable','Cat', 'TopK',5);
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
             cl2 = onCleanup(@() close(fig));
 
@@ -2032,9 +2032,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            fig = de_statebins(T, 'StateCol','StateCode', 'ColorCol','Value', ...
+            fig = de_statebins(T, 'StateCol','StateCode', 'ColorVariable','Value', ...
                 'TimeCol','Year', 'CellRenderer','heatmap_cat', ...
-                'CatCol','Cat', 'TopK',4);
+                'GroupVariable','Cat', 'TopK',4);
             testCase.assertNotEmpty(fig, 'Expected a figure handle from de_statebins');
             cl2 = onCleanup(@() close(fig));
 
@@ -2062,9 +2062,9 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            fig = de_tilegrid(T, g, normed, 'ColorCol','Value', ...
+            fig = de_tilegrid(T, g, normed, 'ColorVariable','Value', ...
                 'TimeCol','FirstMaxDate', 'CellRenderer','heatmap_cat', ...
-                'CatCol','Cat', 'TopK',5);
+                'GroupVariable','Cat', 'TopK',5);
             cl2 = onCleanup(@() close(fig));
             key = findobj(fig, 'Tag','cat_legend');
             testCase.assertNotEmpty(key, 'heatmap_cat must draw a key');
@@ -2089,7 +2089,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
-            fig = de_tilegrid(T, g, normed, 'ColorCol','Value', 'TimeCol','FirstMaxDate');
+            fig = de_tilegrid(T, g, normed, 'ColorVariable','Value', 'TimeCol','FirstMaxDate');
             cl2 = onCleanup(@() close(fig));
             key = findobj(fig, 'Tag','legend_key');
             testCase.assertNotEmpty(key, 'sparkline must draw a legend key');
@@ -2149,7 +2149,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
 
             fig = de_tilegrid(T, g, normed, ...
-                'CellRenderer','scatter_cat', 'CatCol','Cat', ...
+                'CellRenderer','scatter_cat', 'GroupVariable','Cat', ...
                 'XCol','X', 'YCol','Y', 'TopK',5, ...
                 'SharedXLim',[1,16], 'SharedYLim',[-3,3]);
             testCase.assertNotEmpty(fig, 'Expected a figure handle');
@@ -2786,14 +2786,14 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             T = table(string(["ME";"NY"]), [1;2], 'VariableNames', {'State','Value'});
             g.codes = {'ME','NY'}; g.rows = [0,1]; g.cols = [0,0]; g.is_overflow = [false;false];
             testCase.verifyError(@() de_tilegrid(T, g, string(T.State), ...
-                'ColorCol','Value', 'CLim',[10 1]), 'DataExplorer:badRange');
+                'ColorVariable','Value', 'CLim',[10 1]), 'DataExplorer:badRange');
         end
 
         function test_cellrenderer_typo_errors(testCase)
             % A misspelled CellRenderer must error (not silently fall back to color).
             T = table(string(["ME";"NY"]), [1;2], 'VariableNames', {'StateCode','Value'});
             testCase.verifyError(@() de_statebins(T, 'StateCol','StateCode', ...
-                'ColorCol','Value', 'CellRenderer','heatmp'), 'MATLAB:validators:mustBeMember');
+                'ColorVariable','Value', 'CellRenderer','heatmp'), 'MATLAB:validators:mustBeMember');
         end
 
         function test_topk_zero_errors(testCase)
@@ -2801,14 +2801,14 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             T = table(string(["ME";"NY"]), categorical(["A";"B"]), [1;2], ...
                 'VariableNames', {'StateCode','Cat','Value'});
             testCase.verifyError(@() de_statebins(T, 'StateCol','StateCode', ...
-                'ColorCol','Value', 'CatCol','Cat', 'CellRenderer','heatmap_cat', 'TopK',0), ...
+                'ColorVariable','Value', 'GroupVariable','Cat', 'CellRenderer','heatmap_cat', 'TopK',0), ...
                 'MATLAB:validators:mustBePositive');
         end
 
         % ── Plan A: complain about options the active renderer ignores ──────
         function test_value_ladder_warns_ignored_xcol(testCase)
             % value_ladder ignores scatter options like XCol — must warn.
-            % (ColorCol is NOT ignored anymore: B2 uses it as the tile fill.)
+            % (ColorVariable is NOT ignored anymore: B2 uses it as the tile fill.)
             T = table(string(["ME";"NY";"CA"]), [1;2;3], [4;5;6], ...
                 'VariableNames', {'State','A','B'});
             g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
@@ -2816,12 +2816,12 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
             testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
-                'CellRenderer','value_ladder', 'ValueCols',["A","B"], 'XCol','A'), ...
+                'CellRenderer','value_ladder', 'DataVariables',["A","B"], 'XCol','A'), ...
                 'de_tilegrid:ignoredOptions');
         end
 
         function test_value_ladder_colorcol_fills_tiles(testCase)
-            % B2: value_ladder + ColorCol = combined glyph — tiles filled by ColorCol
+            % B2: value_ladder + ColorVariable = combined glyph — tiles filled by ColorVariable
             % (colorbar present) with member bars drawn on top.
             rng(3);
             states = repmat(["ME";"NY";"CA"], 10, 1);
@@ -2834,23 +2834,23 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
             fig = de_tilegrid(T, g, string(T.State), 'CellRenderer','value_ladder', ...
-                'ValueCols',["A","B"], 'ColorCol','Fill');
+                'DataVariables',["A","B"], 'ColorVariable','Fill');
             cl2 = onCleanup(@() close(fig));
             testCase.verifyNotEmpty(findobj(fig, 'Type','colorbar'), ...
-                'ColorCol must fill the tiles (colorbar present)');
+                'ColorVariable must fill the tiles (colorbar present)');
             testCase.verifyNotEmpty(findobj(fig, 'Tag','value_ladder'), ...
                 'member bars must still be drawn on top');
         end
 
         function test_value_ladder_one_col_warns(testCase)
-            % value_ladder with <2 ValueCols was a silent fallback — must warn.
+            % value_ladder with <2 DataVariables was a silent fallback — must warn.
             T = table(string(["ME";"NY";"CA"]), [1;2;3], 'VariableNames', {'State','A'});
             g.codes = {'ME','NY','CA'}; g.rows = [0;1;2]; g.cols = [0;0;0];
             g.is_overflow = [false;false;false];
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
             testCase.verifyWarning(@() de_tilegrid(T, g, string(T.State), ...
-                'CellRenderer','value_ladder', 'ValueCols',"A"), 'de_tilegrid:valueLadderNeeds2');
+                'CellRenderer','value_ladder', 'DataVariables',"A"), 'de_tilegrid:valueLadderNeeds2');
         end
 
         function test_heatmap_cat_no_spurious_ignore_warning(testCase)
@@ -2862,7 +2862,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
             testCase.verifyWarningFree(@() de_tilegrid(T, g, string(T.State), ...
-                'ColorCol','Value', 'CatCol','Cat', 'CellRenderer','heatmap_cat'));
+                'ColorVariable','Value', 'GroupVariable','Cat', 'CellRenderer','heatmap_cat'));
         end
 
         % ── Plan B1: ColorMethod (aggregation, default mean) ────────────────
@@ -2874,7 +2874,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
-            fig = de_tilegrid(T, g, string(T.State), 'ColorCol','V', 'ColorMethod','count');
+            fig = de_tilegrid(T, g, string(T.State), 'ColorVariable','V', 'ColorMethod','count');
             cl2 = onCleanup(@() close(fig));
             cb = findobj(fig, 'Type','colorbar');
             testCase.verifyNotEmpty(cb, 'count varies (3 vs 1) so a choropleth colorbar must appear');
@@ -2888,7 +2888,7 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
             old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
             cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
-            fig = de_tilegrid(T, g, string(T.State), 'ColorCol','V');
+            fig = de_tilegrid(T, g, string(T.State), 'ColorVariable','V');
             cl2 = onCleanup(@() close(fig));
             testCase.verifyEmpty(findobj(fig, 'Type','colorbar'), ...
                 'mean of equal values is degenerate → no colorbar (default behavior preserved)');

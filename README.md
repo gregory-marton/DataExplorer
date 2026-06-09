@@ -212,7 +212,7 @@ console profile and on the figures) so you can see it and override it.
   `cg_*` code generators may do arbitrarily clever analysis to *decide* what to emit,
   but what they emit should be a handful of plain library calls plus the *structure*
   exposed as editable variables — e.g. a correlated family becomes
-  `fam_cols = {...}; de_pairplot(T, prof, fam_cols); de_statebins(..., 'ValueCols',fam_cols)`,
+  `fam_cols = {...}; de_pairplot(T, prof, fam_cols); de_statebins(..., 'DataVariables',fam_cols)`,
   not a single opaque call that hides the column list. A new single-purpose wrapper
   that exists only to shorten the recipe is a smell: it moves the decision out of the
   student's reach. Prefer composing existing `de_*` calls

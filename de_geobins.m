@@ -4,9 +4,9 @@ function [fig, ax] = de_geobins(T, options)
 %
 %   Usage
 %   ─────
-%   de_geobins(T, 'GeoCol','State',   'ColorCol','Rate', 'Grid','us-states')
-%   de_geobins(T, 'GeoCol','Country', 'ColorCol','GDP',  'Grid','world')
-%   de_geobins(T, 'GeoCol','Prov',    'ColorCol','Val',  'Grid','ca-provinces')
+%   de_geobins(T, 'GeoCol','State',   'ColorVariable','Rate', 'Grid','us-states')
+%   de_geobins(T, 'GeoCol','Country', 'ColorVariable','GDP',  'Grid','world')
+%   de_geobins(T, 'GeoCol','Prov',    'ColorVariable','Val',  'Grid','ca-provinces')
 %
 %   Grid argument
 %   ─────────────
@@ -33,7 +33,7 @@ function [fig, ax] = de_geobins(T, options)
 %   Optional name-value arguments
 %   ─────────────────────────────
 %   GeoCol           Column of codes / names in T
-%   ColorCol         Numeric column for tile fill (choropleth / heatmap_cat)
+%   ColorVariable         Numeric column for tile fill (choropleth / heatmap_cat)
 %   TimeCol          Time axis — encoded as a per-tile heatmap x-axis or sparkline
 %                    (never a slider); wide year columns are pivoted to long form
 %   Title            Figure title
@@ -47,12 +47,12 @@ function [fig, ax] = de_geobins(T, options)
 %   Scale            'auto' (default) | 'log' | 'linear' — quantitative axis of the
 %                    active renderer (choropleth color, or value_ladder bar height)
 %   CellRenderer     'color' (default) | 'heatmap_cat' | 'scatter_cat' | 'value_ladder'
-%   ValueCols        value_ladder: numeric columns drawn as per-tile bars
+%   DataVariables        value_ladder: numeric columns drawn as per-tile bars
 %   ConfoundNote     Small red caveat drawn in the figure body (e.g. a mean that
 %                    mixes sub-populations); empty = none
 %   LegendNote       Extra legend text
-%   CatCol, TopK, SharedYLim, CatColors, XCol, YCol, SharedXLim
-%                    Passed through to de_tilegrid (CatCol drives heatmap_cat/scatter_cat)
+%   GroupVariable, TopK, SharedYLim, GroupColors, XCol, YCol, SharedXLim
+%                    Passed through to de_tilegrid (GroupVariable drives heatmap_cat/scatter_cat)
 %
 %   Returns
 %   ───────
@@ -62,7 +62,7 @@ function [fig, ax] = de_geobins(T, options)
 arguments
     T (:,:) table
     options.GeoCol           (1,1) string  = ""
-    options.ColorCol         (1,1) string  = ""
+    options.ColorVariable         (1,1) string  = ""
     options.TimeCol          (1,1) string  = ""
     options.Title            (1,1) string  = ""
     options.Colormap                       = 'parula'
@@ -72,15 +72,15 @@ arguments
     options.MapLabel         (1,1) string  = ""
     options.FontSize         (1,1) double  = 7
     options.CellRenderer     (1,1) string {mustBeMember(options.CellRenderer, ["color","heatmap_cat","scatter_cat","value_ladder"])} = "color"
-    options.CatCol           (1,1) string  = ""
+    options.GroupVariable           (1,1) string  = ""
     options.TopK             (1,1) double {mustBePositive} = 5
     options.SharedYLim       (1,2) double  = [NaN NaN]
-    options.CatColors                      = []
+    options.GroupColors                      = []
     options.XCol             (1,1) string  = ""
     options.YCol             (1,1) string  = ""
     options.SharedXLim       (1,2) double  = [NaN NaN]
     options.CLim             (1,2) double  = [NaN NaN]
-    options.ValueCols        (1,:) string  = string([])
+    options.DataVariables        (1,:) string  = string([])
     options.LegendNote       (1,1) string  = ""
     options.ConfoundNote     (1,1) string  = ""
     options.Scale            (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"
@@ -93,8 +93,8 @@ fig = []; ax = [];
 varnames    = string(T.Properties.VariableNames);
 needs_color = options.CellRenderer == "color" || options.CellRenderer == "heatmap_cat";
 if options.GeoCol == "" || ~ismember(options.GeoCol, varnames) || ...
-   (needs_color && options.ColorCol == "")
-    fprintf('  ℹ de_geobins: need GeoCol + ColorCol — nothing to plot.\n');
+   (needs_color && options.ColorVariable == "")
+    fprintf('  ℹ de_geobins: need GeoCol + ColorVariable — nothing to plot.\n');
     return
 end
 
@@ -186,22 +186,22 @@ g.cols        = COLS;
 g.is_overflow = IS_OVERFLOW;
 
 [fig, ax] = de_tilegrid(T, g, normed, ...
-    'ColorCol',      options.ColorCol, ...
+    'ColorVariable',      options.ColorVariable, ...
     'TimeCol',       options.TimeCol, ...
     'Title',         options.Title, ...
     'Colormap',      options.Colormap, ...
     'MapLabel',      char(map_label), ...
     'FontSize',      options.FontSize, ...
     'CellRenderer',  options.CellRenderer, ...
-    'CatCol',        options.CatCol, ...
+    'GroupVariable',        options.GroupVariable, ...
     'TopK',          options.TopK, ...
     'SharedYLim',    options.SharedYLim, ...
-    'CatColors',     options.CatColors, ...
+    'GroupColors',     options.GroupColors, ...
     'XCol',          options.XCol, ...
     'YCol',          options.YCol, ...
     'SharedXLim',    options.SharedXLim, ...
     'CLim',          options.CLim, ...
-    'ValueCols',     options.ValueCols, ...
+    'DataVariables',     options.DataVariables, ...
     'LegendNote',    options.LegendNote, ...
     'ConfoundNote',  options.ConfoundNote, ...
     'Scale',         options.Scale, ...

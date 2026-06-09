@@ -10,7 +10,7 @@ function [fig, ax] = de_tilegrid(T, grid, normed, options)
 %   g.cols       = [11, 9, 1,...];          % 0-indexed col positions
 %   g.is_overflow = false(numel(g.codes),1); % true = orphan tiles
 %   normed = string(T.StateCode);           % pre-normalised code column
-%   de_tilegrid(T, g, normed, 'ColorCol','Value', 'TimeCol','Year')
+%   de_tilegrid(T, g, normed, 'ColorVariable','Value', 'TimeCol','Year')
 %
 %   Arguments
 %   ─────────
@@ -20,12 +20,12 @@ function [fig, ax] = de_tilegrid(T, grid, normed, options)
 %
 %   Name-value options (see the arguments block for the full set)
 %   ──────────────────
-%   ColorCol          numeric column for tile fill
+%   ColorVariable          numeric column for tile fill
 %   TimeCol           time axis — drawn as a per-tile heatmap x-axis or sparkline
 %                     (never a slider)
 %   CellRenderer      'color' (default) | 'heatmap_cat' | 'scatter_cat' | 'value_ladder'
-%   CatCol            categorical for heatmap_cat / scatter_cat
-%   ValueCols         value_ladder: numeric columns drawn as per-tile bars
+%   GroupVariable            categorical for heatmap_cat / scatter_cat
+%   DataVariables         value_ladder: numeric columns drawn as per-tile bars
 %   Scale             'auto' | 'log' | 'linear' — color / bar quantitative axis
 %   ConfoundNote      small red caveat drawn in the figure body
 %   Title             figure / window title
@@ -40,7 +40,7 @@ arguments
     T      (:,:) table
     grid   (1,1) struct
     normed (:,1) string
-    options.ColorCol          (1,1) string  = ""
+    options.ColorVariable          (1,1) string  = ""
     options.TimeCol           (1,1) string  = ""
     options.Title             (1,1) string  = ""
     options.Colormap                        = 'parula'
@@ -48,15 +48,15 @@ arguments
     options.MapLabel          (1,1) string  = "Map"
     options.FontSize          (1,1) double  = 7
     options.CellRenderer      (1,1) string {mustBeMember(options.CellRenderer, ["color","heatmap_cat","scatter_cat","value_ladder"])} = "color"
-    options.CatCol            (1,1) string  = ""
+    options.GroupVariable            (1,1) string  = ""
     options.TopK              (1,1) double {mustBePositive} = 5
     options.SharedYLim        (1,2) double {de__must_be_range} = [NaN NaN]
-    options.CatColors                       = []
+    options.GroupColors                       = []
     options.XCol              (1,1) string  = ""
     options.YCol              (1,1) string  = ""
     options.SharedXLim        (1,2) double {de__must_be_range} = [NaN NaN]
     options.CLim              (1,2) double {de__must_be_range} = [NaN NaN]
-    options.ValueCols         (1,:) string  = string([])  % CellRenderer="value_ladder"
+    options.DataVariables         (1,:) string  = string([])  % CellRenderer="value_ladder"
     options.LegendNote        (1,1) string  = ""
     options.ConfoundNote      (1,1) string  = ""      % small red in-figure caveat
     options.Scale             (1,1) string {mustBeMember(options.Scale, ["auto","log","linear"])} = "auto"   % color axis (choropleth) or bar axis (value_ladder)
@@ -87,19 +87,19 @@ code_map = containers.Map(CODES, num2cell(1:n_tiles));
 
 %% ── Validate columns ─────────────────────────────────────────────────────────
 varnames  = string(T.Properties.VariableNames);
-has_color = options.ColorCol ~= "" && ismember(options.ColorCol, varnames);
+has_color = options.ColorVariable ~= "" && ismember(options.ColorVariable, varnames);
 has_time  = options.TimeCol  ~= "" && ismember(options.TimeCol,  varnames);
 has_choro = has_color && numel(normed) == height(T) && height(T) > 0;
 is_heatmap_cat = options.CellRenderer == "heatmap_cat" && ...
-    options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
-    options.ColorCol ~= "" && ismember(options.ColorCol, varnames) && ...
+    options.GroupVariable ~= "" && ismember(options.GroupVariable, varnames) && ...
+    options.ColorVariable ~= "" && ismember(options.ColorVariable, varnames) && ...
     numel(normed) == height(T) && height(T) > 0;
 is_scatter_cat = options.CellRenderer == "scatter_cat" && ...
-    options.CatCol ~= "" && ismember(options.CatCol, varnames) && ...
+    options.GroupVariable ~= "" && ismember(options.GroupVariable, varnames) && ...
     options.XCol ~= "" && ismember(options.XCol, varnames) && ...
     options.YCol ~= "" && ismember(options.YCol, varnames) && ...
     numel(normed) == height(T) && height(T) > 0;
-val_cols       = options.ValueCols(ismember(options.ValueCols, varnames));
+val_cols       = options.DataVariables(ismember(options.DataVariables, varnames));
 is_value_ladder = options.CellRenderer == "value_ladder" && ...
     numel(val_cols) >= 2 && numel(normed) == height(T) && height(T) > 0;
 
@@ -109,17 +109,17 @@ is_value_ladder = options.CellRenderer == "value_ladder" && ...
 % when value_ladder silently falls back for lack of columns.
 if options.CellRenderer == "value_ladder" && ~is_value_ladder
     warning('de_tilegrid:valueLadderNeeds2', ...
-        ['CellRenderer="value_ladder" needs >=2 ValueCols present in the table ' ...
+        ['CellRenderer="value_ladder" needs >=2 DataVariables present in the table ' ...
          '(got %d); drawing a plain map instead.'], numel(val_cols));
 else
     if is_value_ladder
-        tg_active = "value_ladder"; tg_consumed = ["ValueCols", "SharedYLim", "ColorCol"];
+        tg_active = "value_ladder"; tg_consumed = ["DataVariables", "SharedYLim", "ColorVariable"];
     elseif is_heatmap_cat
-        tg_active = "heatmap_cat";  tg_consumed = ["CatCol", "ColorCol", "TimeCol", "SharedYLim"];
+        tg_active = "heatmap_cat";  tg_consumed = ["GroupVariable", "ColorVariable", "TimeCol", "SharedYLim"];
     elseif is_scatter_cat
-        tg_active = "scatter_cat";  tg_consumed = ["CatCol", "XCol", "YCol", "SharedXLim", "SharedYLim", "CatColors"];
+        tg_active = "scatter_cat";  tg_consumed = ["GroupVariable", "XCol", "YCol", "SharedXLim", "SharedYLim", "GroupColors"];
     else
-        tg_active = "color";        tg_consumed = ["ColorCol", "TimeCol"];
+        tg_active = "color";        tg_consumed = ["ColorVariable", "TimeCol"];
     end
     tg_ig = tg_ignored_options(options, tg_consumed);
     if ~isempty(tg_ig)
@@ -148,7 +148,7 @@ Heat    = NaN(n_tiles, n_t);
 N_obs   = zeros(n_tiles, n_t);
 
 if has_choro
-    ydata = double(T.(char(options.ColorCol)));
+    ydata = double(T.(char(options.ColorVariable)));
     tdata_col = [];
     if has_time
         tdata_col = T.(char(options.TimeCol));
@@ -180,7 +180,7 @@ if ~any(isnan(options.CLim))
     vmax = options.CLim(2);
 end
 if isnan(vmin) || vmin == vmax, has_choro = false; end
-if is_heatmap_cat || is_scatter_cat, has_choro = false; end   % value_ladder may keep a ColorCol tile fill (B2)
+if is_heatmap_cat || is_scatter_cat, has_choro = false; end   % value_ladder may keep a ColorVariable tile fill (B2)
 
 % Log color scale.  Policy: callers (the recipe) pass Scale "log"/"linear" based on
 % the column's profiled skewness; "auto" falls back to a skewness test on the tile
@@ -213,12 +213,12 @@ end
 multi_heat = []; top_cat_levels = {};
 sh_lo = NaN; sh_hi = NaN; K = 0;
 if is_heatmap_cat
-    ydata_sc   = double(T.(char(options.ColorCol)));
+    ydata_sc   = double(T.(char(options.ColorVariable)));
     if has_time
         tdata_sc = T.(char(options.TimeCol));
         if ~isa(tdata_sc,'datetime'), tdata_sc = double(tdata_sc); end
     end
-    cat_col_sc = categorical(string(T.(char(options.CatCol))));
+    cat_col_sc = categorical(string(T.(char(options.GroupVariable))));
     all_lv     = cellstr(categories(cat_col_sc));
     cnt_lv     = countcats(cat_col_sc);
     [~, ord_lv] = sort(cnt_lv,'descend');
@@ -260,14 +260,14 @@ sh_lo2 = NaN; sh_hi2 = NaN;
 if is_scatter_cat
     xdata_sc2   = double(T.(char(options.XCol)));
     ydata_sc2   = double(T.(char(options.YCol)));
-    cat_col_sc2 = categorical(string(T.(char(options.CatCol))));
+    cat_col_sc2 = categorical(string(T.(char(options.GroupVariable))));
     all_lv2     = cellstr(categories(cat_col_sc2));
     cnt_lv2     = countcats(cat_col_sc2);
     [~, ord2]   = sort(cnt_lv2,'descend');
     K2          = min(options.TopK, numel(all_lv2));
     top_cat_levels2 = all_lv2(ord2(1:K2));
-    if ~isempty(options.CatColors) && size(options.CatColors,1) >= K2
-        cat_colors_mat2 = options.CatColors(1:K2,:);
+    if ~isempty(options.GroupColors) && size(options.GroupColors,1) >= K2
+        cat_colors_mat2 = options.GroupColors(1:K2,:);
     else
         cat_colors_mat2 = lines(K2);
     end
@@ -411,7 +411,7 @@ if has_choro
     colormap(ax, cmap_ch);
     clim(ax, [vmin vmax]);
     cb = colorbar(ax, 'Position', [CBAR_X, 0.04, CBAR_W, 0.92]);
-    lbl = strrep(char(options.ColorCol), '_', ' ');
+    lbl = strrep(char(options.ColorVariable), '_', ' ');
     if has_spark
         t1s_cb = tg_yr_str(t_vals, 1, is_year_axis);
         tns_cb = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
@@ -434,7 +434,7 @@ if has_choro
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
-title(ax, tg_title_str(mname, options.ColorCol, options.MapLabel, ...
+title(ax, tg_title_str(mname, options.ColorVariable, options.MapLabel, ...
     t_vals, is_year_axis, has_choro, has_spark), ...
     'FontSize', F.page, 'Interpreter', 'none');
 
@@ -605,7 +605,7 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
         colormap(ax, cmap_ch);
         clim(ax, [sh_lo sh_hi]);
         cb = colorbar(ax, 'Position', [CBAR_X, 0.04, CBAR_W, 0.92]);
-        val_lbl = strrep(char(options.ColorCol), '_', ' ');
+        val_lbl = strrep(char(options.ColorVariable), '_', ' ');
         if n_t > 1
             cb.Label.String = sprintf('%s(%s, %s%s%s)', mname, val_lbl, ...
                 tg_yr_str(t_vals, 1, is_year_axis), char(8211), ...
@@ -672,7 +672,7 @@ end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────
 dcm = datacursormode(fig);
-Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorCol); hs_dc=has_spark;
+Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorVariable); hs_dc=has_spark;
 dcm.UpdateFcn = @(~,ev) tg_datatip(ev, Heat_dc, N_dc, cn_dc, hs_dc, code_map);
 
 end % de_tilegrid
@@ -698,12 +698,12 @@ end
 
 function ig = tg_ignored_options(options, consumed)
 %TG_IGNORED_OPTIONS  Non-default discriminating options not used by the active renderer.
-names = ["ColorCol", "TimeCol", "CatCol", "ValueCols", "XCol", "YCol", ...
-         "SharedYLim", "SharedXLim", "CatColors"];
-isset = [ options.ColorCol ~= "", options.TimeCol ~= "", options.CatCol ~= "", ...
-          ~isempty(options.ValueCols), options.XCol ~= "", options.YCol ~= "", ...
+names = ["ColorVariable", "TimeCol", "GroupVariable", "DataVariables", "XCol", "YCol", ...
+         "SharedYLim", "SharedXLim", "GroupColors"];
+isset = [ options.ColorVariable ~= "", options.TimeCol ~= "", options.GroupVariable ~= "", ...
+          ~isempty(options.DataVariables), options.XCol ~= "", options.YCol ~= "", ...
           ~all(isnan(options.SharedYLim)), ~all(isnan(options.SharedXLim)), ...
-          ~isempty(options.CatColors) ];
+          ~isempty(options.GroupColors) ];
 ig = names(isset & ~ismember(names, consumed));
 end
 

@@ -10,7 +10,14 @@
 > `ColorCol` added to its consumed-set so Plan A no longer flags it). The original "ladder also colored
 > by something" is delivered. 2 tests + checkcode + recipe-smoke green (recipe value_ladder has no
 > ColorCol → unchanged).
-> **REMAINING: B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
+> **B3 DONE 2026-06-08:** renamed via `scripts/rename_options.py` (longest-superset-first:
+> `CatColors`→`GroupColors`, `CatCol`→`GroupVariable`, `ColorCol`→`ColorVariable`,
+> `ValueCols`→`DataVariables`) across 11 files; `student_examples.m` skipped (off-limits — its calls
+> need the new names). checkcode 52 + recipe-smoke 8 + targeted tilegrid/value_ladder/colormethod/
+> countrybins tests green. **Plan B complete (B1+B2+B3).**
+> _Original B3 notes below._
+>
+> **(historical) B3** the rename `ColorCol`→`ColorVariable`, `ValueCols`→`DataVariables`,
 > `CatCol`→`GroupVariable` (cosmetic, high-churn; rewrites recipe text + tests + docs). Do it WHOLE
 > (a partial rename leaves mixed vocabulary, worse than none). **De-risked order** (longest-superset
 > first, per file via replace_all): (1) `CatColors`→`GroupColors`, (2) `CatCol`→`GroupVariable`,

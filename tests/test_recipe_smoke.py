@@ -192,10 +192,10 @@ def test_recipe_stratifies_single_numeric_choropleth(matlab_bin):
     assert "heatmap_cat" in recipe, (
         f"confounded single numeric should be shown stratified.\n{recipe}"
     )
-    assert "'CatCol','Standard'" in recipe, (
+    assert "'GroupVariable','Standard'" in recipe, (
         f"stratifier must be the qualifying categorical Standard, not Junk.\n{recipe}"
     )
-    assert "'CatCol','Junk'" not in recipe, "near-zero η² Junk must be below floor"
+    assert "'GroupVariable','Junk'" not in recipe, "near-zero η² Junk must be below floor"
 
 
 def _confound_highcard_csv(n=420):
@@ -221,7 +221,7 @@ def test_recipe_confound_warning_when_unfaceable(matlab_bin):
     assert "ConfoundNote" in recipe, (
         f"a high-cardinality confounder should trigger a warning.\n{recipe}"
     )
-    assert "'CatCol','Site'" not in recipe, (
+    assert "'GroupVariable','Site'" not in recipe, (
         f"a 20-level stratifier is too high-card to facet — warn, don't facet.\n{recipe}"
     )
 
@@ -243,7 +243,7 @@ def test_recipe_logscale_for_skewed_choropleth(matlab_bin):
 def test_recipe_excludes_camelcase_id_choropleths(matlab_bin):
     recipe = _gen_recipe(_camelcase_csv(), matlab_bin)
     for idname in ("StateCode", "SiteNum", "ParameterCode"):
-        assert f"'ColorCol','{idname}'" not in recipe, (
+        assert f"'ColorVariable','{idname}'" not in recipe, (
             f"CamelCase id column {idname} must not be a choropleth color.\n"
             f"Recipe:\n{recipe}"
         )
@@ -258,7 +258,7 @@ def test_recipe_collapses_correlated_family(matlab_bin):
     assert "de_plot_corr_family" not in recipe, "de_plot_corr_family was removed"
     # MeasureA/B/C are a correlated family: at most one may be a choropleth color.
     n_family_choro = sum(
-        f"'ColorCol','{m}'" in recipe for m in ("MeasureA", "MeasureB", "MeasureC")
+        f"'ColorVariable','{m}'" in recipe for m in ("MeasureA", "MeasureB", "MeasureC")
     )
     assert n_family_choro <= 1, (
         f"At most one family member may get its own choropleth; got {n_family_choro}.\n{recipe}"

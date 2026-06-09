@@ -10,20 +10,20 @@ function [fig, ax] = de_usamap(T, options)
 %   exposed so students can see how the affine transform works:
 %
 %     % See AK at its true geographic size (it's enormous):
-%     de_usamap(T, 'StateCol','State', 'ColorCol','Value', 'AKScale',1.0)
+%     de_usamap(T, 'StateCol','State', 'ColorVariable','Value', 'AKScale',1.0)
 %
 %     % Move AK to a custom position (projected metres):
 %     de_usamap(T, ..., 'AKOffset',[-2.1e6, -1.0e6])
 %
 %   Usage
 %   ─────
-%   de_usamap(T, 'StateCol','State', 'ColorCol','Value')
-%   de_usamap(T, 'StateCol','State', 'ColorCol','Value', 'TimeCol','Year')
+%   de_usamap(T, 'StateCol','State', 'ColorVariable','Value')
+%   de_usamap(T, 'StateCol','State', 'ColorVariable','Value', 'TimeCol','Year')
 %
 %   Name-value arguments
 %   ────────────────────
 %   StateCol    column of 2-letter state codes or full state names
-%   ColorCol    numeric column for fill color
+%   ColorVariable    numeric column for fill color
 %   TimeCol     time axis → activates slider
 %   Title       figure / window title
 %   Colormap    colormap (default 'parula')
@@ -39,7 +39,7 @@ function [fig, ax] = de_usamap(T, options)
 arguments
     T (:,:) table
     options.StateCol  (1,1) string  = ""
-    options.ColorCol  (1,1) string  = ""
+    options.ColorVariable  (1,1) string  = ""
     options.TimeCol   (1,1) string  = ""
     options.Title     (1,1) string  = ""
     options.Colormap                = 'parula'
@@ -70,12 +70,12 @@ end
 %% ── Validate columns ─────────────────────────────────────────────────────────
 varnames  = string(T.Properties.VariableNames);
 has_state = options.StateCol ~= "" && ismember(options.StateCol, varnames);
-has_color = options.ColorCol ~= "" && ismember(options.ColorCol, varnames);
+has_color = options.ColorVariable ~= "" && ismember(options.ColorVariable, varnames);
 has_time  = options.TimeCol  ~= "" && ismember(options.TimeCol,  varnames);
 has_choro = has_state && has_color;
 
 if ~has_choro
-    fprintf('  ℹ de_usamap: need StateCol + ColorCol — nothing to plot.\n');
+    fprintf('  ℹ de_usamap: need StateCol + ColorVariable — nothing to plot.\n');
     return
 end
 
@@ -110,7 +110,7 @@ code_to_idx = containers.Map(all_codes, num2cell(1:n_st));
 cmap_ch = um_cmap(options.Colormap);
 Heat    = NaN(n_st, n_t);
 N_obs   = zeros(n_st, n_t);
-ydata   = double(T.(char(options.ColorCol)));
+ydata   = double(T.(char(options.ColorVariable)));
 
 tdata_col = [];
 if has_time
@@ -233,12 +233,12 @@ if has_choro
     colormap(ax, cmap_ch);
     clim(ax, [vmin vmax]);
     cb = colorbar(ax,'Position',[CBAR_X, 0.05+sldr_lift, CBAR_W, 0.90-sldr_lift]);
-    cb.Label.String = strrep(char(options.ColorCol),'_',' ');
+    cb.Label.String = strrep(char(options.ColorVariable),'_',' ');
     cb.FontSize = 8;
 end
 
 %% ── Title ────────────────────────────────────────────────────────────────────
-title(ax, um_title_str(options.ColorCol, t_vals, 1, is_year_axis, has_choro, has_time), ...
+title(ax, um_title_str(options.ColorVariable, t_vals, 1, is_year_axis, has_choro, has_time), ...
     'FontSize', 11, 'Interpreter','none');
 
 %% ── Slider ───────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ if has_slider
         'FontSize',10,'BackgroundColor',BG_GRAY,'HorizontalAlignment','left');
 
     ph_c=patch_h; Heat_c=Heat; vmin_c=vmin; vmax_c=vmax; cmap_c=cmap_ch;
-    tvals_c=t_vals; iyr_c=is_year_axis; th_c=ax.Title; cc_c=options.ColorCol;
+    tvals_c=t_vals; iyr_c=is_year_axis; th_c=ax.Title; cc_c=options.ColorVariable;
     ht_c=has_time; hchoro_c=has_choro; ctoi_c=code_to_idx;
 
     sld.Callback = @(src,~) um_update(src, ph_c, Heat_c, vmin_c, vmax_c, cmap_c, ...
@@ -263,7 +263,7 @@ end
 
 %% ── Datacursor ───────────────────────────────────────────────────────────────
 dcm = datacursormode(fig);
-Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorCol); sld_dc=sld; ctoi_dc=code_to_idx;
+Heat_dc=Heat; N_dc=N_obs; cn_dc=char(options.ColorVariable); sld_dc=sld; ctoi_dc=code_to_idx;
 dcm.UpdateFcn = @(~,ev) um_datatip(ev, Heat_dc, N_dc, cn_dc, sld_dc, ctoi_dc);
 
 end % de_usamap

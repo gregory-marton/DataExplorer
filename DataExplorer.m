@@ -572,7 +572,7 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = sprintf('%% Choropleth: %s (wide years → long)', catname);
     L{end+1} = sprintf('yr_ch = {%s};', yr_cell);
     L{end+1} = 'T_long_ch = de_pivot_wide_years(T, yr_ch);';
-    L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
+    L{end+1} = sprintf('de_statebins(T_long_ch, ''StateCol'',''%s'', ''ColorVariable'',''Value'', ''TimeCol'',''Year'', ''Title'',''Choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
@@ -587,22 +587,22 @@ else
                 'shown stratified — re-run DataExplorer for a different view'], ...
                 ncn, char(strat), round(100*eta2));
             if isempty(time_idx)
-                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ' ...
-                    '''CatCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorVariable'',''%s'', ' ...
+                    '''GroupVariable'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), ncn, char(strat));
             else
                 tcn = prof.name{time_idx};
-                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ' ...
-                    '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                si = si+1; sub{si} = sprintf(['de_statebins(T, ''StateCol'',''%s'', ''ColorVariable'',''%s'', ' ...
+                    '''GroupVariable'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), tcn, ncn, char(strat));
             end
         else
             cna = se_confound_note_arg(T, prof, string(ncn), string(catname), 'state');
             if isempty(time_idx)
-                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
+                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorVariable'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
             else
                 tcn = prof.name{time_idx};
-                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
+                si = si+1; sub{si} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''ColorVariable'',''%s'', ''TimeCol'',''%s'', ''Title'',''Choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
             end
         end
         si = si+1; sub{si} = '';
@@ -647,7 +647,7 @@ if ~isempty(wide_yr_idxs)
     L{end+1} = sprintf('%% World choropleth: %s (wide years → long)', catname);
     L{end+1} = sprintf('yr_co = {%s};', yr_cell);
     L{end+1} = 'T_long_co = de_pivot_wide_years(T, yr_co);';
-    L{end+1} = sprintf('de_countrybins(T_long_co, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''Title'',''World choropleth: %s'');', catname, catname);
+    L{end+1} = sprintf('de_countrybins(T_long_co, ''CountryCol'',''%s'', ''ColorVariable'',''Value'', ''TimeCol'',''Year'', ''Title'',''World choropleth: %s'');', catname, catname);
     L{end+1} = '';
 else
     num_plot = num_idxs(~ismember(num_idxs, [geo_idx, time_idx]));
@@ -662,22 +662,22 @@ else
                 'shown stratified — re-run DataExplorer for a different view'], ...
                 ncn, char(strat), round(100*eta2));
             if isempty(time_idx)
-                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ' ...
-                    '''CatCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorVariable'',''%s'', ' ...
+                    '''GroupVariable'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), ncn, char(strat));
             else
                 tcn = prof.name{time_idx};
-                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ' ...
-                    '''CatCol'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
+                si = si+1; sub{si} = sprintf(['de_countrybins(T, ''CountryCol'',''%s'', ''ColorVariable'',''%s'', ' ...
+                    '''GroupVariable'',''%s'', ''TimeCol'',''%s'', ''CellRenderer'',''heatmap_cat'', ''Title'',''%s by %s'');'], ...
                     catname, ncn, char(strat), tcn, ncn, char(strat));
             end
         else
             cna = se_confound_note_arg(T, prof, string(ncn), string(catname), 'country');
             if isempty(time_idx)
-                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
+                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorVariable'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, ncn, sca, cna);
             else
                 tcn = prof.name{time_idx};
-                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorCol'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
+                si = si+1; sub{si} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''ColorVariable'',''%s'', ''TimeCol'',''%s'', ''Title'',''World choropleth: %s''%s%s);', catname, ncn, tcn, ncn, sca, cna);
             end
         end
         si = si+1; sub{si} = '';
@@ -754,13 +754,13 @@ for gi = 1:numel(geo_cats)
         li = li+1; L{li} = sprintf('top_gm = {%s};', levs_cell);
         li = li+1; L{li} = sprintf('T_filt_gm = T_long_gm(ismember(string(T_long_gm.%s), string(top_gm)), :);', cat_name);
         if is_states_geo
-            li = li+1; L{li} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+            li = li+1; L{li} = sprintf('de_statebins(T_filt_gm, ''StateCol'',''%s'', ''ColorVariable'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''GroupVariable'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str);
         elseif strcmp(geo_grid_name, 'world')
-            li = li+1; L{li} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+            li = li+1; L{li} = sprintf('de_countrybins(T_filt_gm, ''CountryCol'',''%s'', ''ColorVariable'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''GroupVariable'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, cat_name, K, title_str);
         else
-            li = li+1; L{li} = sprintf('de_geobins(T_filt_gm, ''GeoCol'',''%s'', ''Grid'',''%s'', ''ColorCol'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''CatCol'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
+            li = li+1; L{li} = sprintf('de_geobins(T_filt_gm, ''GeoCol'',''%s'', ''Grid'',''%s'', ''ColorVariable'',''Value'', ''TimeCol'',''Year'', ''CellRenderer'',''heatmap_cat'', ''GroupVariable'',''%s'', ''TopK'',%d, ''Title'',''%s'');', ...
                 geo_name, geo_grid_name, cat_name, K, title_str);
         end
         li = li+1; L{li} = '';
@@ -879,11 +879,11 @@ for fi = 1:numel(families)
         if sk > 2, scale = 'log'; else, scale = 'linear'; end
         switch grid_nm
             case 'us-states'
-                li = li+1; L{li} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, scale);
+                li = li+1; L{li} = sprintf('de_statebins(T, ''StateCol'',''%s'', ''CellRenderer'',''value_ladder'', ''DataVariables'',fam_cols, ''Scale'',''%s'');', gname, scale);
             case 'world'
-                li = li+1; L{li} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, scale);
+                li = li+1; L{li} = sprintf('de_countrybins(T, ''CountryCol'',''%s'', ''CellRenderer'',''value_ladder'', ''DataVariables'',fam_cols, ''Scale'',''%s'');', gname, scale);
             otherwise
-                li = li+1; L{li} = sprintf('de_geobins(T, ''GeoCol'',''%s'', ''Grid'',''%s'', ''CellRenderer'',''value_ladder'', ''ValueCols'',fam_cols, ''Scale'',''%s'');', gname, grid_nm, scale);
+                li = li+1; L{li} = sprintf('de_geobins(T, ''GeoCol'',''%s'', ''Grid'',''%s'', ''CellRenderer'',''value_ladder'', ''DataVariables'',fam_cols, ''Scale'',''%s'');', gname, grid_nm, scale);
         end
     end
     li = li+1; L{li} = '';
