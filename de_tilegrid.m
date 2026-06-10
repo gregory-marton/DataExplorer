@@ -442,6 +442,9 @@ if has_choro
         t1s_cb = tg_yr_str(t_vals, 1, is_year_axis);
         tns_cb = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
         lbl = sprintf('%s(%s, %s – %s)', mname, lbl, t1s_cb, tns_cb);
+    elseif has_time && isscalar(t_vals)
+        % Single-period TimeCol: not an axis, but label the period (time IS supported).
+        lbl = sprintf('%s(%s), %s', mname, lbl, tg_yr_str(t_vals, 1, is_year_axis));
     else
         lbl = sprintf('%s(%s)', mname, lbl);
     end
@@ -636,8 +639,11 @@ if is_heatmap_cat && K > 0 && ~isnan(sh_lo) && sh_lo < sh_hi
             cb.Label.String = sprintf('%s(%s, %s%s%s)', mname, val_lbl, ...
                 tg_yr_str(t_vals, 1, is_year_axis), char(8211), ...
                 tg_yr_str(t_vals, numel(t_vals), is_year_axis));
+        elseif has_time && isscalar(t_vals)
+            cb.Label.String = sprintf('%s(%s), %s', mname, val_lbl, ...
+                tg_yr_str(t_vals, 1, is_year_axis));
         else
-            cb.Label.String = val_lbl;
+            cb.Label.String = sprintf('%s(%s)', mname, val_lbl);
         end
         cb.FontSize = F.subtitle;
         key_lines = [{'rows:'}, arrayfun(@(k) sprintf('%d  %s', k, top_cat_levels{k}), ...
@@ -790,6 +796,8 @@ if has_spark && numel(t_vals) >= 2
     t1 = tg_yr_str(t_vals, 1, is_year_axis);
     tn = tg_yr_str(t_vals, numel(t_vals), is_year_axis);
     s = sprintf('%s(%s)  —  %s to %s', method, char(color_col), t1, tn);
+elseif isscalar(t_vals)
+    s = sprintf('%s(%s), %s', method, char(color_col), tg_yr_str(t_vals, 1, is_year_axis));
 else
     s = sprintf('%s(%s)', method, char(color_col));
 end

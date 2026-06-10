@@ -2939,6 +2939,26 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 'de_tilegrid:flatStratification');
         end
 
+        function test_single_period_time_labels_period(testCase)
+            % A TimeCol with one distinct value isn't an axis, but the period is
+            % shown as a label (title/colorbar) — signalling that time is supported.
+            states = ["ME";"ME";"NY";"NY"];
+            yr     = [2025;2025;2025;2025];
+            vals   = [1;3;5;7];                 % varies across states -> a real choropleth
+            T = table(string(states), yr, vals, 'VariableNames', {'State','Year','V'});
+            g.codes = {'ME','NY'}; g.rows = [0;1]; g.cols = [0;0]; g.is_overflow = [false;false];
+            old_vis = get(0,'DefaultFigureVisible'); set(0,'DefaultFigureVisible','off');
+            cl = onCleanup(@() set(0,'DefaultFigureVisible',old_vis));
+            [fig, ax] = de_tilegrid(T, g, string(T.State), 'ColorVariable','V', 'TimeCol','Year');
+            cl2 = onCleanup(@() close(fig));
+            ttl = strjoin(string(ax.Title.String), ' ');
+            cb  = findobj(fig, 'Type','colorbar');
+            cbl = "";
+            if ~isempty(cb), cbl = strjoin(string(cb(1).Label.String), ' '); end
+            testCase.verifyTrue(contains(ttl, '2025') || contains(cbl, '2025'), ...
+                sprintf('single-period TimeCol should label the period; title="%s" colorbar="%s"', ttl, cbl));
+        end
+
     end
 
 end

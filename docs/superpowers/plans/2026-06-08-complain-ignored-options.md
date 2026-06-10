@@ -13,6 +13,9 @@
 > the closest real one (`gb_closest`). **degenerate-TimeCol SKIPPED (on purpose):** a single distinct
 > time value is indistinguishable from legitimate single-period data (the cad3bda single-year recipe),
 > so warning would over-fire and break the warning-free recipe gate — not worth the false positives.
+> **Instead, single-period LABELING (DONE 2026-06-09):** when TimeCol collapses to one value, the
+> title and colorbar state the period (e.g. `mean(MedianAQI), 2025`) and the axis is skipped — time is
+> shown as a label, signalling it's supported, rather than faked as an axis or flagged as an error.
 > **REMAINING (low value):** de_countrybins FontSize/GridFile override notices, de_overview
 > MaxVars-truncation notice, de_plot_categorical_drilldown truncation notice.
 > **Related:** [2026-06-08-native-grouping-api.md] (renames the very options this plan
