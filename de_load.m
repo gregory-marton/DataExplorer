@@ -65,6 +65,7 @@ end
 [~, basename, ext] = fileparts(filepath);
 ext = string(lower(ext));
 fprintf('\n  Loading: %s%s\n', basename, ext);
+de_load_warn_options(ext, options);
 
 if ext == ".zip"
     T = de_load_from_zip(filepath, options);
@@ -79,6 +80,39 @@ if ismember(ext, [".nc", ".nc4", ".netcdf"])
     return
 end
 T = de_load_text(filepath, options);
+end
+
+% ── de_load_warn_options ──────────────────────────────────────────────────────
+function de_load_warn_options(ext, options)
+%DE_LOAD_WARN_OPTIONS  Warn about format-specific options the chosen format can't
+%   use, instead of silently ignoring them.
+is_xlsx = ismember(ext, [".xlsx", ".xls", ".xlsm"]);
+is_zip  = ext == ".zip";
+is_nc   = ismember(ext, [".nc", ".nc4", ".netcdf"]);
+is_text = ~(is_xlsx || is_zip || is_nc);
+
+names  = ["VariableNamesRange", "DataRange", "Sheet", "InnerFile", "NCVariable", ...
+          "VariableNamesLine", "DataLines"];
+isset  = [ strlength(options.VariableNamesRange) > 0, strlength(options.DataRange) > 0, ...
+           strlength(string(options.Sheet)) > 0, strlength(options.InnerFile) > 0, ...
+           strlength(options.NCVariable) > 0, ~isnan(options.VariableNamesLine), ...
+           ~all(isnan(options.DataLines)) ];
+usable = [ is_xlsx, is_xlsx, is_xlsx, is_zip, is_nc, is_text, is_text ];
+ig = names(isset & ~usable);
+if isempty(ig), return; end
+
+if is_xlsx,    label = "Excel";
+elseif is_zip, label = "ZIP";
+elseif is_nc,  label = "NetCDF";
+else,          label = "text/CSV";
+end
+hint = "";
+if is_text && any(ismember(["VariableNamesRange", "DataRange"], ig))
+    hint = " — for delimited text use VariableNamesLine / DataLines";
+end
+warning('DataExplorer:ignoredLoadOptions', ...
+    'These options do not apply to a %s file and are ignored: %s%s', ...
+    label, strjoin(cellstr(ig), ', '), hint);
 end
 
 % ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─

@@ -3001,6 +3001,18 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyEqual(height(W), 2);
         end
 
+        function test_de_load_warns_format_mismatched_option(testCase)
+            % VariableNamesRange is Excel-only; passing it to a CSV must warn, not
+            % silently do nothing (the loader analog of de_tilegrid:ignoredOptions).
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w'); fprintf(fid, 'a,b\n1,2\n3,4\n'); fclose(fid);
+            testCase.verifyWarning(@() de_load(string(tmp), VariableNamesRange="A1:B1"), ...
+                'DataExplorer:ignoredLoadOptions');
+            % A correct text header option must NOT warn.
+            testCase.verifyWarningFree(@() de_load(string(tmp), VariableNamesLine=1));
+        end
+
     end
 
 end

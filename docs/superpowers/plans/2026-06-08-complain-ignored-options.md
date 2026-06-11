@@ -18,6 +18,16 @@
 > shown as a label, signalling it's supported, rather than faked as an axis or flagged as an error.
 > **REMAINING (low value):** de_countrybins FontSize/GridFile override notices, de_overview
 > MaxVars-truncation notice, de_plot_categorical_drilldown truncation notice.
+>
+> **Loader-option audit (REDONE 2026-06-11):** the original scan only audited `de_tilegrid`
+> *renderer* options and MISSED `de_load` entirely — format-specific loader options were silently
+> ignored when passed to the wrong format (the reported case: `VariableNamesRange="A8:L8"` on a CSV
+> did nothing). Fixed: `de_load` now warns `DataExplorer:ignoredLoadOptions` when a format-specific
+> option can't be used (VariableNamesRange/DataRange/Sheet → non-Excel; InnerFile → non-zip;
+> NCVariable → non-nc; VariableNamesLine/DataLines → non-text), with a hint pointing text users at
+> VariableNamesLine/DataLines. AND the text path now actually *supports* a non-row-1 header
+> (VariableNamesLine/DataLines + auto-guess past preamble — separate commit). Lesson: option-support
+> audits must cover the LOADER surface, not just renderers.
 > **Related:** [2026-06-08-native-grouping-api.md] (renames the very options this plan
 > warns about — coordinate the consumed-sets), [2026-06-08-filter-during-read.md].
 
