@@ -482,18 +482,10 @@ function T = de_load_text(filepath, options)
     delim_names = {'comma-separated','tab-separated','semicolon-separated','pipe-separated'};
     fprintf('  Detected: %s\n', delim_names{delim_char});
 
-    % Header line: explicit VariableNamesLine, else auto-detect a header that sits
-    % below preamble rows.  A guessed line > 1 means rows above it are preamble.
-    hdr_line = NaN;
-    if ~isnan(options.VariableNamesLine)
-        hdr_line = options.VariableNamesLine;
-    else
-        g = de__guess_header_line(filepath, delim_raw);
-        if ~isnan(g) && g > 1
-            hdr_line = g;
-            fprintf('  ✓ Header looks like line %d (skipping %d preamble row(s)).\n', g, g - 1);
-        end
-    end
+    % An explicit VariableNamesLine wins.  Otherwise we may auto-guess a header
+    % below preamble rows — but ONLY as a fallback, after a normal read comes back
+    % with default Var1..VarN names (header not on row 1 and not auto-detected).
+    hdr_line = options.VariableNamesLine;   % NaN if unset
 
     % Check file size — reservoir-sample big files, but only when the header is on
     % row 1 (the reservoir reader assumes that).
@@ -519,6 +511,23 @@ function T = de_load_text(filepath, options)
             end
         end
         T = readtable(filepath, opts);
+
+        % Fallback only: a normal read produced Var1..VarN → the header probably
+        % sits below preamble rows.  Guess an all-text header line and re-read.
+        if isnan(hdr_line)
+            nm = T.Properties.VariableNames;
+            is_default = all(cellfun(@(s) ~isempty(regexp(s, '^Var\d+$', 'once')), nm));
+            if is_default
+                g = de__guess_header_line(filepath, delim_raw);
+                if ~isnan(g) && g > 1
+                    opts.VariableNamesLine = g;
+                    opts.DataLines = [g + 1, Inf];
+                    T = readtable(filepath, opts);
+                    fprintf('  ✓ Header looks like line %d (skipping %d preamble row(s)).\n', g, g - 1);
+                end
+            end
+        end
+
         n_before = height(T);
         T = de__sample(T, options.MaxRows);
         if height(T) < n_before

@@ -3013,6 +3013,18 @@ classdef test_DataExplorer < matlab.unittest.TestCase
             testCase.verifyWarningFree(@() de_load(string(tmp), VariableNamesLine=1));
         end
 
+        function test_guess_header_line_no_false_pick_on_data(testCase)
+            % All rows are data (text + numbers, same field count) — there is no
+            % all-text header row, so the guesser must return NaN, not grab a
+            % text-bearing data row as the header.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'Alice,90,Boston\nBob,85,Lynn\nCarol,70,Salem\n');
+            fclose(fid);
+            testCase.verifyTrue(isnan(de__guess_header_line(string(tmp), ',')));
+        end
+
     end
 
 end

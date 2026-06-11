@@ -35,8 +35,12 @@ modal = mode(multi);
 
 for i = 1:n-1
     if fc(i) == modal && fc(i+1) == modal
-        cells = strsplit(lines(i), delim);
-        if ~all(~isnan(str2double(cells)))   % at least one non-numeric cell → labels
+        header_all_text = all(isnan(str2double(strsplit(lines(i),   delim))));
+        next_has_number = any(~isnan(str2double(strsplit(lines(i+1), delim))));
+        % A header is all labels (no numeric cells); the row below it, being data,
+        % carries at least one number.  This keeps text-bearing data rows (names,
+        % cities) from being mistaken for the header.
+        if header_all_text && next_has_number
             ln = i;
             return
         end
