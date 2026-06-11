@@ -2959,6 +2959,48 @@ classdef test_DataExplorer < matlab.unittest.TestCase
                 sprintf('single-period TimeCol should label the period; title="%s" colorbar="%s"', ttl, cbl));
         end
 
+        % ── de_load text header: explicit VariableNamesLine + auto-guess ────
+        function test_guess_header_line_skips_preamble(testCase)
+            % Header on line 8 after 7 single-field preamble rows.
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'Wyzant History\n');
+            fprintf(fid, 'exported 2025\n');
+            for k = 1:5, fprintf(fid, 'note %d\n', k); end
+            fprintf(fid, 'Name,Score,City\n');
+            fprintf(fid, 'Alice,90,Boston\nBob,85,Lynn\n');
+            fclose(fid);
+            testCase.verifyEqual(de__guess_header_line(string(tmp), ','), 8);
+        end
+
+        function test_de_load_explicit_variablenamesline(testCase)
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            for k = 1:7, fprintf(fid, 'preamble %d,x,y\n', k); end
+            fprintf(fid, 'Name,Score,City\n');
+            fprintf(fid, 'Alice,90,Boston\nBob,85,Lynn\n');
+            fclose(fid);
+            W = de_load(string(tmp), VariableNamesLine=8);
+            testCase.verifyEqual(string(W.Properties.VariableNames), ["Name","Score","City"]);
+            testCase.verifyEqual(height(W), 2);
+        end
+
+        function test_de_load_guesses_header_after_preamble(testCase)
+            tmp = [tempname '.csv'];
+            cl  = onCleanup(@() delete(tmp));
+            fid = fopen(tmp, 'w');
+            fprintf(fid, 'Some Report Title\n');
+            fprintf(fid, 'Generated 2025\n');
+            fprintf(fid, 'Name,Score,City\n');
+            fprintf(fid, 'Alice,90,Boston\nBob,85,Lynn\n');
+            fclose(fid);
+            W = de_load(string(tmp));
+            testCase.verifyEqual(string(W.Properties.VariableNames), ["Name","Score","City"]);
+            testCase.verifyEqual(height(W), 2);
+        end
+
     end
 
 end

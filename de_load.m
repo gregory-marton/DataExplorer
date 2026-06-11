@@ -22,8 +22,11 @@ function [T, prof] = de_load(filepath, options)
 %   AutoSelect           Pick the default on ambiguity without prompting
 %   Interactive          Prompt on ambiguity (default false)
 %   MissingStrings       Extra strings to recode as missing (passed to de_profile)
-%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx)
-%   DataRange            Data start cell, e.g. 'A2' (xlsx)
+%   VariableNamesRange   Header cell range, e.g. 'A1' (xlsx only)
+%   DataRange            Data start cell, e.g. 'A2' (xlsx only)
+%   VariableNamesLine    Header line number for delimited TEXT, 1-based (e.g. 8).
+%                        Also auto-detected when preamble rows sit above the header.
+%   DataLines            [first last] data line range for text, e.g. [9 Inf]
 %   MaxRows              Row budget. Inf = load everything (default).
 
 arguments
@@ -36,6 +39,8 @@ arguments
     options.MissingStrings      (1,:) string  = string([])
     options.VariableNamesRange  (1,1) string  = ""
     options.DataRange           (1,1) string  = ""
+    options.VariableNamesLine   (1,1) double  = NaN
+    options.DataLines           (1,2) double  = [NaN NaN]
     options.MaxRows             (1,1) double {de__must_be_row_budget} = Inf
 end
 
@@ -435,18 +440,34 @@ function T = de_load_text(filepath, options)
     npipes  = sum(firstline == '|');
 
     [~, delim_char] = max([ncommas, ntabs, nsemis, npipes]);
-    delims = {',', '\t', ';', '|'};
-    delim  = delims{delim_char};
+    delims     = {',', '\t', ';', '|'};
+    delims_raw = {',', char(9), ';', '|'};
+    delim      = delims{delim_char};
+    delim_raw  = delims_raw{delim_char};
 
     delim_names = {'comma-separated','tab-separated','semicolon-separated','pipe-separated'};
     fprintf('  Detected: %s\n', delim_names{delim_char});
 
-    % Check file size — use reservoir sampling for files over threshold
+    % Header line: explicit VariableNamesLine, else auto-detect a header that sits
+    % below preamble rows.  A guessed line > 1 means rows above it are preamble.
+    hdr_line = NaN;
+    if ~isnan(options.VariableNamesLine)
+        hdr_line = options.VariableNamesLine;
+    else
+        g = de__guess_header_line(filepath, delim_raw);
+        if ~isnan(g) && g > 1
+            hdr_line = g;
+            fprintf('  ✓ Header looks like line %d (skipping %d preamble row(s)).\n', g, g - 1);
+        end
+    end
+
+    % Check file size — reservoir-sample big files, but only when the header is on
+    % row 1 (the reservoir reader assumes that).
     LARGE_FILE_MB = 100;
     info = dir(filepath);
     file_mb = info.bytes / 1e6;
 
-    if file_mb > LARGE_FILE_MB && isfinite(options.MaxRows)
+    if file_mb > LARGE_FILE_MB && isfinite(options.MaxRows) && isnan(hdr_line)
         fprintf('  ℹ Large file (%.0f MB) — using reservoir sampling to read %d rows.\n', ...
             file_mb, options.MaxRows);
         fprintf('    This avoids loading the full file into memory.\n');
@@ -455,6 +476,14 @@ function T = de_load_text(filepath, options)
     else
         opts = detectImportOptions(filepath, 'FileType', 'text', 'Delimiter', delim);
         opts.MissingRule = 'fill';
+        if ~isnan(hdr_line)
+            opts.VariableNamesLine = hdr_line;
+            if ~all(isnan(options.DataLines))
+                opts.DataLines = options.DataLines;
+            else
+                opts.DataLines = [hdr_line + 1, Inf];
+            end
+        end
         T = readtable(filepath, opts);
         n_before = height(T);
         T = de__sample(T, options.MaxRows);
