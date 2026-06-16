@@ -1,15 +1,25 @@
 % T = DataExplorer("examples/2026_daygenbyfuel.xlsx", Sheet=2);
-% TODO: add 2026_energy_peak_by_source.xlsx ?
+% TODO: add DataExplorer("examples/2026_energy_peak_by_source.xlsx");
 
+%{
+% 311 Schema file. NOTE: this is not data, this is just the schema!
 T = de_load("examples/311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx", ...
     Sheet="All Agencies Complaint<>Details");
 % Replace "Department of" with "D." in Agency categorical labels (case-sensitive)
 % Convert categories to cellstr, perform replace on category names
 cats = strrep(string(categories(T.Agency)), "Department of", "D.");
 T.Agency = categorical(T.Agency, categories(T.Agency), cats);
-DataExplorer(T);
-DataExplorer("examples/311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx", ...
+de_stacked_bars(T, "Agency", "Descriptor");
+% DataExplorer(T);
+HPD = de_load("examples/311_ServiceRequest_2020-present_DataDictionary_Updated_2025.xlsx", ...
     Sheet="HPD Complaint<>Details");
+% This appears strange, but the reason the values are the same across
+% BMPs is not that the data are corrupt, but that we're looking at the 
+% data dictionary, the schema, not the actual complaint data themselves:
+de_pareto_multiples(HPD, "BMP", "Descriptor"); 
+de_pareto_multiples(HPD, "BMP", "Additional_Details");
+DataExplorer(HPD);
+%}
 
 %{ 
 T = de_load("examples/State_Tobacco_Related_Disparities_Dashboard_Data.csv"); 
@@ -69,7 +79,41 @@ DataExplorer(T);
 % MA-2024.zip
 % State_Tobacco_Related_Disparities_Dashboard_Data.csv
 
+%{
 % annual_aqi_by_county_2025.zip and annual_conc_by_monitor_2025.zip
 % are together?
+%DataExplorer("examples/annual_aqi_by_county_2025.zip");
+%DataExplorer("examples/annual_conc_by_monitor_2025.zip");
+AQI = de_load("examples/annual_aqi_by_county_2025.zip");
+% Prepare value ladder columns in the requested order and compute MedianAQI per county/state
+cols = ["GoodDays", "ModerateDays", "UnhealthyForSensitiveGroupsDays", ...
+    "UnhealthyDays", "VeryUnhealthyDays", "HazardousDays"];
+de_statebins(AQI, StateCol="State", CellRenderer="value_ladder", ...
+    DataVariables=cols, ColorVariable="MedianAQI", Title="EPA Air Quality Index");
+% plot MedianAQI against 
+CBM = de_load("examples/annual_conc_by_monitor_2025.zip");
+% the pm25, pm10 concentrations from CBM as a de_statebin ladder 
+is_pm25 = CBM.ParameterName == "PM2.5 - Local Conditions";
+
+CBM_pm25 = CBM(is_pm25, :);
+disp(groupsummary(CBM_pm25, "StateName", "median", "ArithmeticMean"));
+% TODO: make this by median instead of mean. 
+% Reason: the mean values are completely unreasonable, 
+% driven by outliers that appear to be errors. 
+% Likely BUG: a bunch of values where 
+%   CBM.ParameterName == "PM2.5 - Local Conditions" 
+% are at or just shy of 1440 which is suspiciously the number of minutes 
+% per day, and wildly out of range for PM2.5, so this is a test case for 
+% anomaly detection.
+de_statebins(CBM_pm25, StateCol="StateName", ColorVariable="ArithmeticMean",...
+    Title="PM2.5 Particulates");
+% What? lol. The data cut off alphabetically at California. Other states
+% are just not in the file. 
+%}
 
 % minerals.pdf 	minerals.zip
+% DataExplorer("examples/minerals.zip");
+% TODO: convert CIF format to something readable.
+
+W = de_load("~/Downloads/Wyzant History - Sheet1.csv", VariableNamesLine=8);
+DataExplorer(W);
