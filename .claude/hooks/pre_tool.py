@@ -17,8 +17,8 @@ if tool == 'Bash':
         # Block if a specific .m file path is present (no glob)
         if re.search(r'(?<!\*)\b[\w./\-]+\.(m|txt|log)\b(?!\*)', cmd):
             print(
-                "HOOK blocked: Use the Read tool to read most files "
-                "or write and execute an actual test or script to help you."
+                "HOOK blocked: Use the Read tool or python tools in scripts/ to read or search most files "
+                "or write and execute an actual test or new script to help you."
             )
             sys.exit(2)
     if re.search(r'matlab\s+-batch', cmd):
