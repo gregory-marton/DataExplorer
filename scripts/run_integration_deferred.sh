@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-UUID="${1:?UUID argument required}"
+UUID="${1:?UUID argument required: pass 'now' to just launch it.}"
 ROOT="${DI_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 SENTINEL="$ROOT/.cache/integration_sentinel.txt"
 LAST_RUN="$ROOT/.cache/last_full_run.txt"
@@ -23,14 +23,17 @@ LOCKFILE="$ROOT/.cache/di.lock"
 
 # Window long enough that ordinary dev pauses (edits, MATLAB probes) don't trip it;
 # the deferred run is meant for genuine dry spells.  Overridable for tests.
-SLEEP_SECS="${DI_SLEEP:-1800}"
+SLEEP_SECS="${DI_SLEEP:-900}"
 DI_CMD="${DI_CMD:-python3 -m pytest tests/ --override-ini=addopts= --tb=short -v}"
+if [ "$UUID" == "now" ]; then
+    UUID=$$
+else
+    sleep "$SLEEP_SECS"
 
-sleep "$SLEEP_SECS"
-
-# Supersede: a newer smoke run would have written a new sentinel UUID.
-if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$UUID" ]; then
-    exit 0
+    # Supersede: a newer smoke run would have written a new sentinel UUID.
+    if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$UUID" ]; then
+        exit 0
+    fi
 fi
 
 # Single-flight: never let two DI runs overlap.  noclobber makes "> file" an
